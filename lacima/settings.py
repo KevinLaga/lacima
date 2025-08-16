@@ -11,6 +11,12 @@ import dj_database_url
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+DEBUG = False  # en producción
+
+# PON AQUÍ TU HOST REAL DE RENDER
+ALLOWED_HOSTS = ["lacima.onrender.com"]
+CSRF_TRUSTED_ORIGINS = ["https://lacima.onrender.com"]
+
 # -----------------------------
 # Claves y modo debug
 # -----------------------------
