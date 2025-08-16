@@ -1,0 +1,78 @@
+{% load static %}
+{% if perms.empaques.view_shipment or perms.empaques.export_reports %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Reporte Diario – {{ report_date }}</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+</head>
+<body>
+  <h1>Reporte del {{ report_date }}</h1>
+
+  <form method="get">
+    <label for="id_date">Fecha:</label>
+    <input type="date" id="id_date" name="date"
+           value="{{ report_date|date:'Y-m-d' }}">
+    <button type="submit">Ver</button>
+    <a href="{% url 'shipment_list' %}">Ver todo</a>
+  </form>
+{% if perms.empaques.export_reports %}
+  <!-- ÚNICA fila de botones para descargar -->
+  <p>
+  <a href="?date={{ report_date|date:'Y-m-d' }}&format=xlsx"><b>Descargar Excel General</b></a>
+  {% for c, cslug in clientes %}
+    | <a href="?date={{ report_date|date:'Y-m-d' }}&format=xlsx_{{ cslug }}"><b>Descargar Excel {{ c }}</b></a>
+  {% endfor %}
+</p>
+{% endif %}
+{% else %}
+  <p>No tienes permiso para ver esta página.</p>
+{% endif %}
+
+  <table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+      <tr>
+        <th>Embarque</th>
+        <th>Factura</th>
+        <th>Presentación</th>
+        <th>Tamaño</th>
+        <th>Cantidad</th>
+        <th>Equiv. 11 lbs</th>
+        <th>Importe ($)</th>
+        <th>Cliente</th>
+        <th>Temperatura</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in shipments %}
+      {% for item in s.items.all %}
+      <tr>
+        <td>{{ s.tracking_number }}</td>
+        <td>{{ s.invoice_number }}</td>
+        <td>{{ item.presentation.name }}</td>
+        <td>{{ item.size }}</td>
+        <td style="text-align:right">{{ item.quantity }}</td>
+        <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
+        <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
+        <td>{{ item.cliente }}</td>
+        <td>{{ subform.temperatura }}</td>
+      </tr>
+      {% endfor %}
+    {% empty %}
+      <tr><td colspan="8">No hay embarques para esta fecha.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="4" style="text-align:right">TOTALES:</th>
+        <th style="text-align:right">{{ total_boxes }}</th>
+        <th style="text-align:right">{{ total_eq_11lbs|floatformat:"2" }}</th>
+        <th style="text-align:right">{{ total_amount|floatformat:"2" }}</th>
+        <th></th>
+      </tr>
+    </tfoot>
+  </table>
+
+</body>
+</html>

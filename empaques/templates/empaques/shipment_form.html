@@ -1,0 +1,229 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Nuevo Embarque</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+</head>
+<body>
+  <!-- BOTÓN CERRAR SESIÓN (arriba derecha) -->
+<div class="logout-btn-wrap">
+  <form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button type="submit" class="logout-btn" title="Cerrar sesión">⎋ Cerrar sesión</button>
+  </form>
+</div>
+<style>
+  .logout-btn-wrap {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+  }
+  .logout-btn {
+    background: #ba2121;
+    color: #fff;
+    border: 0;
+    border-radius: 6px;
+    padding: .5rem .85rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .logout-btn:hover { opacity: .92; }
+</style>
+
+  <h1>Registrar Embarque</h1>
+  <form method="post">
+    {% csrf_token %}
+<fieldset>
+  <legend>Datos del Embarque</legend>
+  <div>
+    {{ form.tracking_number.label_tag }} {{ form.tracking_number }}
+    {{ form.tracking_number.errors }}
+  </div>
+  <div>
+    {{ form.date.label_tag }} {{ form.date }}
+    {{ form.date.errors }}
+  </div>
+  <div>
+    {{ form.carrier.label_tag }} {{ form.carrier }}
+    {{ form.carrier.errors }}
+  </div>
+  <div>
+    {{ form.tractor_plates.label_tag }} {{ form.tractor_plates }}
+    {{ form.tractor_plates.errors }}
+  </div>
+  <div>
+    {{ form.box_plates.label_tag }} {{ form.box_plates }}
+    {{ form.box_plates.errors }}
+  </div>
+  <div>
+    {{ form.driver.label_tag }} {{ form.driver }}
+    {{ form.driver.errors }}
+  </div>
+  <div>
+    {{ form.departure_time.label_tag }} {{ form.departure_time }}
+    {{ form.departure_time.errors }}
+  </div>
+  <div>
+    {{ form.box.label_tag }} {{ form.box }}
+    {{ form.box.errors }}
+  </div>
+  <div>
+    {{ form.box_conditions.label_tag }} {{ form.box_conditions }}
+    {{ form.box_conditions.errors }}
+  </div>
+  <div>
+    {{ form.box_free_of_odors.label_tag }} {{ form.box_free_of_odors }}
+    {{ form.box_free_of_odors.errors }}
+  </div>
+  <div>
+    {{ form.ryan.label_tag }} {{ form.ryan }}
+    {{ form.ryan.errors }}
+  </div>
+  <div>
+    <b>Sellos:</b>
+    {{ form.seal_1 }} {{ form.seal_2 }} {{ form.seal_3 }} {{ form.seal_4 }}
+    <!-- Puedes añadir etiquetas si quieres -->
+  </div>
+  <div>
+    {{ form.chismografo.label_tag }} {{ form.chismografo }}
+    {{ form.chismografo.errors }}
+  </div>
+  <div>
+    {{ form.delivery_signature.label_tag }} {{ form.delivery_signature }}
+    {{ form.delivery_signature.errors }}
+  </div>
+  <div>
+    {{ form.driver_signature.label_tag }} {{ form.driver_signature }}
+    {{ form.driver_signature.errors }}
+  </div>
+  <div>
+    {{ form.invoice_number.label_tag }} {{ form.invoice_number }}
+    {{ form.invoice_number.errors }}
+  </div>
+</fieldset>
+
+    <fieldset>
+  <legend>Ítems del Embarque</legend>
+  {{ formset.management_form }}
+  <div style="display: flex; gap: 40px;">
+    <!-- Lado izquierdo -->
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Tarima</th>
+          <th>Tipo</th>
+          <th>Tamaño</th>
+          <th>Cantidad</th>
+          <th>Cliente</th>
+          <th>Temperatura</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for subform in formset|slice:":13" %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ subform.tarima }}</td>
+          <td>{{ subform.type }}</td>
+          <td>{{ subform.size }}</td>
+          <td>{{ subform.quantity }}</td>
+          <td>{{ subform.cliente }}</td>
+          <td>{{ subform.temperatura }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Lado derecho -->
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Tarima</th>
+          <th>Tipo</th>
+          <th>Tamaño</th>
+          <th>Cantidad</th>
+          <th>Cliente</th>
+          <th>Temperatura</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for subform in formset|slice:"13:" %}
+        <tr>
+          <td>{{ forloop.counter|add:13 }}</td>
+          <td>{{ subform.tarima }}</td>
+          <td>{{ subform.type }}</td>
+          <td>{{ subform.size }}</td>
+          <td>{{ subform.quantity }}</td>
+          <td>{{ subform.cliente }}</td>
+          <td>{{ subform.temperatura }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <!-- Errores generales del formset -->
+  {% if formset.non_form_errors %}
+    <div class="formset-errors">
+      {{ formset.non_form_errors }}
+    </div>
+  {% endif %}
+</fieldset>
+{% if form.errors %}
+  <div style="color: red;">
+    {{ form.errors }}
+  </div>
+{% endif %}
+{% if formset.non_form_errors %}
+  <div style="color: red;">
+    {{ formset.non_form_errors }}
+  </div>
+{% endif %}
+{% for subform in formset %}
+  {% if subform.errors %}
+    <div style="color: red;">
+      {{ subform.errors }}
+    </div>
+  {% endif %}
+{% endfor %}
+
+
+    <button type="button" id="add-item-btn">+ Añadir Ítem</button>
+    <button type="submit">Guardar</button>
+  </form>
+  <script>
+document.addEventListener("DOMContentLoaded", function() {
+    const addBtn = document.getElementById("add-item-btn");
+    const tableBody = document.querySelector("table tbody");
+    let totalForms = document.getElementById("id_items-TOTAL_FORMS");
+
+    addBtn.addEventListener("click", function() {
+        const formIdx = parseInt(totalForms.value);
+        const emptyRow = tableBody.querySelector("tr").cloneNode(true);
+
+        // Limpia los campos del nuevo row
+        emptyRow.querySelectorAll("input, select").forEach(input => {
+            if (input.name) {
+                // Cambia el índice en el name y id
+                input.name = input.name.replace(/-\d+-/, `-${formIdx}-`);
+                input.id = input.id.replace(/-\d+-/, `-${formIdx}-`);
+            }
+            if (input.type === "checkbox" || input.type === "radio") {
+                input.checked = false;
+            } else {
+                input.value = "";
+            }
+        });
+
+        // Agrega la nueva fila a la tabla
+        tableBody.appendChild(emptyRow);
+        // Aumenta el TOTAL_FORMS
+        totalForms.value = formIdx + 1;
+    });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Iniciar sesión — La Cima</title>
+  <!-- Usamos el CSS del admin para un estilo básico agradable -->
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { background: #f5f6f8; }
+    .login-wrap {
+      max-width: 420px;
+      margin: 5rem auto;
+      background: #fff;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.06);
+      padding: 2rem;
+    }
+    .brand {
+      display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem;
+    }
+    .brand img { height: 40px; width: auto; }
+    h1 { font-size: 1.25rem; margin: .25rem 0 1.25rem; }
+    .help { color: #666; font-size: .9rem; margin-bottom: 1rem; }
+    .errorlist, .messages { margin: .5rem 0 1rem; }
+    .errorlist { color: #b00020; }
+    .field { margin-bottom: 1rem; }
+    .field label { display:block; font-weight: 600; margin-bottom: .35rem; }
+    .field input {
+      width: 100%; padding: .625rem .75rem; border: 1px solid #cfcfcf; border-radius: 6px;
+    }
+    .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; }
+    .actions button {
+      background: #417690; color: #fff; border: 0; padding: .6rem 1rem; border-radius: 6px; cursor: pointer;
+    }
+    .actions a { font-size: .9rem; color: #417690; text-decoration: none; }
+    .footer { margin-top: 1.25rem; text-align: center; font-size: .9rem; color: #666; }
+  </style>
+</head>
+<body>
+
+  <div class="login-wrap">
+    <div class="brand">
+      <!-- Si tienes un logo general ponlo aquí (opcional) -->
+      <!-- <img src="{% static 'logos/lacima.png' %}" alt="La Cima"> -->
+      <strong>La Cima</strong>
+    </div>
+
+    <h1>Iniciar sesión</h1>
+    <p class="help">Ingresa tus credenciales para continuar.</p>
+
+    {% if form.non_field_errors %}
+      <ul class="errorlist">
+        {% for err in form.non_field_errors %}
+          <li>{{ err }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if messages %}
+      <ul class="messages">
+        {% for message in messages %}
+          <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <form method="post" action="">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+
+      <div class="field">
+        <label for="{{ form.username.id_for_label }}">Usuario</label>
+        {{ form.username }}
+        {% if form.username.errors %}
+          <ul class="errorlist">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.password.id_for_label }}">Contraseña</label>
+        {{ form.password }}
+        {% if form.password.errors %}
+          <ul class="errorlist">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+
+      <div class="actions">
+        <a href="{% url 'password_reset' %}">¿Olvidaste tu contraseña?</a>
+        <button type="submit">Entrar</button>
+      </div>
+    </form>
+
+    <div class="footer">
+      <small>Operación interna · Acceso restringido</small>
+    </div>
+  </div>
+
+</body>
+</html>

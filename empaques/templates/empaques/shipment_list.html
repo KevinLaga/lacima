@@ -1,0 +1,99 @@
+{% if perms.empaques.view_shipment %}
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Lista de Embarques</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+</head>
+<body>
+  <!-- BOTÓN CERRAR SESIÓN (arriba derecha) -->
+<div class="logout-btn-wrap">
+  <form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button type="submit" class="logout-btn" title="Cerrar sesión">⎋ Cerrar sesión</button>
+  </form>
+</div>
+<style>
+  .logout-btn-wrap {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 9999;
+  }
+  .logout-btn {
+    background: #ba2121; /* rojo admin */
+    color: #fff;
+    border: 0;
+    border-radius: 6px;
+    padding: .5rem .85rem;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .logout-btn:hover { opacity: .92; }
+</style>
+
+  <h1>Embarques Registrados</h1>
+  <p><a href="{% url 'shipment_create' %}">+ Nuevo Embarque</a></p>
+  {% if perms.empaques.export_reports %}
+    <!-- Formularios/botones de descargar mes/año -->
+  {% endif %}
+{% else %}
+  <p>No tienes permiso para ver embarques.</p>
+{% endif %}
+
+  <!-- Formulario de descarga mensual -->
+  <h3>Descargar resumen mensual</h3>
+  <form method="get" action="{% url 'shipment_list' %}">
+    <input type="hidden" name="descargar" value="mes">
+    <label for="year-mes">Año:</label>
+    <input type="number" id="year-mes" name="year" min="2020" max="2100"
+           value="{{ request.GET.year|default:today.year }}">
+    <label for="month-mes">Mes:</label>
+    <input type="number" id="month-mes" name="month" min="1" max="12"
+           value="{{ request.GET.month|default:today.month }}">
+    <button type="submit">Descargar Mes</button>
+  </form>
+
+  <!-- Formulario de descarga anual -->
+  <h3>Descargar resumen anual</h3>
+  <form method="get" action="{% url 'shipment_list' %}">
+    <input type="hidden" name="descargar" value="ano">
+    <label for="year-ano">Año:</label>
+    <input type="number" id="year-ano" name="year" min="2020" max="2100"
+           value="{{ request.GET.year|default:today.year }}">
+    <button type="submit">Descargar Año</button>
+  </form>
+
+  <br>
+
+  <!-- Tabla de embarques -->
+  <table border="1" cellpadding="5" cellspacing="0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Embarque</th>
+        <th>Factura</th>
+        <th>Fecha</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in shipments %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td>{{ s.tracking_number }}</td>
+        <td>{{ s.invoice_number }}</td>
+        <td>{{ s.date }}</td>
+        <td>
+          <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver Reporte</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5">No hay embarques aún.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
