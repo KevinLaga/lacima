@@ -1,5 +1,4 @@
-# Python / Django
-__pycache__/
+﻿__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -7,22 +6,12 @@ __pycache__/
 db.sqlite3
 .env
 .env.*
-
-# Virtualenv
 venv/
 ENV/
-.env/
 .venv/
-
-# Django static collect
-/staticfiles/
+staticfiles/
 media/
-
-# IDEs
 .vscode/
 .idea/
-*.code-workspace
-
-# OS
 .DS_Store
 Thumbs.db
