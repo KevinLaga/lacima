@@ -11,26 +11,37 @@ import dj_database_url
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = False  # en producción
+# -----------------------------
+# Utilidades
+# -----------------------------
+def env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes", "on")
 
-# PON AQUÍ TU HOST REAL DE RENDER
-ALLOWED_HOSTS = ["lacima.onrender.com"]
-CSRF_TRUSTED_ORIGINS = ["https://lacima.onrender.com"]
+def env_list(name: str, default: str = "") -> list[str]:
+    raw = os.getenv(name, default)
+    return [x.strip() for x in raw.split(",") if x.strip()]
 
 # -----------------------------
-# Claves y modo debug
+# Debug / Secret / Hosts
 # -----------------------------
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-CHANGE-ME")
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+DEBUG = env_bool("DEBUG", False)
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-CHANGE-ME")
 
-# Dominios permitidos
-if DEBUG:
-    ALLOWED_HOSTS = []
-    CSRF_TRUSTED_ORIGINS = []
-else:
-    # Ajusta estos valores para producción
-    ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "").split(",") if os.environ.get("ALLOWED_HOSTS") else []
-    CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if os.environ.get("CSRF_TRUSTED_ORIGINS") else []
+# Por defecto permitimos tu dominio de Render y local
+DEFAULT_HOSTS = "lacima.onrender.com,localhost,127.0.0.1"
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", DEFAULT_HOSTS)
+
+# CSRF: confía en los mismos hosts pero con https (excluye localhost)
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{h.lstrip('.')}" for h in ALLOWED_HOSTS
+    if h not in ("localhost", "127.0.0.1")
+]
+
+# Render/Proxies: respeta X-Forwarded-Proto
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # -----------------------------
 # Apps instaladas
@@ -46,11 +57,11 @@ INSTALLED_APPS = [
 ]
 
 # -----------------------------
-# Middleware (Whitenoise ya incluido)
+# Middleware (WhiteNoise)
 # -----------------------------
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",  # <- importante para estáticos en prod
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -67,7 +78,7 @@ ROOT_URLCONF = "lacima.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],  # usa templates de apps (APP_DIRS=True)
+        "DIRS": [],  # usa templates de las apps
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -82,14 +93,16 @@ TEMPLATES = [
 WSGI_APPLICATION = "lacima.wsgi.application"
 
 # -----------------------------
-# Base de datos (usa DATABASE_URL si existe; si no, SQLite)
+# Base de datos
+# - Usa DATABASE_URL (Postgres en Render)
+# - Si no existe, usa SQLite local
 # -----------------------------
 DATABASES = {
     "default": dj_database_url.config(
         env="DATABASE_URL",
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
-        ssl_require=False if DEBUG else True,
+        ssl_require=not DEBUG,
     )
 }
 
@@ -106,30 +119,23 @@ AUTH_PASSWORD_VALIDATORS = [
 # -----------------------------
 # Internacionalización / Zona horaria
 # -----------------------------
-LANGUAGE_CODE = "es"  # interfaz admin en español
+LANGUAGE_CODE = "es-mx"
 TIME_ZONE = "America/Mazatlan"
 USE_I18N = True
 USE_TZ = True
 
 # -----------------------------
-# Archivos estáticos
+# Archivos estáticos (WhiteNoise)
 # -----------------------------
 STATIC_URL = "/static/"
-
-# Carpeta donde pones tus archivos estáticos propios (logos, css, etc.)
-# Crea esta carpeta si no existe: BASE_DIR / "static"
-STATICFILES_DIRS = [
-    BASE_DIR / "static",
-]
-
-# Carpeta a la que collectstatic copiará todo (no la crees tú)
+# Carpeta con tus estáticos propios (logos, etc.)
+STATICFILES_DIRS = [BASE_DIR / "static"]
+# Carpeta donde collectstatic los reúne (Render los sirve desde aquí)
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-# Whitenoise: servir estáticos en prod
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # -----------------------------
-# Seguridad (solo en producción)
+# Seguridad extra en producción
 # -----------------------------
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
