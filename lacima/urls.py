@@ -19,6 +19,7 @@ from django.urls import path
 from django.urls import path, include
 
 urlpatterns = [
+    path("", RedirectView.as_view(pattern_name="shipment_create", permanent=False)),
     path('admin/', admin.site.urls),
     path('empaques/', include('empaques.urls')),  # incluimos las de tu app
     path('accounts/', include('django.contrib.auth.urls')),
