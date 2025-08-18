@@ -67,24 +67,27 @@ def shipment_create(request):
         'form': form,
         'formset': formset,
     })
-@login_required
-@permission_required('empaques.view_shipment', raise_exception=True)
-def shipment_list(request):
-    from datetime import date
-    from collections import defaultdict
-    from io import BytesIO
-    import os
-    from django.conf import settings
-    from django.http import HttpResponse
-    from openpyxl import Workbook
-    from openpyxl.drawing.image import Image as XLImage
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from openpyxl.utils import get_column_letter
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from datetime import date
+from collections import defaultdict
 
+from .models import Shipment, ShipmentItem
+
+@login_required
+def shipment_list(request):
+    # Imports locales para la exportación
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+    # --- Lista de embarques para la tabla ---
     shipments = Shipment.objects.order_by('-date', '-id')
 
-    # Parámetros para descarga
-    descargar = request.GET.get('descargar')  # 'mes' | 'ano' | None
+    # --- Permiso para descargar/exportar ---
+    can_download = request.user.has_perm('empaques.can_download_reports')
+
+    # --- Parámetros de periodo ---
     try:
         year = int(request.GET.get('year') or date.today().year)
     except ValueError:
@@ -94,204 +97,172 @@ def shipment_list(request):
     except ValueError:
         month = date.today().month
 
-    # ---------- Helpers de estilo ----------
-    def _style_headers(ws, row, headers, fill_color="225577", font_color="FFFFFF"):
-        head_font = Font(name='Calibri', size=14, bold=True, color=font_color)
-        fill = PatternFill("solid", fgColor=fill_color)
+    # Solo aceptamos descargas si tiene permiso
+    descargar = request.GET.get('descargar') if can_download else None
+
+    # ================================
+    # Descarga mensual o anual (XLSX)
+    # ================================
+    if descargar in ('mes', 'ano'):
+        if descargar == 'mes':
+            embarques = (
+                Shipment.objects
+                .filter(date__year=year, date__month=month)
+                .order_by('date', 'tracking_number')
+                .prefetch_related('items', 'items__presentation')
+            )
+            filename = f"resumen_mes_{year}_{month:02d}.xlsx"
+            titulo = f"Resumen Mensual {year}-{month:02d}"
+        else:
+            embarques = (
+                Shipment.objects
+                .filter(date__year=year)
+                .order_by('date', 'tracking_number')
+                .prefetch_related('items', 'items__presentation')
+            )
+            filename = f"resumen_anual_{year}.xlsx"
+            titulo = f"Resumen Anual {year}"
+
+        # Recolecta ítems
+        items = []
+        for s in embarques:
+            for it in s.items.all():
+                items.append(it)
+
+        # Agregados
+        presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
+        total_cajas = 0
+        total_eq_11lbs = 0.0
+        total_dinero = 0.0
+
+        for it in items:
+            key = (it.presentation.name, it.size)
+            presentaciones_info[key]['cajas'] += it.quantity
+            importe = it.quantity * float(it.presentation.price)
+            presentaciones_info[key]['dinero'] += importe
+            total_cajas += it.quantity
+            total_eq_11lbs += it.quantity * float(it.presentation.conversion_factor)
+            total_dinero += importe
+
+        # ==== Construir Excel bonito ====
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resumen"
+
+        # Estilos
+        title_font = Font(name='Calibri', size=18, bold=True, color="3C78D8")
+        header_font = Font(name='Calibri', size=14, bold=True, color="FFFFFF")
+        normal_font = Font(name='Calibri', size=12)
+        th_fill = PatternFill("solid", fgColor="225577")
         border = Border(
             left=Side(style='thin', color='AAAAAA'),
             right=Side(style='thin', color='AAAAAA'),
             top=Side(style='thin', color='AAAAAA'),
             bottom=Side(style='thin', color='AAAAAA'),
         )
-        for col, text in enumerate(headers, start=1):
-            c = ws.cell(row=row, column=col, value=text)
-            c.font = head_font
-            c.fill = fill
-            c.alignment = Alignment(horizontal="center")
-            c.border = border
-        return border  # para reutilizarlo
 
-    def _set_widths(ws, widths):
-        for i, w in enumerate(widths, start=1):
-            ws.column_dimensions[get_column_letter(i)].width = w
+        row = 1
+        ws.cell(row=row, column=1, value=titulo).font = title_font
+        row += 2
 
-    def _fmt_currency(cell):
-        cell.number_format = '$#,##0.00'
+        # Totales globales (bloque)
+        ws.cell(row=row, column=1, value="Total de Embarques:").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=len(embarques)).font = normal_font
+        row += 1
+        ws.cell(row=row, column=1, value="Número total de cajas:").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=total_cajas).font = normal_font
+        row += 1
+        ws.cell(row=row, column=1, value="Total equivalente en 11 lbs:").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=round(total_eq_11lbs, 2)).font = normal_font
+        row += 1
+        ws.cell(row=row, column=1, value="Total de dinero:").font = Font(bold=True)
+        ws.cell(row=row, column=2, value=round(total_dinero, 2)).font = normal_font
+        row += 2
 
-    def _fmt_number(cell, decimals=0):
-        cell.number_format = '#,##0' if decimals == 0 else '#,##0.' + '0'*decimals
+        # Tabla: Presentaciones utilizadas
+        ws.cell(row=row, column=1, value="Presentaciones utilizadas").font = Font(size=14, bold=True)
+        row += 1
+        headers = ["Presentación", "Tamaño", "Total de cajas", "Total de dinero"]
+        for col, h in enumerate(headers, start=1):
+            cell = ws.cell(row=row, column=col, value=h)
+            cell.font = header_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = border
+        row += 1
 
-    def _put_logo(ws, anchor="A1"):
-        # Logo opcional (coloca un PNG en static/logos/la-cima.png si quieres mostrarlo)
-        logo_path = os.path.join(settings.BASE_DIR, 'static', 'logos', 'la-cima.png')
-        if os.path.exists(logo_path):
-            img = XLImage(logo_path)
-            img.height = 90
-            img.width = 200
-            ws.add_image(img, anchor)
-            return True
-        return False
+        for (nombre_pres, size), info in sorted(presentaciones_info.items()):
+            ws.cell(row=row, column=1, value=nombre_pres)
+            ws.cell(row=row, column=2, value=size)
+            ws.cell(row=row, column=3, value=info['cajas'])
+            ws.cell(row=row, column=4, value=round(info['dinero'], 2))
+            for col in range(1, 5):
+                c = ws.cell(row=row, column=col)
+                c.font = normal_font
+                c.alignment = Alignment(horizontal="center")
+                c.border = border
+            row += 1
 
-    def _period_queryset(year, month_or_none):
-        if month_or_none:
-            qs_ship = Shipment.objects.filter(
-                date__year=year, date__month=month_or_none
-            ).order_by('date', 'tracking_number').prefetch_related('items', 'items__presentation')
-            titulo = f"Resumen Mensual – {year}-{month_or_none:02d}"
-            nombre = f"resumen_mes_{year}_{month_or_none:02d}.xlsx"
-        else:
-            qs_ship = Shipment.objects.filter(
-                date__year=year
-            ).order_by('date', 'tracking_number').prefetch_related('items', 'items__presentation')
-            titulo = f"Resumen Anual – {year}"
-            nombre = f"resumen_ano_{year}.xlsx"
-        return qs_ship, titulo, nombre
+        # Ancho columnas
+        ws.column_dimensions['A'].width = 26
+        ws.column_dimensions['B'].width = 14
+        ws.column_dimensions['C'].width = 18
+        ws.column_dimensions['D'].width = 16
 
-    def _build_period_workbook(qs_ship, title_text):
-        # --- Agregados ---
-        items = ShipmentItem.objects.filter(shipment__in=qs_ship).select_related('presentation', 'shipment')
-        presentaciones = defaultdict(lambda: {'cajas': 0, 'eq': 0.0, 'importe': 0.0})
-        total_embarques = qs_ship.count()
-        total_cajas = 0
-        total_eq = 0.0
-        total_dinero = 0.0
+        row += 2
 
-        for it in items:
-            key = (it.presentation.name, it.size)
-            cajas = it.quantity
-            eq = it.quantity * float(it.presentation.conversion_factor)
-            imp = it.quantity * float(it.presentation.price)
-            presentaciones[key]['cajas'] += cajas
-            presentaciones[key]['eq'] += eq
-            presentaciones[key]['importe'] += imp
-            total_cajas += cajas
-            total_eq += eq
-            total_dinero += imp
+        # Detalle por embarque
+        ws.cell(row=row, column=1, value="Detalle de embarques").font = Font(size=14, bold=True)
+        row += 1
+        headers_det = ["Fecha", "N# Embarque", "N# Factura", "Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs", "Importe ($)"]
+        for col, h in enumerate(headers_det, start=1):
+            cell = ws.cell(row=row, column=col, value=h)
+            cell.font = header_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = border
+        row += 1
 
-        # --- Workbook / sheet ---
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Resumen"
-
-        # Título
-        title_font = Font(name='Calibri', size=18, bold=True, color="3C78D8")
-        ws.cell(row=1, column=3, value=title_text).font = title_font
-        ws.cell(row=1, column=3).alignment = Alignment(horizontal="left")
-
-        # Logo (opcional)
-        has_logo = _put_logo(ws, "A1")
-        top_info_row = 3 if has_logo else 1
-
-        # Bloque Resumen
-        label_font = Font(name='Calibri', size=12, bold=True, color="666666")
-        value_font = Font(name='Calibri', size=12)
-        r = top_info_row + 2
-        ws.cell(row=r, column=1, value="Total de embarques:").font = label_font
-        ws.cell(row=r, column=2, value=total_embarques).font = value_font
-        r += 1
-        ws.cell(row=r, column=1, value="Total de cajas:").font = label_font
-        ws.cell(row=r, column=2, value=total_cajas).font = value_font
-        _fmt_number(ws.cell(row=r, column=2), 0)
-        r += 1
-        ws.cell(row=r, column=1, value="Total equivalente 11 lbs:").font = label_font
-        ws.cell(row=r, column=2, value=round(total_eq, 2)).font = value_font
-        _fmt_number(ws.cell(row=r, column=2), 2)
-        r += 1
-        ws.cell(row=r, column=1, value="Total de dinero:").font = label_font
-        ws.cell(row=r, column=2, value=round(total_dinero, 2)).font = value_font
-        _fmt_currency(ws.cell(row=r, column=2))
-
-        # --- Presentaciones usadas ---
-        r += 2
-        ws.cell(row=r, column=1, value="Presentaciones usadas").font = Font(size=14, bold=True)
-        r += 1
-        pres_headers = ["Presentación", "Tamaño", "Total de cajas", "Eq. 11 lbs", "Importe ($)"]
-        pres_border = _style_headers(ws, r, pres_headers)
-        _set_widths(ws, [28, 12, 16, 14, 14])
-        ws.auto_filter.ref = f"A{r}:E{r}"
-        r += 1
-
-        for (nombre_pres, size), info in sorted(presentaciones.items()):
-            ws.cell(row=r, column=1, value=nombre_pres)
-            ws.cell(row=r, column=2, value=size)
-            ws.cell(row=r, column=3, value=info['cajas']);       _fmt_number(ws.cell(row=r, column=3), 0)
-            ws.cell(row=r, column=4, value=round(info['eq'], 2)); _fmt_number(ws.cell(row=r, column=4), 2)
-            ws.cell(row=r, column=5, value=round(info['importe'], 2)); _fmt_currency(ws.cell(row=r, column=5))
-            for c in range(1, 6):
-                ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
-                ws.cell(row=r, column=c).border = pres_border
-            r += 1
-
-        # --- Detalle por embarque (por fecha ascendente) ---
-        r += 2
-        ws.cell(row=r, column=1, value="Detalle de embarques").font = Font(size=14, bold=True)
-        r += 1
-        det_headers = ["Fecha", "N# Embarque", "N# Factura", "Presentación", "Tamaño", "Cantidad", "Eq. 11 lbs", "Importe ($)"]
-        det_border = _style_headers(ws, r, det_headers)
-        _set_widths(ws, [12, 16, 16, 28, 12, 12, 14, 14])
-        ws.auto_filter.ref = f"A{r}:H{r}"
-        r += 1
-
-        for s in qs_ship:  # ya viene ordenado por fecha y tracking_number
+        for s in embarques:
             for it in s.items.all():
-                eq = it.quantity * float(it.presentation.conversion_factor)
-                imp = it.quantity * float(it.presentation.price)
-                ws.cell(row=r, column=1, value=s.date.strftime("%Y-%m-%d"))
-                ws.cell(row=r, column=2, value=s.tracking_number)
-                ws.cell(row=r, column=3, value=s.invoice_number)
-                ws.cell(row=r, column=4, value=it.presentation.name)
-                ws.cell(row=r, column=5, value=it.size)
-                ws.cell(row=r, column=6, value=it.quantity);      _fmt_number(ws.cell(row=r, column=6), 0)
-                ws.cell(row=r, column=7, value=round(eq, 2));      _fmt_number(ws.cell(row=r, column=7), 2)
-                ws.cell(row=r, column=8, value=round(imp, 2));     _fmt_currency(ws.cell(row=r, column=8))
-                for c in range(1, 9):
-                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
-                    ws.cell(row=r, column=c).border = det_border
-                r += 1
+                eq  = it.quantity * float(it.presentation.conversion_factor)
+                amt = it.quantity * float(it.presentation.price)
+                vals = [
+                    s.date.strftime("%Y-%m-%d"),
+                    s.tracking_number,
+                    s.invoice_number,
+                    it.presentation.name,
+                    it.size,
+                    it.quantity,
+                    round(eq, 2),
+                    round(amt, 2),
+                ]
+                for col, v in enumerate(vals, start=1):
+                    cell = ws.cell(row=row, column=col, value=v)
+                    cell.alignment = Alignment(horizontal="center")
+                    cell.border = border
+                row += 1
 
-        # Congelar paneles (arriba del detalle)
-        ws.freeze_panes = f"A{top_info_row + 8}"
-
-        # Mensaje si no hay datos
-        if total_embarques == 0:
-            ws.cell(row=top_info_row + 2, column=1, value="Sin embarques en el período").font = Font(italic=True, color="999999")
-
-        return wb
-
-    # ---------- Descarga mensual (XLSX con diseño) ----------
-    if descargar == 'mes':
-        qs_ship, titulo, nombre = _period_queryset(year, month)
-        wb = _build_period_workbook(qs_ship, titulo)
-        out = BytesIO()
-        wb.save(out)
-        out.seek(0)
+        # Descargar
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
         response = HttpResponse(
-            out,
+            output,
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
-    # ---------- Descarga anual (XLSX con diseño) ----------
-    if descargar == 'ano':
-        qs_ship, titulo, nombre = _period_queryset(year, None)
-        wb = _build_period_workbook(qs_ship, titulo)
-        out = BytesIO()
-        wb.save(out)
-        out.seek(0)
-        response = HttpResponse(
-            out,
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        response['Content-Disposition'] = f'attachment; filename="{nombre}"'
-        return response
-
-    # ---------- Vista HTML normal ----------
+    # ================================
+    # Render normal (sin descargas)
+    # ================================
     return render(request, 'empaques/shipment_list.html', {
         'shipments': shipments,
-        'today': date.today(),  # para autollenar selects si los usas
+        'today': date.today(),
+        'can_download': can_download,
     })
+
 
 
 from datetime import date
@@ -301,11 +272,7 @@ import os
 from django.conf import settings 
 from django.http import HttpResponse
 @login_required
-def daily_report(request):
-    if es_capturista(request.user):
-        messages.info(request, 'No tienes permiso de ver "Reportes". Te llevamos a "Nuevo Embarque".')
-        return redirect("shipment_create")
-    # ... resto de tu lógica actual de reportes ...
+
 def daily_report(request):
     if not (request.user.has_perm('empaques.view_shipment') or request.user.has_perm('empaques.export_reports')):
         return HttpResponseForbidden("No tienes permiso para ver reportes.")  # <-- usa HttpResponseForbidden

@@ -1,5 +1,6 @@
 from django.urls import path, include
 from . import views
+from empaques.views import post_login_redirect  # <-- importa la vista
 
 urlpatterns = [
 path('nuevo/', views.shipment_create, name='shipment_create'),

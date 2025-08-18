@@ -37,7 +37,7 @@ class Shipment(models.Model):
     invoice_number = models.CharField(max_length=30, verbose_name="Número de factura", blank=True)  
     class Meta:
         permissions = [
-            ('export_reports', 'Puede exportar reportes'),
+            ("can_download_reports", "Puede descargar/exportar reportes"),
         ]
 
 

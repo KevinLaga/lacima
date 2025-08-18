@@ -1,0 +1,155 @@
+[
+{
+  "model": "empaques.presentation",
+  "pk": 2,
+  "fields": {
+    "name": "11 lbs",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.15"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 3,
+  "fields": {
+    "name": "costco 27 lbs bag",
+    "conversion_factor": "2.4545454545454600",
+    "price": "9.23"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 4,
+  "fields": {
+    "name": "Costco 16x2.25 36lbs",
+    "conversion_factor": "3.2727272727272700",
+    "price": "11.80"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 5,
+  "fields": {
+    "name": "Walmart 11 lbs 2pz",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.15"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 6,
+  "fields": {
+    "name": "SAMS 16X2LB (32LB)BAG",
+    "conversion_factor": "2.9090909090909100",
+    "price": "10.66"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 7,
+  "fields": {
+    "name": "20x250G (11.02LB)",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.65"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 8,
+  "fields": {
+    "name": "25x200G   (11 lbs)",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.65"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 9,
+  "fields": {
+    "name": "11X450G  (10.9LB)",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.12"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 10,
+  "fields": {
+    "name": "11X450G 2 PZ",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.12"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 11,
+  "fields": {
+    "name": "34x150G (11.24 LB)",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.73"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 12,
+  "fields": {
+    "name": "27x180G",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.55"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 13,
+  "fields": {
+    "name": "TIPS (15 LB)",
+    "conversion_factor": "1.3636363636363600",
+    "price": "4.30"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 14,
+  "fields": {
+    "name": "20X12oz    (15 LBS)",
+    "conversion_factor": "1.3636363636363600",
+    "price": "4.30"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 15,
+  "fields": {
+    "name": "28 LBS",
+    "conversion_factor": "2.5454545454545400",
+    "price": "8.01"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 16,
+  "fields": {
+    "name": "BAG 11lbs",
+    "conversion_factor": "1.0000000000000000",
+    "price": "4.65"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 17,
+  "fields": {
+    "name": "14x12oz BAG (11 LB)",
+    "conversion_factor": "1.0000000000000000",
+    "price": "3.15"
+  }
+},
+{
+  "model": "empaques.presentation",
+  "pk": 18,
+  "fields": {
+    "name": "3.75 LBS 10oz",
+    "conversion_factor": "0.3409090909090910",
+    "price": "2.50"
+  }
+}
+]
