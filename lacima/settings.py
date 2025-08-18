@@ -27,14 +27,13 @@ def env_list(name: str, default: str = "") -> list[str]:
 # -----------------------------
 # Debug / Secret / Hosts
 # -----------------------------
-DEBUG = env_bool("DEBUG", False)
+DEBUG = env_bool("DEBUG", True)  # True en local por defecto
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-CHANGE-ME")
 
-# Por defecto permitimos tu dominio de Render y local
 DEFAULT_HOSTS = "lacima.onrender.com,localhost,127.0.0.1"
 ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", DEFAULT_HOSTS)
 
-# CSRF: confía en los mismos hosts pero con https (excluye localhost)
+# CSRF: confía en los hosts (con https) excepto localhost
 CSRF_TRUSTED_ORIGINS = [
     f"https://{h.lstrip('.')}" for h in ALLOWED_HOSTS
     if h not in ("localhost", "127.0.0.1")
@@ -94,15 +93,15 @@ WSGI_APPLICATION = "lacima.wsgi.application"
 
 # -----------------------------
 # Base de datos
-# - Usa DATABASE_URL (Postgres en Render)
-# - Si no existe, usa SQLite local
+# - En Render: DATABASE_URL (Postgres)
+# - En local: SQLite por defecto (sin SSL)
 # -----------------------------
 DATABASES = {
     "default": dj_database_url.config(
         env="DATABASE_URL",
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
         conn_max_age=600,
-        ssl_require=not DEBUG,
+        ssl_require=not DEBUG,  # solo exige SSL cuando no estás en DEBUG
     )
 }
 
@@ -128,10 +127,8 @@ USE_TZ = True
 # Archivos estáticos (WhiteNoise)
 # -----------------------------
 STATIC_URL = "/static/"
-# Carpeta con tus estáticos propios (logos, etc.)
-STATICFILES_DIRS = [BASE_DIR / "static"]
-# Carpeta donde collectstatic los reúne (Render los sirve desde aquí)
-STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [BASE_DIR / "static"]  # para tus logos, CSS, etc.
+STATIC_ROOT = BASE_DIR / "staticfiles"    # donde collectstatic deja todo
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # -----------------------------
