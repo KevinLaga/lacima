@@ -146,7 +146,7 @@ if not DEBUG:
 # Login/Logout
 # -----------------------------
 LOGIN_URL = "/accounts/login/"
-LOGIN_REDIRECT_URL = "/empaques/lista/"
+LOGIN_REDIRECT_URL = "/empaques/nuevo/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # -----------------------------

@@ -8,6 +8,9 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.forms import inlineformset_factory
 from django.http import HttpResponse, HttpResponseForbidden
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect
 
 
 from .models import Shipment, ShipmentItem
@@ -17,6 +20,20 @@ from .forms import (
     BaseShipmentItemFormSet,
 )
 from django.contrib.auth.decorators import login_required, permission_required
+def es_capturista(user):
+    return user.is_authenticated and user.groups.filter(name="capturista").exists()
+
+@login_required
+def post_login_redirect(request):
+    """
+    Redirige según el rol:
+    - capturista -> nuevo embarque
+    - demás -> lista de embarques
+    """
+    if es_capturista(request.user):
+        return redirect("shipment_create")
+    return redirect("shipment_list")
+
 
 @login_required
 @permission_required('empaques.add_shipment', raise_exception=True)
@@ -285,6 +302,11 @@ from django.conf import settings
 from django.http import HttpResponse
 @login_required
 def daily_report(request):
+    if es_capturista(request.user):
+        messages.info(request, 'No tienes permiso de ver "Reportes". Te llevamos a "Nuevo Embarque".')
+        return redirect("shipment_create")
+    # ... resto de tu lógica actual de reportes ...
+def daily_report(request):
     if not (request.user.has_perm('empaques.view_shipment') or request.user.has_perm('empaques.export_reports')):
         return HttpResponseForbidden("No tienes permiso para ver reportes.")  # <-- usa HttpResponseForbidden
 
@@ -513,7 +535,6 @@ def daily_report(request):
         # Anchos
         ws.column_dimensions['C'].width = 25
         ws.column_dimensions['H'].width = 20
-
         output = BytesIO()
         wb.save(output)
         output.seek(0)
@@ -580,13 +601,13 @@ def daily_report(request):
 
                 # [num impar] [bloque impar x4] [temp impar] [bloque par x4] [temp par] [num par]
                 num_left_col    = base_col
-                left_block_col  = num_left_col + 1
-                left_temp_col   = left_block_col + 4
+                left_block_col  = num_left_col + 1 
+                left_temp_col   = left_block_col + 4 
                 right_block_col = left_temp_col + 1
                 right_temp_col  = right_block_col + 4
                 num_right_col   = right_temp_col + 1
 
-                # Anchos
+                # Anchos de columnas
                 set_col_width(num_left_col,  number_col_width)
                 for cc in range(left_block_col, left_block_col + 4):
                     set_col_width(cc, data_col_width)
@@ -624,8 +645,8 @@ def daily_report(request):
                     c.alignment = Alignment(horizontal="center", vertical="center")
                     c.border = thick_all
 
-            # ---------- Tabla resumen inferior (SIN temperatura) ----------
-            table_header_font = Font(name='Calibri', size=14, bold=True, color="FFFFFF")
+            # ---------- Tabla resumen inferior (SIN temperatura) ---------- 
+            table_header_font = Font(name='Calibri', size=14, bold=True, color="FFFFFF") 
             th_fill = PatternFill("solid", fgColor="225577")
             border_thin = Border(
                 left=Side(style='thin', color='AAAAAA'),
@@ -696,8 +717,9 @@ def daily_report(request):
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
 
-    # ---- HTML normal ----
-    #que me provoco el error sabia que no era real pero y si lo era? quezzzzzz
+    # ---- HTML normal ----- 
+
+
     for s in qs:
         for item in s.items.all():
             item.eq_11lbs_calc = item.quantity * float(item.presentation.conversion_factor)
