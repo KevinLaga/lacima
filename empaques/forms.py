@@ -1,11 +1,9 @@
+# empaques/forms.py
 from django import forms
 from django.forms import ModelForm
 from django.forms.models import BaseInlineFormSet
 from django.core.exceptions import ValidationError
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-import re
 from .models import Shipment, ShipmentItem, Presentation
-
 
 class BaseShipmentItemFormSet(BaseInlineFormSet):
     def clean(self):
@@ -14,19 +12,16 @@ class BaseShipmentItemFormSet(BaseInlineFormSet):
             if getattr(form, 'cleaned_data', None) is None or form.cleaned_data.get('DELETE', False):
                 continue
 
-            # Solo tomamos en cuenta tarima, type y quantity para considerar si está lleno
             filled = any([
                 form.cleaned_data.get('tarima'),
                 form.cleaned_data.get('type'),
-                form.cleaned_data.get('quantity')
+                form.cleaned_data.get('quantity'),
             ])
             if filled:
-                # Si hay alguno de estos campos, ahora sí exigimos todos
                 for field in ['tarima', 'type', 'size', 'quantity']:
                     if not form.cleaned_data.get(field):
                         form.add_error(field, "Este campo es requerido.")
             else:
-                # Si está vacío (ignorar size por default), lo marcamos para borrar
                 form.cleaned_data['DELETE'] = True
 
 
@@ -39,26 +34,13 @@ class ShipmentForm(forms.ModelForm):
         label="Horario de salida",
         widget=forms.TimeInput(attrs={'type': 'time'})
     )
-
     class Meta:
         model = Shipment
         fields = [
-            'tracking_number',   # Número de orden
-            'date',              # Fecha
-            'carrier',           # Transportista
-            'tractor_plates',    # Placas tractor
-            'box_plates',        # Placas caja
-            'driver',            # Operador
-            'departure_time',    # Horario de salida
-            'box',               # Caja
-            'box_conditions',    # Condiciones de la caja
-            'box_free_of_odors', # Caja libre de olores
-            'ryan',              # Ryan
-            'seal_1', 'seal_2', 'seal_3', 'seal_4', # Sellos
-            'chismografo',
-            'delivery_signature',# Firma de entrega
-            'driver_signature',  # Firma de operador
-            'invoice_number',    # Número de factura
+            'tracking_number','date','carrier','tractor_plates','box_plates',
+            'driver','departure_time','box','box_conditions','box_free_of_odors',
+            'ryan','seal_1','seal_2','seal_3','seal_4','chismografo',
+            'delivery_signature','driver_signature','invoice_number',
         ]
 
 
@@ -70,57 +52,41 @@ CLIENTE_CHOICES = [
     ('GBF Farms', 'GBF Farms'),
 ]
 
-
 class ShipmentItemForm(ModelForm):
     tarima = forms.IntegerField(label="Tarima", min_value=1, max_value=26)
 
-    # dropdown de Presentation
+    # 👇 Evitamos query en import: arrancamos con .none() y lo rellenamos en __init__
     type = forms.ModelChoiceField(
-        queryset=Presentation.objects.order_by('name'),
+        queryset=Presentation.objects.none(),
         label="Tipo"
     )
 
     cliente = forms.ChoiceField(
         choices=CLIENTE_CHOICES,
-        required=False, 
+        required=False,
         label="Cliente"
     )
 
-    temperatura = forms.CharField(
+    temperatura = forms.DecimalField(
         required=False,
-        label="Temperatura",
-        widget=forms.TextInput(attrs={'placeholder': 'Ej: 5°C'})
+        label="Temperatura (°F)",
+        max_digits=5,
+        decimal_places=1,
+        widget=forms.NumberInput(attrs={'step': '0.1', 'placeholder': 'Ej: 36.2'})
     )
 
     class Meta:
         model = ShipmentItem
         fields = ['type', 'size', 'quantity', 'tarima', 'cliente', 'temperatura']
 
-    def clean_temperatura(self):
-        val = self.cleaned_data.get('temperatura')
-        if val in (None, ''):
-            return None
-
-        # Si ya es número
-        if isinstance(val, (int, float, Decimal)):
-            return Decimal(str(val)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
-
-        s = str(val).strip()
-        s = s.replace(',', '.')
-        m = re.search(r'-?\d+(?:\.\d+)?', s)
-        if not m:
-            raise ValidationError("Ingresa una temperatura válida (ej. 36.2°F).")
-
-        try:
-            num = Decimal(m.group(0)).quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)
-        except InvalidOperation:
-            raise ValidationError("Ingresa una temperatura válida (ej. 36.2°F).")
-
-        return num
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # ❗ Aquí ya es seguro asignar el queryset
+        self.fields['type'].queryset = Presentation.objects.order_by('name')
 
     def clean(self):
         cleaned = super().clean()
-        # "type" es el objeto Presentation
+        # mantén tu lógica si necesitas setear instance.presentation, etc.
         self.instance.presentation = cleaned.get('type')
         return cleaned
 
