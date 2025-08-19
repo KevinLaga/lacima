@@ -68,15 +68,17 @@ def shipment_create(request):
         'formset': formset,
     })
 from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
 from django.http import HttpResponse
 from datetime import date
 from collections import defaultdict
 
 from .models import Shipment, ShipmentItem
 
+
 @login_required
 def shipment_list(request):
-    # Imports locales para la exportación
+    from datetime import date, timedelta
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -97,8 +99,306 @@ def shipment_list(request):
     except ValueError:
         month = date.today().month
 
+    # --------------------------
+    # Helper: genera XLSX común
+    # --------------------------
+    def build_summary_xlsx(title_text, subtitle_text, embarques_qs):
+        items = ShipmentItem.objects.filter(shipment__in=embarques_qs).select_related('presentation')
+
+        # Agregados por presentación/tamaño
+        presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
+        for it in items:
+            k = (it.presentation.name, it.size)
+            presentaciones_info[k]['cajas'] += it.quantity
+            presentaciones_info[k]['dinero'] += it.quantity * float(it.presentation.price)
+
+        total_cajas = sum(i.quantity for i in items)
+        total_eq_11lbs = sum(i.quantity * float(i.presentation.conversion_factor) for i in items)
+        total_dinero = sum(i.quantity * float(i.presentation.price) for i in items)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resumen"
+
+        # Estilos
+        title_font = Font(name="Calibri", size=16, bold=True, color="3C78D8")
+        h_font = Font(name="Calibri", size=12, bold=True)
+        th_font = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+        th_fill = PatternFill("solid", fgColor="225577")
+        border = Border(
+            left=Side(style='thin', color='AAAAAA'),
+            right=Side(style='thin', color='AAAAAA'),
+            top=Side(style='thin', color='AAAAAA'),
+            bottom=Side(style='thin', color='AAAAAA'),
+        )
+
+        r = 1
+        ws.cell(row=r, column=1, value=title_text).font = title_font
+        r += 1
+        if subtitle_text:
+            ws.cell(row=r, column=1, value=subtitle_text)
+            r += 2
+
+        # Presentaciones
+        ws.cell(row=r, column=1, value="Presentaciones utilizadas").font = h_font
+        r += 1
+        headers_pres = ["Presentación", "Tamaño", "Total cajas", "Total dinero"]
+        for c, txt in enumerate(headers_pres, start=1):
+            cell = ws.cell(row=r, column=c, value=txt)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = border
+        r += 1
+
+        if presentaciones_info:
+            for (n_pres, sz), info in sorted(presentaciones_info.items()):
+                ws.cell(row=r, column=1, value=n_pres)
+                ws.cell(row=r, column=2, value=sz)
+                ws.cell(row=r, column=3, value=info['cajas'])
+                ws.cell(row=r, column=4, value=round(info['dinero'], 2))
+                for c in range(1, 5):
+                    ws.cell(row=r, column=c).border = border
+                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
+                r += 1
+        else:
+            ws.cell(row=r, column=1, value="(Sin datos)")
+            r += 1
+
+        r += 1
+        # Totales
+        ws.cell(row=r, column=1, value="Número total de cajas:").font = h_font
+        ws.cell(row=r, column=2, value=total_cajas)
+        r += 1
+        ws.cell(row=r, column=1, value="Total equivalente en 11 lbs:").font = h_font
+        ws.cell(row=r, column=2, value=round(total_eq_11lbs, 2))
+        r += 1
+        ws.cell(row=r, column=1, value="Total de dinero:").font = h_font
+        ws.cell(row=r, column=2, value=round(total_dinero, 2))
+        r += 2
+
+        # Detalle
+        ws.cell(row=r, column=1, value="Detalle de embarques").font = h_font
+        r += 1
+        headers_det = ["Fecha", "N# Embarque", "N# Factura", "Presentación", "Tamaño", "Cantidad", "Importe"]
+        for c, txt in enumerate(headers_det, start=1):
+            cell = ws.cell(row=r, column=c, value=txt)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center")
+            cell.border = border
+        r += 1
+
+        for sh in embarques_qs.order_by('date', 'tracking_number'):
+            for it in sh.items.all():
+                importe = it.quantity * float(it.presentation.price)
+                ws.cell(row=r, column=1, value=sh.date.strftime("%d/%m/%Y"))
+                ws.cell(row=r, column=2, value=sh.tracking_number)
+                ws.cell(row=r, column=3, value=sh.invoice_number)
+                ws.cell(row=r, column=4, value=it.presentation.name)
+                ws.cell(row=r, column=5, value=it.size)
+                ws.cell(row=r, column=6, value=it.quantity)
+                ws.cell(row=r, column=7, value=round(importe, 2))
+                for c in range(1, 7 + 1):
+                    ws.cell(row=r, column=c).border = border
+                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
+                r += 1
+
+        # Anchos
+        ws.column_dimensions['A'].width = 14
+        ws.column_dimensions['B'].width = 16
+        ws.column_dimensions['C'].width = 16
+        ws.column_dimensions['D'].width = 26
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 12
+        ws.column_dimensions['G'].width = 14
+
+        return wb
+
     # Solo aceptamos descargas si tiene permiso
     descargar = request.GET.get('descargar') if can_download else None
+
+    # --------------------------
+    # Descarga SEMANAL (XLSX)
+    # --------------------------
+    if descargar == 'semana':
+        if not request.user.has_perm('empaques.can_download_reports'):
+            return HttpResponse("No tienes permiso para descargar reportes.", status=403)
+
+        iso_week = request.GET.get('iso_week', '')
+        week = None
+        if iso_week:
+            try:
+                y_str, w_str = iso_week.split('-W')
+                year = int(y_str)
+                week = int(w_str)
+            except Exception:
+                week = None
+
+        if week is None:
+            try:
+                week = int(request.GET.get('week') or date.today().isocalendar().week)
+            except ValueError:
+                week = date.today().isocalendar().week
+
+        try:
+            week_start = date.fromisocalendar(year, week, 1)
+            week_end   = date.fromisocalendar(year, week, 7)
+        except Exception:
+            today = date.today()
+            iso = today.isocalendar()
+            year, week = iso.year, iso.week
+            week_start = date.fromisocalendar(year, week, 1)
+            week_end   = date.fromisocalendar(year, week, 7)
+
+        embarques = Shipment.objects.filter(date__range=(week_start, week_end)).order_by('date', 'tracking_number')
+        total_embarques = embarques.count()
+
+        items = ShipmentItem.objects.filter(shipment__in=embarques).select_related('presentation')
+
+        presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
+        for item in items:
+            key = (item.presentation.name, item.size)
+            presentaciones_info[key]['cajas'] += item.quantity
+            presentaciones_info[key]['dinero'] += item.quantity * float(item.presentation.price)
+
+        total_cajas = sum(i.quantity for i in items)
+        total_eq_11lbs = sum(i.quantity * float(i.presentation.conversion_factor) for i in items)
+        total_dinero = sum(i.quantity * float(i.presentation.price) for i in items)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Resumen semanal"
+
+        title_font = Font(name="Calibri", size=16, bold=True, color="3C78D8")
+        h_font = Font(name="Calibri", size=12, bold=True)
+        th_font = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+        th_fill = PatternFill("solid", fgColor="225577")
+        border = Border(
+            left=Side(style='thin', color='AAAAAA'),
+            right=Side(style='thin', color='AAAAAA'),
+            top=Side(style='thin', color='AAAAAA'),
+            bottom=Side(style='thin', color='AAAAAA'),
+        )
+
+        r = 1
+        ws.cell(row=r, column=1, value=f"Resumen de Embarques – Semana ISO {week} / {year}").font = title_font
+        r += 1
+        ws.cell(row=r, column=1, value=f"Rango: {week_start.strftime('%d/%m/%Y')} – {week_end.strftime('%d/%m/%Y')}")
+        r += 1
+        ws.cell(row=r, column=1, value=f"Total de embarques: {total_embarques}")
+        r += 2
+
+        ws.cell(row=r, column=1, value="Presentaciones utilizadas").font = h_font
+        r += 1
+        headers_pres = ["Presentación", "Tamaño", "Total cajas", "Total dinero"]
+        for c, txt in enumerate(headers_pres, start=1):
+            cell = ws.cell(row=r, column=c, value=txt)
+            cell.font = th_font; cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center"); cell.border = border
+        r += 1
+
+        if presentaciones_info:
+            for (nombre_pres, size), info in sorted(presentaciones_info.items()):
+                ws.cell(row=r, column=1, value=nombre_pres)
+                ws.cell(row=r, column=2, value=size)
+                ws.cell(row=r, column=3, value=info['cajas'])
+                ws.cell(row=r, column=4, value=round(info['dinero'], 2))
+                for c in range(1, 5):
+                    ws.cell(row=r, column=c).border = border
+                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
+                r += 1
+        else:
+            ws.cell(row=r, column=1, value="(Sin datos)"); r += 1
+
+        r += 1
+        ws.cell(row=r, column=1, value="Número total de cajas:").font = h_font
+        ws.cell(row=r, column=2, value=total_cajas); r += 1
+        ws.cell(row=r, column=1, value="Total equivalente en 11 lbs:").font = h_font
+        ws.cell(row=r, column=2, value=round(total_eq_11lbs, 2)); r += 1
+        ws.cell(row=r, column=1, value="Total de dinero:").font = h_font
+        ws.cell(row=r, column=2, value=round(total_dinero, 2)); r += 2
+
+        ws.cell(row=r, column=1, value="Detalle de embarques de la semana").font = h_font
+        r += 1
+        headers_det = ["Fecha", "N# Embarque", "N# Factura", "Presentación", "Tamaño", "Cantidad", "Importe"]
+        for c, txt in enumerate(headers_det, start=1):
+            cell = ws.cell(row=r, column=c, value=txt)
+            cell.font = th_font; cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center"); cell.border = border
+        r += 1
+
+        for shipment in embarques:
+            for item in shipment.items.all():
+                importe = item.quantity * float(item.presentation.price)
+                ws.cell(row=r, column=1, value=shipment.date.strftime("%d/%m/%Y"))
+                ws.cell(row=r, column=2, value=shipment.tracking_number)
+                ws.cell(row=r, column=3, value=shipment.invoice_number)
+                ws.cell(row=r, column=4, value=item.presentation.name)
+                ws.cell(row=r, column=5, value=item.size)
+                ws.cell(row=r, column=6, value=item.quantity)
+                ws.cell(row=r, column=7, value=round(importe, 2))
+                for c in range(1, 7 + 1):
+                    ws.cell(row=r, column=c).border = border
+                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
+                r += 1
+
+        ws.column_dimensions['A'].width = 14
+        ws.column_dimensions['B'].width = 16
+        ws.column_dimensions['C'].width = 16
+        ws.column_dimensions['D'].width = 26
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 12
+        ws.column_dimensions['G'].width = 14
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"resumen_semana_{year}_W{week:02d}.xlsx"
+        response = HttpResponse(
+            output,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    # --------------------------
+    # Descarga por RANGO (XLSX)
+    # --------------------------
+    if descargar == 'rango':
+        if not request.user.has_perm('empaques.can_download_reports'):
+            return HttpResponse("No tienes permiso para descargar reportes.", status=403)
+
+        start_str = request.GET.get('start')
+        end_str   = request.GET.get('end')
+        if not start_str or not end_str:
+            return HttpResponse("Debes indicar 'start' y 'end' en formato YYYY-MM-DD.", status=400)
+
+        try:
+            start_d = date.fromisoformat(start_str)
+            end_d   = date.fromisoformat(end_str)
+        except ValueError:
+            return HttpResponse("Fechas inválidas. Usa formato YYYY-MM-DD.", status=400)
+
+        if end_d < start_d:
+            return HttpResponse("El fin de rango no puede ser menor que el inicio.", status=400)
+
+        embarques = Shipment.objects.filter(date__range=(start_d, end_d))
+
+        wb = build_summary_xlsx(
+            "Resumen de Embarques – Rango de fechas",
+            f"Rango: {start_d.strftime('%d/%m/%Y')} – {end_d.strftime('%d/%m/%Y')}",
+            embarques
+        )
+
+        output = BytesIO(); wb.save(output); output.seek(0)
+        filename = f"resumen_rango_{start_d.strftime('%Y%m%d')}_{end_d.strftime('%Y%m%d')}.xlsx"
+        resp = HttpResponse(
+            output,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return resp
 
     # ================================
     # Descarga mensual o anual (XLSX)
@@ -124,10 +424,7 @@ def shipment_list(request):
             titulo = f"Resumen Anual {year}"
 
         # Recolecta ítems
-        items = []
-        for s in embarques:
-            for it in s.items.all():
-                items.append(it)
+        items = [it for s in embarques for it in s.items.all()]
 
         # Agregados
         presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
@@ -149,7 +446,6 @@ def shipment_list(request):
         ws = wb.active
         ws.title = "Resumen"
 
-        # Estilos
         title_font = Font(name='Calibri', size=18, bold=True, color="3C78D8")
         header_font = Font(name='Calibri', size=14, bold=True, color="FFFFFF")
         normal_font = Font(name='Calibri', size=12)
@@ -165,7 +461,6 @@ def shipment_list(request):
         ws.cell(row=row, column=1, value=titulo).font = title_font
         row += 2
 
-        # Totales globales (bloque)
         ws.cell(row=row, column=1, value="Total de Embarques:").font = Font(bold=True)
         ws.cell(row=row, column=2, value=len(embarques)).font = normal_font
         row += 1
@@ -179,7 +474,6 @@ def shipment_list(request):
         ws.cell(row=row, column=2, value=round(total_dinero, 2)).font = normal_font
         row += 2
 
-        # Tabla: Presentaciones utilizadas
         ws.cell(row=row, column=1, value="Presentaciones utilizadas").font = Font(size=14, bold=True)
         row += 1
         headers = ["Presentación", "Tamaño", "Total de cajas", "Total de dinero"]
@@ -196,14 +490,13 @@ def shipment_list(request):
             ws.cell(row=row, column=2, value=size)
             ws.cell(row=row, column=3, value=info['cajas'])
             ws.cell(row=row, column=4, value=round(info['dinero'], 2))
-            for col in range(1, 5):
+            for col in range(1, 4 + 1):
                 c = ws.cell(row=row, column=col)
                 c.font = normal_font
                 c.alignment = Alignment(horizontal="center")
                 c.border = border
             row += 1
 
-        # Ancho columnas
         ws.column_dimensions['A'].width = 26
         ws.column_dimensions['B'].width = 14
         ws.column_dimensions['C'].width = 18
@@ -211,7 +504,6 @@ def shipment_list(request):
 
         row += 2
 
-        # Detalle por embarque
         ws.cell(row=row, column=1, value="Detalle de embarques").font = Font(size=14, bold=True)
         row += 1
         headers_det = ["Fecha", "N# Embarque", "N# Factura", "Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs", "Importe ($)"]
@@ -243,7 +535,6 @@ def shipment_list(request):
                     cell.border = border
                 row += 1
 
-        # Descargar
         output = BytesIO()
         wb.save(output)
         output.seek(0)
@@ -262,6 +553,7 @@ def shipment_list(request):
         'today': date.today(),
         'can_download': can_download,
     })
+
 
 
 

@@ -42,6 +42,21 @@
 {% else %}
   <p>No tienes permiso para ver embarques.</p>
 {% endif %}
+<!-- Descarga por semana (input type="week") -->
+<form method="get" style="display:inline-block; margin-right:10px;">
+  <label for="id_iso_week">Semana:</label>
+  <input type="week" id="id_iso_week" name="iso_week" />
+  <button type="submit" name="descargar" value="semana">Descargar semana</button>
+</form>
+
+<!-- Descarga por rango de fechas -->
+<form method="get" style="display:inline-block; margin-right:10px;">
+  <label for="id_start">Rango:</label>
+  <input type="date" id="id_start" name="start" required>
+  <span>—</span>
+  <input type="date" id="id_end" name="end" required>
+  <button type="submit" name="descargar" value="rango">Descargar rango</button>
+</form>
 
   <!-- Formulario de descarga mensual -->
   <h3>Descargar resumen mensual</h3>
