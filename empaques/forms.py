@@ -30,6 +30,12 @@ class ShipmentForm(forms.ModelForm):
         label="Fecha",
         widget=forms.DateInput(attrs={'type': 'date'})
     )
+    tarimas_peco = forms.IntegerField(
+        label="Tarimas PECO",
+        min_value=0,
+        required=False,
+        widget=forms.NumberInput(attrs={'placeholder': 'Ej: 3'})
+    )
     departure_time = forms.TimeField(
         label="Horario de salida",
         widget=forms.TimeInput(attrs={'type': 'time'})
@@ -40,7 +46,7 @@ class ShipmentForm(forms.ModelForm):
             'tracking_number','date','carrier','tractor_plates','box_plates',
             'driver','departure_time','box','box_conditions','box_free_of_odors',
             'ryan','seal_1','seal_2','seal_3','seal_4','chismografo',
-            'delivery_signature','driver_signature','invoice_number',
+            'delivery_signature','driver_signature','invoice_number','tarimas_peco',
         ]
 
 

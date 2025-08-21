@@ -628,7 +628,7 @@ def daily_report(request):
             return "Sí" if v else "No" 
         return str(v)
 
-    def write_shipment_info(ws, start_row, start_col, embarque): 
+    def write_shipment_info(ws, start_row, start_col, embarque, include_peco=False):
         """Escribe bloque con datos del embarque. Devuelve el último row usado."""
         label_font = Font(name='Calibri', size=13, bold=True, color="666666")
         value_font = Font(name='Calibri', size=13)
@@ -651,14 +651,18 @@ def daily_report(request):
             ("Firma Operador", _str(embarque.driver_signature)),
             ("Factura",        _str(embarque.invoice_number)),
         ]
-        r = start_row 
+         # Insertar Tarimas PECO SOLO si include_peco=True 
+        if include_peco:
+            info.append(("Tarimas PECO", _str(getattr(embarque, "tarimas_peco", None))))
 
-        for label, val in info:
+
+         # Escribir en hoja
+        r = start_row
+        for label, value in info:
             ws.cell(row=r, column=start_col,     value=label + ":").font = label_font
-            ws.cell(row=r, column=start_col + 1, value=val).font        = value_font
-            ws.cell(row=r, column=start_col).alignment     = Alignment(horizontal="left")
-            ws.cell(row=r, column=start_col + 1).alignment = Alignment(horizontal="left") 
+            ws.cell(row=r, column=start_col + 1, value=value).font     = value_font
             r += 1
+
         return r - 1
 
     def score_shipment(s):
@@ -747,7 +751,7 @@ def daily_report(request):
             rep = max(ships, key=score_shipment)
             last = write_shipment_info(ws, start_row=row, start_col=1, embarque=rep)
             row = last + 2
-
+            
         # Encabezados tabla
         headers = [
             "N# EMBARQUE", "N# FACTURA", "PRESENTACIÓN", "TAMAÑO",
@@ -760,6 +764,7 @@ def daily_report(request):
             cell.alignment = Alignment(horizontal="center")
             cell.border = border
         row += 1
+         
 
         # Filas
         for s in qs:
@@ -778,6 +783,7 @@ def daily_report(request):
                     ws.cell(row=row, column=c).alignment = Alignment(horizontal="center")
                     ws.cell(row=row, column=c).border = border
                 row += 1
+                
 
         # Totales
         ws.merge_cells(start_row=row+1, start_column=1, end_row=row+1, end_column=4)
@@ -830,7 +836,7 @@ def daily_report(request):
             # Datos del embarque (a la izquierda)
             rptr = datos_start_row
             for embarque in shipments_cliente:
-                last = write_shipment_info(ws, start_row=rptr, start_col=2, embarque=embarque)
+                last = write_shipment_info(ws, start_row=rptr, start_col=2, embarque=embarque, include_peco=True)
                 rptr = last + 2
             ws.column_dimensions['B'].width = 20
             ws.column_dimensions['C'].width = 50

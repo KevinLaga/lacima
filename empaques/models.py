@@ -16,6 +16,12 @@ class Presentation(models.Model):
 
 
 class Shipment(models.Model):
+    tarimas_peco = models.PositiveIntegerField(
+        "Tarimas PECO",
+        blank=True,
+        null=True,
+        help_text="Número de tarimas tipo PECO en el embarque"
+    )
     tracking_number = models.CharField(max_length=30, verbose_name="Número de orden")  
     date = models.DateField(verbose_name="Fecha")  
     carrier = models.CharField(max_length=50, verbose_name="Transportista", blank=True)
@@ -38,6 +44,7 @@ class Shipment(models.Model):
     class Meta:
         permissions = [
             ("can_download_reports", "Puede descargar/exportar reportes"),
+
         ]
 
 
