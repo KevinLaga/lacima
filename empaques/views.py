@@ -102,6 +102,8 @@ def shipment_list(request):
     # --------------------------
     # Helper: genera XLSX común
     # --------------------------
+    
+
     def build_summary_xlsx(title_text, subtitle_text, embarques_qs):
         items = ShipmentItem.objects.filter(shipment__in=embarques_qs).select_related('presentation')
 
@@ -210,8 +212,9 @@ def shipment_list(request):
         ws.column_dimensions['C'].width = 16
         ws.column_dimensions['D'].width = 26
         ws.column_dimensions['E'].width = 10
-        ws.column_dimensions['F'].width = 12
+        ws.column_dimensions['F'].width = 20.29
         ws.column_dimensions['G'].width = 14
+        ws.column_dimensions['L'].width = 20.29
 
         return wb
 
@@ -348,8 +351,9 @@ def shipment_list(request):
         ws.column_dimensions['C'].width = 16
         ws.column_dimensions['D'].width = 26
         ws.column_dimensions['E'].width = 10
-        ws.column_dimensions['F'].width = 12
+        ws.column_dimensions['F'].width = 20.29
         ws.column_dimensions['G'].width = 14
+        ws.column_dimensions['L'].width = 20.29
 
         output = BytesIO()
         wb.save(output)
@@ -582,6 +586,20 @@ def daily_report(request):
     from openpyxl.drawing.image import Image as XLImage
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from openpyxl.utils import get_column_letter
+    def fecha_es(d):
+        """Devuelve la fecha en español: LUNES 31 DE AGOSTO DEL 2025 (en mayúsculas)."""
+        if not d:
+            return ""
+    # Opción A: Babel (recomendado)
+        try:
+            from babel.dates import format_date
+            txt = format_date(d, format="EEEE d 'DE' MMMM 'DEL' y", locale='es_MX')
+            return txt.upper()
+        except Exception:
+            # Opción B: fallback manual si Babel no está disponible
+            dias = ["LUNES","MARTES","MIÉRCOLES","JUEVES","VIERNES","SÁBADO","DOMINGO"]
+            meses = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"]
+            return f"{dias[d.weekday()]} {d.day:02d} DE {meses[d.month-1]} DEL {d.year}"
 
     # ---- Lista de clientes ----
     clientes = [ 
@@ -591,6 +609,14 @@ def daily_report(request):
         "Gourmet Baja Farms",
         "GBF Farms",
     ]
+    LEGAL_CLIENT_NAME = {
+    "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
+    "RC Organics": "RC Organics S. DE R.L DE C.V.",
+    "GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  # <- cambia la clave si tu BD no usa "GH Farms"
+    "Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
+    "GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
+}
+
     clientes_slug = [(c, slugify(c)) for c in clientes] 
 
     # ---- Fecha a reportar ----
@@ -630,12 +656,12 @@ def daily_report(request):
 
     def write_shipment_info(ws, start_row, start_col, embarque, include_peco=False):
         """Escribe bloque con datos del embarque. Devuelve el último row usado."""
-        label_font = Font(name='Calibri', size=13, bold=True, color="666666")
-        value_font = Font(name='Calibri', size=13)
+        label_font = Font(name='Calibri', size=18, bold=True, color="666666")
+        value_font = Font(name='Calibri', size=16)
         seals = ", ".join([s for s in [embarque.seal_1, embarque.seal_2, embarque.seal_3, embarque.seal_4] if s])
         info = [
             ("Núm. Orden",     _str(embarque.tracking_number)),
-            ("Fecha",          embarque.date.strftime("%d-%m-%Y") if getattr(embarque, "date", None) else ""),
+            ("FECHA", fecha_es(getattr(embarque, "date", None))),
             ("Transportista",  _str(embarque.carrier)),
             ("Placas Tractor", _str(embarque.tractor_plates)),
             ("Placas Caja",    _str(embarque.box_plates)),
@@ -650,6 +676,8 @@ def daily_report(request):
             ("Firma Entrega",  _str(embarque.delivery_signature)),
             ("Firma Operador", _str(embarque.driver_signature)),
             ("Factura",        _str(embarque.invoice_number)),
+            ("Dirección",      "H. GALEANA N. 85 LOC A-B, C. ZARAGOZA"),
+            ("Y R. ZAPATA COL. CENTRO, 23600", ""),
         ]
          # Insertar Tarimas PECO SOLO si include_peco=True 
         if include_peco:
@@ -686,31 +714,34 @@ def daily_report(request):
                     return str(it.temperatura)
         return ""
 
-    def pintar_bloque_tarima(ws_, top_row, left_col, temp_col, items_, temp_text):
-        """Dibuja bloque 2x4 (tipo/tam/cant | tipo/tam/cant) + celda única de temperatura."""
+    def pintar_bloque_tarima(ws_, top_row, left_col, temp_col_left, items_, temp_text):
         thin  = Side(style='thin',   color='999999')
         thick = Side(style='medium', color='000000')
-        thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
 
         # 8 celdas internas (2 filas x 4 columnas) con marco grueso exterior
         for rr in (top_row, top_row + 1):
             for cc in range(left_col, left_col + 4):
-                cell = ws_.cell(row=rr, column=cc, value="")
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell = ws_.cell(row=rr, column=cc, value=cell.value if (cell := ws_.cell(row=rr, column=cc)).value else "")
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 top_side    = thick if rr == top_row else thin
-                bottom_side = thick if rr == (top_row + 1) else thin
+                bottom_side = thick if rr == top_row + 1 else thin
                 left_side   = thick if cc == left_col else thin
-                right_side  = thick if cc == (left_col + 3) else thin
+                right_side  = thick if cc == left_col + 3 else thin
                 cell.border = Border(top=top_side, bottom=bottom_side, left=left_side, right=right_side)
 
-        # Celda única de temperatura (fusionada verticalmente) → aplicar borde a ambas filas
-        ws_.merge_cells(start_row=top_row, start_column=temp_col, end_row=top_row + 1, end_column=temp_col)
+        # Temperatura ocupa 2 columnas ancho x 2 filas alto (fusionamos 2x2)
+        # Estilar primero TODAS las celdas del rectángulo:
         for rr in (top_row, top_row + 1):
-            c = ws_.cell(row=rr, column=temp_col, value=(temp_text or "") if rr == top_row else None)
-            c.alignment = Alignment(horizontal="center", vertical="center")
-            c.border = thick_all
+            for cc in (temp_col_left, temp_col_left + 1):
+                c = ws_.cell(row=rr, column=cc)
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                c.border = Border(top=thick, bottom=thick, left=thick, right=thick)
+        # Fusionar y escribir SOLO en la esquina superior-izquierda:
+        ws_.merge_cells(start_row=top_row, start_column=temp_col_left, end_row=top_row + 1, end_column=temp_col_left + 1)
+        if temp_text:  # sin "GMT" por defecto; sólo escribe si hay lectura
+            ws_.cell(row=top_row, column=temp_col_left, value=temp_text)
 
-        # Pinta hasta 2 ítems (izquierda y derecha del bloque)
+        # Poner hasta 2 ítems
         if not items_:
             return
         it1 = items_[0]
@@ -810,177 +841,327 @@ def daily_report(request):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+         
+    fmt = (request.GET.get('format') or "").strip().lower()
+    if fmt.startswith('xlsx_'):
+        cliente_slug = fmt[5:]
+        cliente = next((c for c in clientes if slugify(c) == cliente_slug), None)
+        if not cliente:
+            return HttpResponse("Cliente no válido para este reporte.", status=400)
 
-    # =================== EXCEL POR CLIENTE (grid con temperatura) ===================
-    for cliente in clientes:
-        if request.GET.get('format') == f'xlsx_{slugify(cliente)}':
-            wb = Workbook()
-            ws = wb.active
+        from openpyxl import Workbook
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        from openpyxl.styles import Alignment
 
-            # Logo y posiciones base
-            logo_path = os.path.join(settings.BASE_DIR, 'static', 'logos', f'{slugify(cliente)}.png')
-            if os.path.exists(logo_path):
-                img = XLImage(logo_path)
-                img.height = 120
-                img.width  = 260
-                ws.add_image(img, "A1")
-                grid_start_row  = 6   # grid arriba (no choca con logo)
-                datos_start_row = 12  # datos debajo del logo
-            else:
-                grid_start_row  = 4
-                datos_start_row = 8
+        wb = Workbook()
+        ws = wb.active
+        ws.title = slugify(cliente)[:31] or "Cliente"
 
-            # Embarques que sí tienen items de este cliente
-            shipments_cliente = [s for s in qs if s.items.filter(cliente=cliente).exists()]
+    # --- (a partir de aquí va TODO tu código de esta rama: anchos, alturas,
+    #     logo, títulos en I1/I2, grid E..R, etc.) ---
+    # widths = {...}
+    # for col, w in widths.items(): ws.column_dimensions[col].width = w
+    # ...
+    # output/return response
+    # return response
 
-            # Datos del embarque (a la izquierda)
-            rptr = datos_start_row
-            for embarque in shipments_cliente:
-                last = write_shipment_info(ws, start_row=rptr, start_col=2, embarque=embarque, include_peco=True)
-                rptr = last + 2
-            ws.column_dimensions['B'].width = 20
-            ws.column_dimensions['C'].width = 50
 
-            # ---- GRID UNIFICADO (tarimas) a la derecha de los datos ----
-            number_font = Font(name='Calibri', size=12, bold=True, color="444444")
-            # Bordes gruesos para celdas fusionadas (número y temperatura)
-            thick = Side(style='medium', color='000000')
-            thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
+        # --- Anchos A..R (exactos) ---
+        widths = {
+            'A': 11.43, 'B': 8.57,  'C': 8.57,  'D':10.29, 'E': 7.14,
+            'F': 5.43,  'G': 6.14,  'H': 5.57,  'I': 6.86, 'J': 2.86,
+            'K': 5.86,  'L': 5.71,  'M': 5.43,  'N': 6.29, 'O': 6.86,
+            'P': 3.57,  'Q': 5.00,  'R': 1.71,
+        }
+        for col, w in widths.items():
+            ws.column_dimensions[col].width = w
 
-            base_col = 5  # columna E para pegarlo a los datos
+        # --- Alturas (todas 18.75) ---
+        for r in range(1, 80):
+            ws.row_dimensions[r].height = 18.75
 
-            # Ítems de este cliente (para temperaturas por tarima)
-            items_cliente = [item for s in qs for item in s.items.filter(cliente=cliente)]
+        # --- Logo en A2 ---
+        logo_path = os.path.join(settings.BASE_DIR, 'static', 'logos', f'{slugify(cliente)}.png')
+        if os.path.exists(logo_path):
+            img = XLImage(logo_path)
 
-            def set_col_width(col_idx, width):
-                ws.column_dimensions[get_column_letter(col_idx)].width = width
+            # Que el alto quede aprox en 140 px (≈ 6 filas de 18.75 pt)
+            target_h = 140  # ajusta a tu gusto (120–160)
+            scale = target_h / img.height
+            img.width  = int(img.width * scale)
+            img.height = int(img.height * scale)
 
-            number_col_width = 4.0
-            data_col_width   = 5.43
-            temp_col_width   = 6.24
+            ws.add_image(img, "A1")
 
-            for i in range(13):
-                top = grid_start_row + i * 2
-                tarima_impar = 1 + 2*i
-                tarima_par   = 2 + 2*i
 
-                # [num impar] [bloque impar x4] [temp impar] [bloque par x4] [temp par] [num par]
-                num_left_col    = base_col
-                left_block_col  = num_left_col + 1 
-                left_temp_col   = left_block_col + 4 
-                right_block_col = left_temp_col + 1
-                right_temp_col  = right_block_col + 4
-                num_right_col   = right_temp_col + 1
+        # --- Encabezados en I1 e I2 ---
+        title_font = Font(name="Calibri", size=12, bold=True)
+        subtitle_font = Font(name="Calibri", size=11, bold=True)
+        display_name = LEGAL_CLIENT_NAME.get(cliente, cliente)  # solo afecta el título mostrado
 
-                # Anchos de columnas
-                set_col_width(num_left_col,  number_col_width)
-                for cc in range(left_block_col, left_block_col + 4):
-                    set_col_width(cc, data_col_width)
-                set_col_width(left_temp_col,  temp_col_width)
-                for cc in range(right_block_col, right_block_col + 4):
-                    set_col_width(cc, data_col_width)
-                set_col_width(right_temp_col, temp_col_width)
-                set_col_width(num_right_col,  number_col_width)
+        c1 = ws.cell(row=1, column=9, value=display_name)  # I1
+        c1.font = title_font
+        c1.alignment = Alignment(horizontal="left", vertical="center")
+        c2 = ws.cell(row=2, column=9, value="ESPÁRRAGO MANIFIESTO DE EMBARQUE")  # I2
+        c2.font = subtitle_font
+        c2.alignment = Alignment(horizontal="left", vertical="center")
 
-                # Ítems por tarima (máximo 2 por bloque)
-                items_impar = [it for it in items_cliente if it.tarima == tarima_impar][:2]
-                items_par   = [it for it in items_cliente if it.tarima == tarima_par][:2]
 
-                # Temperaturas por tarima (texto listo)
-                temp_left_text  = tarima_temp_text(items_cliente, tarima_impar)
-                temp_right_text = tarima_temp_text(items_cliente, tarima_par)
+        # "EMBARQUE:" a la derecha, número en R2
+        label_font = Font(name="Calibri", size=10, bold=True)
+        num_font   = Font(name="Calibri", size=10, bold=True, color="FF0000")
+        ws.merge_cells(start_row=2, start_column=16, end_row=2, end_column=17)  # P2:Q2
+        ws.cell(row=2, column=16, value="EMBARQUE:").font = label_font
+        ws.cell(row=2, column=18, value=_str(getattr(max(qs, key=score_shipment) if qs else None, 'tracking_number', ''))).font = num_font  # R2
 
-                # NÚMERO IZQUIERDA (tarima impar) – celda fusionada 2 filas, borde completo
-                ws.merge_cells(start_row=top, end_row=top+1, start_column=num_left_col, end_column=num_left_col)
-                for rr in (top, top+1):
-                    c = ws.cell(row=rr, column=num_left_col, value=str(tarima_impar) if rr == top else None)
-                    c.font = number_font
-                    c.alignment = Alignment(horizontal="center", vertical="center")
-                    c.border = thick_all
+        # --- Datos del embarque (izquierda): etiqueta en A, valor en C; inicia en fila 7 ---
+        datos_start_row = 7
+        shipments_cliente = [s for s in qs if s.items.filter(cliente=cliente).exists()]
+        rep = max(shipments_cliente, key=score_shipment) if shipments_cliente else None
 
-                # Bloques con temperatura (función ya corrige borde de la celda de temperatura)
-                pintar_bloque_tarima(ws, top, left_block_col,  left_temp_col,  items_impar, temp_left_text)
-                pintar_bloque_tarima(ws, top, right_block_col, right_temp_col, items_par,   temp_right_text)
+        def write_datos(ws_, start_row, embarque):
+            lf = Font(name='Calibri', size=12, bold=True, color="000000")
+            vf = Font(name='Calibri', size=13)
+            r = start_row
+            if not embarque:
+                return r - 1
+            seals = ", ".join([s for s in [embarque.seal_1, embarque.seal_2, embarque.seal_3, embarque.seal_4] if s])
+            info = [
+                ("NUM. DE ORDEN",     _str(embarque.tracking_number)),
+                ("FECHA",         fecha_es(getattr(embarque, "date", None))),
+                ("TRANSPORTISTA",     _str(embarque.carrier)),
+                ("PLACAS TRACTOR",    _str(embarque.tractor_plates)),
+                ("PLACAS CAJA",       _str(embarque.box_plates)),
+                ("OPERADOR",          _str(embarque.driver)),
+                ("HORA DE SALIDA",    _str(embarque.departure_time)),
+                ("CAJA",              _str(embarque.box)),
+                ("CONDICIONES DE LA CAJA", _str(embarque.box_conditions)),
+                ("CAJA LIBRE DE OLORES",   _str(embarque.box_free_of_odors)),
+                ("RYAN",           _str(embarque.ryan)),
+                ("SELLOS",            seals),
+                ("CHISMÓGRAFO",       _str(embarque.chismografo)),
+                ("FIRMA DEL QUE ENTREGA", _str(embarque.delivery_signature)),
+                ("FIRMA DEL OPERADOR",    _str(embarque.driver_signature)),
+                ("DEBERÁ MANTENERSE UNA TEMPERATURA CONTINUA DE 35°F", ""),
+                ("T. PECO",           _str(getattr(embarque, "tarimas_peco", None))),
+                ("DIRECCIÓN",         "H. GALEANA N. 85 LOC A-B, C. ZARAGOZA"),
+                ("Y R. ZAPATA COL. CENTRO, 23600", ""),
+                ("TELÉFONO",          "01 (613) 132-19-08"),
+                ("CEL",               "613 111-71-87, 613 122-01-05"),
+            ]
+            
+            for label, value in info:
+                lbl_up = (label or "").upper()
 
-                # NÚMERO DERECHA (tarima par) – celda fusionada 2 filas, borde completo
-                ws.merge_cells(start_row=top, end_row=top+1, start_column=num_right_col, end_column=num_right_col)
-                for rr in (top, top+1):
-                    c = ws.cell(row=rr, column=num_right_col, value=str(tarima_par) if rr == top else None)
-                    c.font = number_font
-                    c.alignment = Alignment(horizontal="center", vertical="center")
-                    c.border = thick_all
+                # 1) Primera línea de dirección → A (etiqueta) y B..C (valor fusionado)
+                if lbl_up.startswith("DIRECCIÓN"):
+                    ws_.cell(row=r, column=1, value=f"{label}:").font = lf  # A
+                    ws_.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+                    vcell = ws_.cell(row=r, column=2, value=value)         # ← escribe en la celda superior-izquierda del merge
+                    vcell.font = vf
+                    vcell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                    r += 1
+                    continue
 
-            # ---------- Tabla resumen inferior (SIN temperatura) ---------- 
-            table_header_font = Font(name='Calibri', size=14, bold=True, color="FFFFFF") 
+                # 2) Segunda línea de dirección (“Y R. ZAPATA…”) → solo valor en B..C fusionado
+                if lbl_up.startswith("Y R. ZAPATA"):
+                    ws_.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+                    vcell = ws_.cell(row=r, column=2, value=label)  # aquí el texto viene en 'label'
+                    vcell.font = vf
+                    vcell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                    r += 1
+                    continue
+
+                # 3) Resto de campos (igual que antes): etiqueta en A, valor en C
+                ws_.cell(row=r, column=1, value=label + ":").font = lf  # A
+                val_cell = ws_.cell(row=r, column=3, value=value)       # C
+                val_cell.font = vf
+                val_cell.alignment = Alignment(horizontal="left", vertical="center")
+                r += 1
+
+            return r - 1
+
+        datos_last_row = write_datos(ws, datos_start_row, rep)
+
+        # --- GRID de tarimas (fila 4 en adelante) ---
+        grid_start_row = 5
+        number_font = Font(name='Calibri', size=8, bold=True, color="444444")
+        thick = Side(style='medium', color='000000')
+        thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
+
+        # Ítems de este cliente
+        items_cliente = [it for s in qs for it in s.items.filter(cliente=cliente)]
+
+        def temp_txt(tarima_n):
+            # sin "GMT": si no hay lectura, deja vacío
+            for it in items_cliente:
+                if it.tarima == tarima_n and it.temperatura not in (None, ""):
+                    try:
+                        return f"{float(it.temperatura):.1f}°F"
+                    except Exception:
+                        return str(it.temperatura)
+            return ""
+        
+        # --- Anchos de columnas (recorridos 1 a la izquierda) ---
+        ws.column_dimensions['T'].width = 9.57     # antes U
+        ws.column_dimensions['B'].width = 14.86     #
+        ws.column_dimensions['G'].width = 9.57
+        ws.column_dimensions['F'].width = 8.86     # antes G
+        ws.column_dimensions['J'].width = 9.57     # antes K
+        ws.column_dimensions['K'].width = 9.57     # antes L
+        ws.column_dimensions['A'].width = 16
+        ws.column_dimensions['Q'].width = 9.57     # antes R
+        ws.column_dimensions['P'].width = 9.57     # antes Q
+        ws.column_dimensions['H'].width = 20.29    # antes I
+        ws.column_dimensions['N'].width = 20.29    # antes O
+        ws.column_dimensions['I'].width = 10.29    # antes J
+        ws.column_dimensions['O'].width = 10.29    # antes P
+        ws.column_dimensions['L'].width = 5.86     # antes M
+        ws.column_dimensions['M'].width = 5.71     # antes N
+        ws.column_dimensions['R'].width = 5.86     # antes S
+        ws.column_dimensions['S'].width = 5.71     # antes T
+
+        # --- Altura de filas del grid de tarimas ---
+        for rr in range(5, 57):  # de la 5 a la 30 inclusive
+            ws.row_dimensions[rr].height = 32.25
+
+        for i in range(13):
+            top = grid_start_row + i * 2
+            t_impar = 1 + 2*i
+            t_par   = 2 + 2*i
+
+            # Columnas según el nuevo mapa (todo -1 col):
+            num_left_col  = 7   # G  (antes 8)
+            block_left    = 8   # H..K (4 cols)  (antes 9)
+            temp_left_l   = 12  # L..M (2 cols)  (antes 13)
+
+            block_right   = 14  # N..Q (4 cols)  (antes 15)
+            temp_right_l  = 18  # R..S (2 cols)  (antes 19)
+            num_right_col = 20  # T             (antes 21)
+
+            # NÚMERO IZQ: estilamos ambas filas, fusionamos y escribimos SOLO arriba
+            for rr in (top, top + 1):
+                c = ws.cell(row=rr, column=num_left_col)
+                c.font = number_font
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                c.border = thick_all
+            ws.merge_cells(start_row=top, start_column=num_left_col, end_row=top + 1, end_column=num_left_col)
+            ws.cell(row=top, column=num_left_col, value=str(t_impar))
+
+            # Bloque izquierdo + temperatura (2 columnas)
+            items_impar = [it for it in items_cliente if it.tarima == t_impar][:2]
+            pintar_bloque_tarima(ws, top, block_left, temp_left_l, items_impar, temp_txt(t_impar))
+
+            # Bloque derecho + temperatura (2 columnas)
+            items_par = [it for it in items_cliente if it.tarima == t_par][:2]
+            pintar_bloque_tarima(ws, top, block_right, temp_right_l, items_par, temp_txt(t_par))
+
+            # NÚMERO DER
+            for rr in (top, top + 1):
+                c = ws.cell(row=rr, column=num_right_col)
+                c.font = number_font
+                c.alignment = Alignment(horizontal="center", vertical="center")
+                c.border = thick_all
+            ws.merge_cells(start_row=top, start_column=num_right_col, end_row=top + 1, end_column=num_right_col)
+            ws.cell(row=top, column=num_right_col, value=str(t_par))
+            # ===== Tabla de RESUMEN inferior (debajo del grid) =====
+            from collections import defaultdict
+            # Estilos (autocontenidos)
+            th_font = Font(name='Calibri', size=16, bold=True, color="FFFFFF")
             th_fill = PatternFill("solid", fgColor="225577")
-            border_thin = Border(
+            thin_border = Border(
                 left=Side(style='thin', color='AAAAAA'),
                 right=Side(style='thin', color='AAAAAA'),
                 top=Side(style='thin', color='AAAAAA'),
                 bottom=Side(style='thin', color='AAAAAA'),
             )
+            body_font = Font(name='Calibri', size=14)
 
-            # Usa el último rptr como fin del bloque de datos
-            data_block_last_row = rptr - 1 if shipments_cliente else (datos_start_row - 1)
+            # 1) Calcular dónde empieza la tabla, sin depender de rptr si no existe
             grid_last_row = grid_start_row + 13*2 - 1
-            after_grid_row = max(data_block_last_row, grid_last_row) + 2
+            data_block_last_row = (locals().get('rptr') - 1) if locals().get('rptr') else (datos_start_row - 1)
+            summary_top = max(grid_last_row, data_block_last_row) + 2
 
-            headers = [
-                "N# EMBARQUE", "N# FACTURA", "PRESENTACIÓN", "TAMAÑO",
-                "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)"
+            # 2) Agregar y agrupar items del cliente
+            items_cliente = [
+                it
+                for s in qs
+                for it in s.items.filter(cliente=cliente).select_related('presentation')
             ]
-            for idx, texto in enumerate(headers, 1):
-                cell = ws.cell(row=after_grid_row, column=idx, value=texto)
-                cell.font = table_header_font
-                cell.fill = th_fill
-                cell.alignment = Alignment(horizontal="center")
-                cell.border = border_thin
 
-            row = after_grid_row + 1
-            cliente_total_boxes = 0
-            cliente_total_eq_11lbs = 0
-            cliente_total_amount = 0
-            for s in qs:
-                for item in s.items.filter(cliente=cliente):
-                    eq = item.quantity * float(item.presentation.conversion_factor)
-                    amt = item.quantity * float(item.presentation.price)
-                    ws.cell(row=row, column=1, value=_str(s.tracking_number))
-                    ws.cell(row=row, column=2, value=_str(s.invoice_number))
-                    ws.cell(row=row, column=3, value=_str(item.presentation.name))
-                    ws.cell(row=row, column=4, value=_str(item.size))
-                    ws.cell(row=row, column=5, value=item.quantity)
-                    ws.cell(row=row, column=6, value=round(eq, 2))
-                    ws.cell(row=row, column=7, value=round(amt, 2))
-                    for c in range(1, 8):
-                        ws.cell(row=row, column=c).border = border_thin
-                        ws.cell(row=row, column=c).alignment = Alignment(horizontal="center")
-                    cliente_total_boxes += item.quantity
-                    cliente_total_eq_11lbs += eq
-                    cliente_total_amount += amt
-                    row += 1
+            presentaciones_info = defaultdict(lambda: {'cajas': 0, 'eq11': 0.0})
+            total_cajas = 0
+            total_eq11  = 0.0
 
-            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-            ws.cell(row=row, column=1, value="TOTALES:").alignment = Alignment(horizontal="right")
-            ws.cell(row=row, column=1).font = Font(bold=True, color="225577")
-            ws.cell(row=row, column=5, value=cliente_total_boxes)
-            ws.cell(row=row, column=6, value=round(cliente_total_eq_11lbs, 2))
-            ws.cell(row=row, column=7, value=round(cliente_total_amount, 2))
-            for c in range(1, 8):
-                ws.cell(row=row, column=c).font = Font(bold=True)
-                ws.cell(row=row, column=c).fill = PatternFill("solid", fgColor="BBDDFF")
-                ws.cell(row=row, column=c).alignment = Alignment(horizontal="center")
+            for it in items_cliente:
+                k = (it.presentation.name, it.size)
+                presentaciones_info[k]['cajas'] += it.quantity
+                eq = it.quantity * float(it.presentation.conversion_factor)
+                presentaciones_info[k]['eq11']  += eq
+                total_cajas += it.quantity
+                total_eq11  += eq
 
-            # Descargar
-            output = BytesIO()
-            wb.save(output)
-            output.seek(0)
-            filename = f"reporte_{report_date}_{slugify(cliente)}.xlsx"
-            response = HttpResponse(
-                output,
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            )
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
-            return response
+            # 3) Encabezados
+            def merge_pair(row, c1, c2, value=None, *, font=None, fill=None, border=None):
+            # aplica estilos a ambas celdas antes de fusionar (evita MergedCell.value)
+                for cc in range(c1, c2 + 1):
+                    cell = ws.cell(row=row, column=cc)
+                    if font:  cell.font = font
+                    if fill:  cell.fill = fill
+                    if border: cell.border = border
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+                if value is not None:
+                    ws.cell(row=row, column=c1, value=value)
+
+            # 3) Encabezados (4 campos, cada uno ocupa 2 columnas)
+            header_pairs = [(1,2), (3,4), (5,6), (7,8)]
+            headers = ["Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs"]
+            for (c1, c2), txt in zip(header_pairs, headers):
+                merge_pair(summary_top, c1, c2, txt, font=th_font, fill=th_fill, border=thin_border)
+
+            # 4) Filas
+            r = summary_top + 1
+            if presentaciones_info:
+                for (pres, size), info in sorted(
+                    presentaciones_info.items(),
+                    key=lambda kv: (kv[0][0].lower(), str(kv[0][1]).lower())
+                ):
+                    merge_pair(r, 1, 2, pres,  font=body_font, border=thin_border)
+                    merge_pair(r, 3, 4, size,  font=body_font, border=thin_border)
+                    merge_pair(r, 5, 6, info['cajas'], font=body_font, border=thin_border)
+                    merge_pair(r, 7, 8, round(info['eq11'], 2), font=body_font, border=thin_border)
+                    r += 1
+            else:
+                # fila "sin datos" ocupando todo el ancho del resumen
+                merge_pair(r, 1, 8, "(Sin datos)", font=body_font, border=thin_border)
+                r += 1
+
+            # 5) Totales (label en 1–2; totales en 5–6 y 7–8)
+            r += 1
+            tot_fill = PatternFill("solid", fgColor="BBDDFF")
+            bold = Font(bold=True)
+
+            merge_pair(r, 1, 2, "TOTALES", font=bold, fill=tot_fill, border=thin_border)
+            # si quieres dejar 3–4 vacías pero con mismo fondo/borde:
+            merge_pair(r, 3, 4, "", font=bold, fill=tot_fill, border=thin_border)
+
+            merge_pair(r, 5, 6, total_cajas,       font=bold, fill=tot_fill, border=thin_border)
+            merge_pair(r, 7, 8, round(total_eq11,2), font=bold, fill=tot_fill, border=thin_border)
+
+        # --- Exportar ---
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        filename = f"reporte_{report_date}_{slugify(cliente)}.xlsx"
+        response = HttpResponse(
+            output,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
     # ---- HTML normal ----- 
 
