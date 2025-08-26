@@ -25,6 +25,8 @@ class BaseShipmentItemFormSet(BaseInlineFormSet):
                 form.cleaned_data['DELETE'] = True
 
 
+# empaques/forms.py
+
 class ShipmentForm(forms.ModelForm):
     date = forms.DateField(
         label="Fecha",
@@ -40,14 +42,33 @@ class ShipmentForm(forms.ModelForm):
         label="Horario de salida",
         widget=forms.TimeInput(attrs={'type': 'time'})
     )
+
+    # (Opcional) Fuerza que sean opcionales en el form, por si en el modelo no tienen blank=True
+    order_lacima   = forms.CharField(label='Núm. orden CIMA',           required=False)
+    order_rc       = forms.CharField(label='Núm. orden RC',             required=False)
+    order_gourmet  = forms.CharField(label='Núm. orden Gourmet Baja',   required=False)
+    order_gbf      = forms.CharField(label='Núm. orden GBF Farms',      required=False)
+    order_gh      = forms.CharField(label='Núm. orden GH Farms',      required=False)
+
     class Meta:
         model = Shipment
         fields = [
             'tracking_number','date','carrier','tractor_plates','box_plates',
             'driver','departure_time','box','box_conditions','box_free_of_odors',
             'ryan','seal_1','seal_2','seal_3','seal_4','chismografo',
-            'delivery_signature','driver_signature','invoice_number','tarimas_peco',
+            'delivery_signature','driver_signature','invoice_number','tarimas_peco', 
+
+            # 👇 AÑADE ESTOS CAMPOS AQUÍ
+            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh',
         ]
+        labels = {
+            'order_lacima':   'Núm. orden CIMA',
+            'order_rc':       'Núm. orden RC',
+            'order_gourmet':  'Núm. orden Gourmet Baja',
+            'order_gbf':      'Núm. orden GBF Farms',
+            'order_gh':      'Núm. orden GH Farms',
+        }
+
 
 
 CLIENTE_CHOICES = [

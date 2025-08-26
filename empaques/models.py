@@ -23,6 +23,11 @@ class Shipment(models.Model):
         help_text="Número de tarimas tipo PECO en el embarque"
     )
     tracking_number = models.CharField(max_length=30, verbose_name="Número de orden")  
+    order_lacima    = models.CharField("Núm. orden CIMA",        max_length=50, blank=True, null=True)
+    order_rc        = models.CharField("Núm. orden RC Organics",  max_length=50, blank=True, null=True)
+    order_gourmet   = models.CharField("Núm. orden Gourmet Baja", max_length=50, blank=True, null=True)
+    order_gbf       = models.CharField("Núm. orden GBF Farms",    max_length=50, blank=True, null=True)
+    order_gh       = models.CharField("Núm. orden GH Farms", max_length=50, blank=True, null=True)
     date = models.DateField(verbose_name="Fecha")  
     carrier = models.CharField(max_length=50, verbose_name="Transportista", blank=True)
     tractor_plates = models.CharField(max_length=20, verbose_name="Placas tractor", blank=True)

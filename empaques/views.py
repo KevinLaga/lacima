@@ -586,6 +586,36 @@ def daily_report(request):
     from openpyxl.drawing.image import Image as XLImage
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from openpyxl.utils import get_column_letter
+    ORDER_FIELD_BY_SLUG = {
+        # nombres cortos
+        'la-cima-produce':                 'order_lacima',
+        'rc-organics':                     'order_rc',
+        'gh-farms':                     'order_gh',
+        'gourmet-baja-farms':              'order_gourmet',
+        'gbf-farms':                       'order_gbf',
+
+        # variantes largas (razón social completa)
+        'la-cima-produce-s-p-r-de-r-l':                'order_lacima',
+        'rc-organics-s-de-r-l-de-c-v':                 'order_rc',
+        'empaque-n-1-s-de-r-l-de-c-v':                 'order_gh',
+        'gourmet-baja-farms-s-de-r-l-de-c-v':          'order_gourmet',
+        'gbf-farms-s-de-r-l-de-c-v':                   'order_gbf',
+    }
+
+    def get_client_order_number(embarque, cliente):
+        """Devuelve el número de orden específico del cliente si existe."""
+        cname = (cliente or "").lower()
+        if "cima" in cname:
+            return getattr(embarque, "order_lacima", None)
+        if "rc" in cname:
+            return getattr(embarque, "order_rc", None)
+        if "gourmet" in cname:
+            return getattr(embarque, "order_gourmet", None)
+        if "gbf" in cname:
+            return getattr(embarque, "order_gbf", None)
+        if "gh" in cname:
+            return getattr(embarque, "order_gh", None)
+        return None
     def fecha_es(d):
         """Devuelve la fecha en español: LUNES 31 DE AGOSTO DEL 2025 (en mayúsculas)."""
         if not d:
@@ -600,6 +630,7 @@ def daily_report(request):
             dias = ["LUNES","MARTES","MIÉRCOLES","JUEVES","VIERNES","SÁBADO","DOMINGO"]
             meses = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"]
             return f"{dias[d.weekday()]} {d.day:02d} DE {meses[d.month-1]} DEL {d.year}"
+    
 
     # ---- Lista de clientes ----
     clientes = [ 
@@ -612,7 +643,7 @@ def daily_report(request):
     LEGAL_CLIENT_NAME = {
     "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
     "RC Organics": "RC Organics S. DE R.L DE C.V.",
-    "GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  # <- cambia la clave si tu BD no usa "GH Farms"
+    "GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  
     "Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
     "GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
 }
@@ -713,6 +744,22 @@ def daily_report(request):
                 except Exception:
                     return str(it.temperatura)
         return ""
+    def get_client_order_number(embarque, cliente):
+        if not embarque:
+            return None
+        cname = (cliente or "").lower()
+        if "cima" in cname:
+            return getattr(embarque, "order_lacima", None)
+        if "rc" in cname:
+            return getattr(embarque, "order_rc", None)
+        if "gourmet" in cname:
+            return getattr(embarque, "order_gourmet", None)
+        if "gh" in cname:
+            return getattr(embarque, "order_gh", None)
+        if "gbf" in cname:
+            return getattr(embarque, "order_gbf", None)
+        return None
+
 
     def pintar_bloque_tarima(ws_, top_row, left_col, temp_col_left, items_, temp_text):
         thin  = Side(style='thin',   color='999999')
@@ -754,6 +801,83 @@ def daily_report(request):
             ws_.cell(row=top_row,     column=left_col + 2, value=_str(it2.presentation.name))
             ws_.cell(row=top_row + 1, column=left_col + 2, value=_str(it2.size))
             ws_.cell(row=top_row + 1, column=left_col + 3, value=it2.quantity)
+    def write_datos(ws_, start_row, embarque, order_override=None):
+        from openpyxl.styles import Font, Alignment
+        lf = Font(name='Calibri', size=12, bold=True, color="000000")
+        vf = Font(name='Calibri', size=13)
+
+        r = start_row
+        if not embarque:
+            return r - 1
+
+        # 1) elegir el número de orden a mostrar (cliente > general)
+        #    usamos "no vacío" (None o "" cae al general)
+        if order_override is not None and str(order_override).strip() != "":
+            orden_val = str(order_override).strip()
+        else:
+            orden_val = _str(embarque.tracking_number)
+
+        # 2) texto de fecha en español (usa tu helper si existe)
+        try:
+            fecha_txt = fecha_es(getattr(embarque, "date", None))
+        except NameError:
+            fecha_txt = embarque.date.strftime("%A %d DE %B DEL %Y").upper() if getattr(embarque, "date", None) else ""
+
+        seals = ", ".join([s for s in [embarque.seal_1, embarque.seal_2, embarque.seal_3, embarque.seal_4] if s])
+
+        info = [
+            ("NUM. DE ORDEN", orden_val),
+            ("FECHA",         fecha_txt),
+            ("TRANSPORTISTA", _str(embarque.carrier)),
+            ("PLACAS TRACTOR", _str(embarque.tractor_plates)),
+            ("PLACAS CAJA",    _str(embarque.box_plates)),
+            ("OPERADOR",       _str(embarque.driver)),
+            ("HORA DE SALIDA", _str(embarque.departure_time)),
+            ("CAJA",           _str(embarque.box)),
+            ("CONDICIONES DE LA CAJA", _str(embarque.box_conditions)),
+            ("CAJA LIBRE DE OLORES",   _str(embarque.box_free_of_odors)),
+            ("RYAN",           _str(embarque.ryan)),
+            ("SELLOS",         seals),
+            ("CHISMÓGRAFO",    _str(embarque.chismografo)),
+            ("FIRMA DEL QUE ENTREGA", _str(embarque.delivery_signature)),
+            ("FIRMA DEL OPERADOR",    _str(embarque.driver_signature)),
+            ("DEBERÁ MANTENERSE UNA TEMPERATURA CONTINUA DE 35°F", ""),
+            ("T. PECO",        _str(getattr(embarque, "tarimas_peco", None))),
+            ("DIRECCIÓN",      "H. GALEANA N. 85 LOC A-B, C. ZARAGOZA"),
+            ("Y R. ZAPATA COL. CENTRO, 23600", ""),
+            ("TELÉFONO",       "01 (613) 132-19-08"),
+            ("CEL",            "613 111-71-87, 613 122-01-05"),
+        ]
+
+        for label, value in info:
+            lbl_up = (label or "").upper()
+
+            # Dirección: valor en B..C (fusionado) y etiqueta en A
+            if lbl_up.startswith("DIRECCIÓN"):
+                ws_.cell(row=r, column=1, value=f"{label}:").font = lf  # A
+                ws_.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+                vcell = ws_.cell(row=r, column=2, value=value)         # B (superior-izq del merge)
+                vcell.font = vf
+                vcell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                r += 1
+                continue
+
+            # 2ª línea de dirección sin etiqueta, solo valor en B..C
+            if lbl_up.startswith("Y R. ZAPATA"):
+                ws_.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
+                vcell = ws_.cell(row=r, column=2, value=value)
+                vcell.font = vf
+                vcell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                r += 1
+                continue
+
+            # Resto normal: etiqueta en A, valor en C
+            ws_.cell(row=r, column=1, value=label + ":").font = lf  # A
+            ws_.cell(row=r, column=3, value=value).font = vf        # C
+            r += 1
+
+        return r - 1
+
 
     # =================== EXCEL GENERAL (diseño) ===================
     if request.GET.get('format') == 'xlsx':
@@ -859,13 +983,7 @@ def daily_report(request):
         ws = wb.active
         ws.title = slugify(cliente)[:31] or "Cliente"
 
-    # --- (a partir de aquí va TODO tu código de esta rama: anchos, alturas,
-    #     logo, títulos en I1/I2, grid E..R, etc.) ---
-    # widths = {...}
-    # for col, w in widths.items(): ws.column_dimensions[col].width = w
-    # ...
-    # output/return response
-    # return response
+   
 
 
         # --- Anchos A..R (exactos) ---
@@ -909,81 +1027,41 @@ def daily_report(request):
         c2.alignment = Alignment(horizontal="left", vertical="center")
 
 
-        # "EMBARQUE:" a la derecha, número en R2
+        # --- "EMBARQUE:" a la derecha, número en R2 ---
         label_font = Font(name="Calibri", size=10, bold=True)
         num_font   = Font(name="Calibri", size=10, bold=True, color="FF0000")
         ws.merge_cells(start_row=2, start_column=16, end_row=2, end_column=17)  # P2:Q2
         ws.cell(row=2, column=16, value="EMBARQUE:").font = label_font
-        ws.cell(row=2, column=18, value=_str(getattr(max(qs, key=score_shipment) if qs else None, 'tracking_number', ''))).font = num_font  # R2
 
-        # --- Datos del embarque (izquierda): etiqueta en A, valor en C; inicia en fila 7 ---
-        datos_start_row = 7
+        # --- Config inicial del bloque por cliente ---
+        datos_start_row = 7  # <<--- defínelo ANTES de usarlo
         shipments_cliente = [s for s in qs if s.items.filter(cliente=cliente).exists()]
-        rep = max(shipments_cliente, key=score_shipment) if shipments_cliente else None
 
-        def write_datos(ws_, start_row, embarque):
-            lf = Font(name='Calibri', size=12, bold=True, color="000000")
-            vf = Font(name='Calibri', size=13)
-            r = start_row
-            if not embarque:
-                return r - 1
-            seals = ", ".join([s for s in [embarque.seal_1, embarque.seal_2, embarque.seal_3, embarque.seal_4] if s])
-            info = [
-                ("NUM. DE ORDEN",     _str(embarque.tracking_number)),
-                ("FECHA",         fecha_es(getattr(embarque, "date", None))),
-                ("TRANSPORTISTA",     _str(embarque.carrier)),
-                ("PLACAS TRACTOR",    _str(embarque.tractor_plates)),
-                ("PLACAS CAJA",       _str(embarque.box_plates)),
-                ("OPERADOR",          _str(embarque.driver)),
-                ("HORA DE SALIDA",    _str(embarque.departure_time)),
-                ("CAJA",              _str(embarque.box)),
-                ("CONDICIONES DE LA CAJA", _str(embarque.box_conditions)),
-                ("CAJA LIBRE DE OLORES",   _str(embarque.box_free_of_odors)),
-                ("RYAN",           _str(embarque.ryan)),
-                ("SELLOS",            seals),
-                ("CHISMÓGRAFO",       _str(embarque.chismografo)),
-                ("FIRMA DEL QUE ENTREGA", _str(embarque.delivery_signature)),
-                ("FIRMA DEL OPERADOR",    _str(embarque.driver_signature)),
-                ("DEBERÁ MANTENERSE UNA TEMPERATURA CONTINUA DE 35°F", ""),
-                ("T. PECO",           _str(getattr(embarque, "tarimas_peco", None))),
-                ("DIRECCIÓN",         "H. GALEANA N. 85 LOC A-B, C. ZARAGOZA"),
-                ("Y R. ZAPATA COL. CENTRO, 23600", ""),
-                ("TELÉFONO",          "01 (613) 132-19-08"),
-                ("CEL",               "613 111-71-87, 613 122-01-05"),
-            ]
-            
-            for label, value in info:
-                lbl_up = (label or "").upper()
+        # Representativo: si no hay de ese cliente, usa alguno del día
+        rep = max(shipments_cliente, key=score_shipment) if shipments_cliente else (max(qs, key=score_shipment) if qs else None)
 
-                # 1) Primera línea de dirección → A (etiqueta) y B..C (valor fusionado)
-                if lbl_up.startswith("DIRECCIÓN"):
-                    ws_.cell(row=r, column=1, value=f"{label}:").font = lf  # A
-                    ws_.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
-                    vcell = ws_.cell(row=r, column=2, value=value)         # ← escribe en la celda superior-izquierda del merge
-                    vcell.font = vf
-                    vcell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    r += 1
-                    continue
+        # Número por cliente (si existe) o el general
+        num_por_cliente = get_client_order_number(rep, cliente) if rep else None
+        numero_final = (num_por_cliente if (num_por_cliente and str(num_por_cliente).strip()) else _str(getattr(rep, 'tracking_number', ''))) if rep else ""
+        ws.cell(row=2, column=18, value=numero_final).font = num_font  # R2
 
-                # 2) Segunda línea de dirección (“Y R. ZAPATA…”) → solo valor en B..C fusionado
-                if lbl_up.startswith("Y R. ZAPATA"):
-                    ws_.merge_cells(start_row=r, start_column=2, end_row=r, end_column=3)
-                    vcell = ws_.cell(row=r, column=2, value=label)  # aquí el texto viene en 'label'
-                    vcell.font = vf
-                    vcell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-                    r += 1
-                    continue
+        # --- Datos del embarque (izquierda): etiqueta en A, valor en C; empieza en fila 7 ---
+        rptr = datos_start_row
 
-                # 3) Resto de campos (igual que antes): etiqueta en A, valor en C
-                ws_.cell(row=r, column=1, value=label + ":").font = lf  # A
-                val_cell = ws_.cell(row=r, column=3, value=value)       # C
-                val_cell.font = vf
-                val_cell.alignment = Alignment(horizontal="left", vertical="center")
-                r += 1
+        if shipments_cliente:
+            # Escribe TODOS los embarques de ese cliente con su orden específica
+            for embarque in shipments_cliente:
+                orden_cliente = get_client_order_number(embarque, cliente)  # puede ser None/"" -> write_datos usa fallback
+                rptr = write_datos(ws, rptr, embarque, order_override=orden_cliente) + 2
+        else:
+            # Si no hay embarques de ese cliente, escribe uno representativo (si existe)
+            if rep:
+                orden_cliente = get_client_order_number(rep, cliente)
+                rptr = write_datos(ws, rptr, rep, order_override=orden_cliente) + 2
 
-            return r - 1
+        # última fila útil de datos (por si la necesitas para ubicar el resumen)
+        datos_last_row = rptr - 2
 
-        datos_last_row = write_datos(ws, datos_start_row, rep)
 
         # --- GRID de tarimas (fila 4 en adelante) ---
         grid_start_row = 5
