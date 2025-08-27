@@ -744,22 +744,7 @@ def daily_report(request):
                 except Exception:
                     return str(it.temperatura)
         return ""
-    def get_client_order_number(embarque, cliente):
-        if not embarque:
-            return None
-        cname = (cliente or "").lower()
-        if "cima" in cname:
-            return getattr(embarque, "order_lacima", None)
-        if "rc" in cname:
-            return getattr(embarque, "order_rc", None)
-        if "gourmet" in cname:
-            return getattr(embarque, "order_gourmet", None)
-        if "gh" in cname:
-            return getattr(embarque, "order_gh", None)
-        if "gbf" in cname:
-            return getattr(embarque, "order_gbf", None)
-        return None
-
+    
 
     def pintar_bloque_tarima(ws_, top_row, left_col, temp_col_left, items_, temp_text):
         thin  = Side(style='thin',   color='999999')
@@ -973,18 +958,9 @@ def daily_report(request):
         if not cliente:
             return HttpResponse("Cliente no válido para este reporte.", status=400)
 
-        from openpyxl import Workbook
-        from openpyxl.drawing.image import Image as XLImage
-        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-        from openpyxl.utils import get_column_letter
-        from openpyxl.styles import Alignment
-
         wb = Workbook()
         ws = wb.active
         ws.title = slugify(cliente)[:31] or "Cliente"
-
-   
-
 
         # --- Anchos A..R (exactos) ---
         widths = {
@@ -1000,24 +976,20 @@ def daily_report(request):
         for r in range(1, 80):
             ws.row_dimensions[r].height = 18.75
 
-        # --- Logo en A2 ---
+        # --- Logo en A1 (escalado) ---
         logo_path = os.path.join(settings.BASE_DIR, 'static', 'logos', f'{slugify(cliente)}.png')
         if os.path.exists(logo_path):
             img = XLImage(logo_path)
-
-            # Que el alto quede aprox en 140 px (≈ 6 filas de 18.75 pt)
-            target_h = 140  # ajusta a tu gusto (120–160)
+            target_h = 140
             scale = target_h / img.height
             img.width  = int(img.width * scale)
             img.height = int(img.height * scale)
-
             ws.add_image(img, "A1")
 
-
-        # --- Encabezados en I1 e I2 ---
+        # --- Título y subtítulo en I1/I2 ---
         title_font = Font(name="Calibri", size=12, bold=True)
         subtitle_font = Font(name="Calibri", size=11, bold=True)
-        display_name = LEGAL_CLIENT_NAME.get(cliente, cliente)  # solo afecta el título mostrado
+        display_name = LEGAL_CLIENT_NAME.get(cliente, cliente)
 
         c1 = ws.cell(row=1, column=9, value=display_name)  # I1
         c1.font = title_font
@@ -1026,54 +998,49 @@ def daily_report(request):
         c2.font = subtitle_font
         c2.alignment = Alignment(horizontal="left", vertical="center")
 
+        # === Selección del embarque del CLIENTE (solo UNO) ===
+        shipments_cliente = [s for s in qs if s.items.filter(cliente=cliente).exists()]
+        ship_id  = request.GET.get('shipment_id')
+        tracking = request.GET.get('tracking')
 
-        # --- "EMBARQUE:" a la derecha, número en R2 ---
+        rep_cli = None
+        if ship_id:
+            rep_cli = next((s for s in shipments_cliente if str(s.id) == str(ship_id)), None)
+        elif tracking:
+            rep_cli = next((s for s in shipments_cliente if _str(s.tracking_number) == tracking), None)
+        if rep_cli is None:
+            rep_cli = shipments_cliente[0] if shipments_cliente else None
+
+        # --- Cabecera "EMBARQUE:" (P2:Q2 etiqueta, R2 valor) con NÚMERO POR CLIENTE ---
         label_font = Font(name="Calibri", size=10, bold=True)
         num_font   = Font(name="Calibri", size=10, bold=True, color="FF0000")
         ws.merge_cells(start_row=2, start_column=16, end_row=2, end_column=17)  # P2:Q2
         ws.cell(row=2, column=16, value="EMBARQUE:").font = label_font
 
-        # --- Config inicial del bloque por cliente ---
-        datos_start_row = 7  # <<--- defínelo ANTES de usarlo
-        shipments_cliente = [s for s in qs if s.items.filter(cliente=cliente).exists()]
-
-        # Representativo: si no hay de ese cliente, usa alguno del día
-        rep = max(shipments_cliente, key=score_shipment) if shipments_cliente else (max(qs, key=score_shipment) if qs else None)
-
-        # Número por cliente (si existe) o el general
-        num_por_cliente = get_client_order_number(rep, cliente) if rep else None
-        numero_final = (num_por_cliente if (num_por_cliente and str(num_por_cliente).strip()) else _str(getattr(rep, 'tracking_number', ''))) if rep else ""
+        numero_final = ""
+        if rep_cli:
+            num_cli = get_client_order_number(rep_cli, cliente)  # puede ser None/""
+            numero_final = num_cli or _str(rep_cli.tracking_number)
         ws.cell(row=2, column=18, value=numero_final).font = num_font  # R2
 
-        # --- Datos del embarque (izquierda): etiqueta en A, valor en C; empieza en fila 7 ---
+        # --- Datos del embarque (izquierda), SOLO UNA VEZ ---
+        datos_start_row = 7
         rptr = datos_start_row
+        if rep_cli:
+            orden_cliente = get_client_order_number(rep_cli, cliente)
+            rptr = write_datos(ws, rptr, rep_cli, order_override=orden_cliente) + 2
 
-        if shipments_cliente:
-            # Escribe TODOS los embarques de ese cliente con su orden específica
-            for embarque in shipments_cliente:
-                orden_cliente = get_client_order_number(embarque, cliente)  # puede ser None/"" -> write_datos usa fallback
-                rptr = write_datos(ws, rptr, embarque, order_override=orden_cliente) + 2
-        else:
-            # Si no hay embarques de ese cliente, escribe uno representativo (si existe)
-            if rep:
-                orden_cliente = get_client_order_number(rep, cliente)
-                rptr = write_datos(ws, rptr, rep, order_override=orden_cliente) + 2
-
-        # última fila útil de datos (por si la necesitas para ubicar el resumen)
-        datos_last_row = rptr - 2
-
-
-        # --- GRID de tarimas (fila 4 en adelante) ---
+        # --- GRID de tarimas ---
         grid_start_row = 5
         number_font = Font(name='Calibri', size=8, bold=True, color="444444")
         thick = Side(style='medium', color='000000')
         thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
 
-        # Ítems de este cliente
-        items_cliente = [it for s in qs for it in s.items.filter(cliente=cliente)]
+        # Ítems SOLO del embarque rep_cli
+        scope_shipments = [rep_cli] if rep_cli else []
+        items_cliente = [it for s in scope_shipments for it in s.items.filter(cliente=cliente)]
 
         def temp_txt(tarima_n):
-            # sin "GMT": si no hay lectura, deja vacío
             for it in items_cliente:
                 if it.tarima == tarima_n and it.temperatura not in (None, ""):
                     try:
@@ -1081,28 +1048,27 @@ def daily_report(request):
                     except Exception:
                         return str(it.temperatura)
             return ""
-        
-        # --- Anchos de columnas (recorridos 1 a la izquierda) ---
-        ws.column_dimensions['T'].width = 9.57     # antes U
-        ws.column_dimensions['B'].width = 14.86     #
-        ws.column_dimensions['G'].width = 9.57
-        ws.column_dimensions['F'].width = 8.86     # antes G
-        ws.column_dimensions['J'].width = 9.57     # antes K
-        ws.column_dimensions['K'].width = 9.57     # antes L
-        ws.column_dimensions['A'].width = 16
-        ws.column_dimensions['Q'].width = 9.57     # antes R
-        ws.column_dimensions['P'].width = 9.57     # antes Q
-        ws.column_dimensions['H'].width = 20.29    # antes I
-        ws.column_dimensions['N'].width = 20.29    # antes O
-        ws.column_dimensions['I'].width = 10.29    # antes J
-        ws.column_dimensions['O'].width = 10.29    # antes P
-        ws.column_dimensions['L'].width = 5.86     # antes M
-        ws.column_dimensions['M'].width = 5.71     # antes N
-        ws.column_dimensions['R'].width = 5.86     # antes S
-        ws.column_dimensions['S'].width = 5.71     # antes T
 
-        # --- Altura de filas del grid de tarimas ---
-        for rr in range(5, 57):  # de la 5 a la 30 inclusive
+        # Ajustes de columnas “recorridos 1 a la izquierda”
+        ws.column_dimensions['T'].width = 9.57
+        ws.column_dimensions['B'].width = 14.86
+        ws.column_dimensions['G'].width = 9.57
+        ws.column_dimensions['F'].width = 8.86
+        ws.column_dimensions['J'].width = 9.57
+        ws.column_dimensions['K'].width = 9.57
+        ws.column_dimensions['A'].width = 16
+        ws.column_dimensions['Q'].width = 9.57
+        ws.column_dimensions['P'].width = 9.57
+        ws.column_dimensions['H'].width = 20.29
+        ws.column_dimensions['N'].width = 20.29
+        ws.column_dimensions['I'].width = 10.29
+        ws.column_dimensions['O'].width = 10.29
+        ws.column_dimensions['L'].width = 5.86
+        ws.column_dimensions['M'].width = 5.71
+        ws.column_dimensions['R'].width = 5.86
+        ws.column_dimensions['S'].width = 5.71
+
+        for rr in range(5, 57):
             ws.row_dimensions[rr].height = 32.25
 
         for i in range(13):
@@ -1110,16 +1076,14 @@ def daily_report(request):
             t_impar = 1 + 2*i
             t_par   = 2 + 2*i
 
-            # Columnas según el nuevo mapa (todo -1 col):
-            num_left_col  = 7   # G  (antes 8)
-            block_left    = 8   # H..K (4 cols)  (antes 9)
-            temp_left_l   = 12  # L..M (2 cols)  (antes 13)
+            num_left_col  = 7   # G
+            block_left    = 8   # H..K
+            temp_left_l   = 12  # L..M
+            block_right   = 14  # N..Q
+            temp_right_l  = 18  # R..S
+            num_right_col = 20  # T
 
-            block_right   = 14  # N..Q (4 cols)  (antes 15)
-            temp_right_l  = 18  # R..S (2 cols)  (antes 19)
-            num_right_col = 20  # T             (antes 21)
-
-            # NÚMERO IZQ: estilamos ambas filas, fusionamos y escribimos SOLO arriba
+            # número izquierdo
             for rr in (top, top + 1):
                 c = ws.cell(row=rr, column=num_left_col)
                 c.font = number_font
@@ -1128,15 +1092,15 @@ def daily_report(request):
             ws.merge_cells(start_row=top, start_column=num_left_col, end_row=top + 1, end_column=num_left_col)
             ws.cell(row=top, column=num_left_col, value=str(t_impar))
 
-            # Bloque izquierdo + temperatura (2 columnas)
+            # bloque izquierdo + temp
             items_impar = [it for it in items_cliente if it.tarima == t_impar][:2]
             pintar_bloque_tarima(ws, top, block_left, temp_left_l, items_impar, temp_txt(t_impar))
 
-            # Bloque derecho + temperatura (2 columnas)
+            # bloque derecho + temp
             items_par = [it for it in items_cliente if it.tarima == t_par][:2]
             pintar_bloque_tarima(ws, top, block_right, temp_right_l, items_par, temp_txt(t_par))
 
-            # NÚMERO DER
+            # número derecho
             for rr in (top, top + 1):
                 c = ws.cell(row=rr, column=num_right_col)
                 c.font = number_font
@@ -1144,90 +1108,77 @@ def daily_report(request):
                 c.border = thick_all
             ws.merge_cells(start_row=top, start_column=num_right_col, end_row=top + 1, end_column=num_right_col)
             ws.cell(row=top, column=num_right_col, value=str(t_par))
-            # ===== Tabla de RESUMEN inferior (debajo del grid) =====
-            from collections import defaultdict
-            # Estilos (autocontenidos)
-            th_font = Font(name='Calibri', size=16, bold=True, color="FFFFFF")
-            th_fill = PatternFill("solid", fgColor="225577")
-            thin_border = Border(
-                left=Side(style='thin', color='AAAAAA'),
-                right=Side(style='thin', color='AAAAAA'),
-                top=Side(style='thin', color='AAAAAA'),
-                bottom=Side(style='thin', color='AAAAAA'),
-            )
-            body_font = Font(name='Calibri', size=14)
 
-            # 1) Calcular dónde empieza la tabla, sin depender de rptr si no existe
-            grid_last_row = grid_start_row + 13*2 - 1
-            data_block_last_row = (locals().get('rptr') - 1) if locals().get('rptr') else (datos_start_row - 1)
-            summary_top = max(grid_last_row, data_block_last_row) + 2
+        # ===== Resumen inferior =====
+        th_font = Font(name='Calibri', size=16, bold=True, color="FFFFFF")
+        th_fill = PatternFill("solid", fgColor="225577")
+        thin_border = Border(
+            left=Side(style='thin', color='AAAAAA'),
+            right=Side(style='thin', color='AAAAAA'),
+            top=Side(style='thin', color='AAAAAA'),
+            bottom=Side(style='thin', color='AAAAAA'),
+        )
+        body_font = Font(name='Calibri', size=14)
 
-            # 2) Agregar y agrupar items del cliente
-            items_cliente = [
-                it
-                for s in qs
-                for it in s.items.filter(cliente=cliente).select_related('presentation')
-            ]
+        grid_last_row = grid_start_row + 13*2 - 1
+        summary_top = max(grid_last_row, (rptr - 1) if rptr else 0) + 2
 
-            presentaciones_info = defaultdict(lambda: {'cajas': 0, 'eq11': 0.0})
-            total_cajas = 0
-            total_eq11  = 0.0
+        # Agregar/agrup items del cliente del día completo
+        from collections import defaultdict
+        items_cliente_dia = [
+            it
+            for s in qs
+            for it in s.items.filter(cliente=cliente).select_related('presentation')
+        ]
+        presentaciones_info = defaultdict(lambda: {'cajas': 0, 'eq11': 0.0})
+        total_cajas = 0
+        total_eq11  = 0.0
+        for it in items_cliente_dia:
+            k = (it.presentation.name, it.size)
+            presentaciones_info[k]['cajas'] += it.quantity
+            eq = it.quantity * float(it.presentation.conversion_factor)
+            presentaciones_info[k]['eq11']  += eq
+            total_cajas += it.quantity
+            total_eq11  += eq
 
-            for it in items_cliente:
-                k = (it.presentation.name, it.size)
-                presentaciones_info[k]['cajas'] += it.quantity
-                eq = it.quantity * float(it.presentation.conversion_factor)
-                presentaciones_info[k]['eq11']  += eq
-                total_cajas += it.quantity
-                total_eq11  += eq
+        def merge_pair(row, c1, c2, value=None, *, font=None, fill=None, border=None):
+            for cc in range(c1, c2 + 1):
+                cell = ws.cell(row=row, column=cc)
+                if font:  cell.font = font
+                if fill:  cell.fill = fill
+                if border: cell.border = border
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+            if value is not None:
+                ws.cell(row=row, column=c1, value=value)
 
-            # 3) Encabezados
-            def merge_pair(row, c1, c2, value=None, *, font=None, fill=None, border=None):
-            # aplica estilos a ambas celdas antes de fusionar (evita MergedCell.value)
-                for cc in range(c1, c2 + 1):
-                    cell = ws.cell(row=row, column=cc)
-                    if font:  cell.font = font
-                    if fill:  cell.fill = fill
-                    if border: cell.border = border
-                    cell.alignment = Alignment(horizontal="center", vertical="center")
-                ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
-                if value is not None:
-                    ws.cell(row=row, column=c1, value=value)
+        header_pairs = [(1,2), (3,4), (5,6), (7,8)]
+        headers = ["Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs"]
+        for (c1, c2), txt in zip(header_pairs, headers):
+            merge_pair(summary_top, c1, c2, txt, font=th_font, fill=th_fill, border=thin_border)
 
-            # 3) Encabezados (4 campos, cada uno ocupa 2 columnas)
-            header_pairs = [(1,2), (3,4), (5,6), (7,8)]
-            headers = ["Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs"]
-            for (c1, c2), txt in zip(header_pairs, headers):
-                merge_pair(summary_top, c1, c2, txt, font=th_font, fill=th_fill, border=thin_border)
-
-            # 4) Filas
-            r = summary_top + 1
-            if presentaciones_info:
-                for (pres, size), info in sorted(
-                    presentaciones_info.items(),
-                    key=lambda kv: (kv[0][0].lower(), str(kv[0][1]).lower())
-                ):
-                    merge_pair(r, 1, 2, pres,  font=body_font, border=thin_border)
-                    merge_pair(r, 3, 4, size,  font=body_font, border=thin_border)
-                    merge_pair(r, 5, 6, info['cajas'], font=body_font, border=thin_border)
-                    merge_pair(r, 7, 8, round(info['eq11'], 2), font=body_font, border=thin_border)
-                    r += 1
-            else:
-                # fila "sin datos" ocupando todo el ancho del resumen
-                merge_pair(r, 1, 8, "(Sin datos)", font=body_font, border=thin_border)
+        r = summary_top + 1
+        if presentaciones_info:
+            for (pres, size), info in sorted(
+                presentaciones_info.items(),
+                key=lambda kv: (kv[0][0].lower(), str(kv[0][1]).lower())
+            ):
+                merge_pair(r, 1, 2, pres,  font=body_font, border=thin_border)
+                merge_pair(r, 3, 4, size,  font=body_font, border=thin_border)
+                merge_pair(r, 5, 6, info['cajas'], font=body_font, border=thin_border)
+                merge_pair(r, 7, 8, round(info['eq11'], 2), font=body_font, border=thin_border)
                 r += 1
-
-            # 5) Totales (label en 1–2; totales en 5–6 y 7–8)
+        else:
+            merge_pair(r, 1, 8, "(Sin datos)", font=body_font, border=thin_border)
             r += 1
-            tot_fill = PatternFill("solid", fgColor="BBDDFF")
-            bold = Font(bold=True)
 
-            merge_pair(r, 1, 2, "TOTALES", font=bold, fill=tot_fill, border=thin_border)
-            # si quieres dejar 3–4 vacías pero con mismo fondo/borde:
-            merge_pair(r, 3, 4, "", font=bold, fill=tot_fill, border=thin_border)
-
-            merge_pair(r, 5, 6, total_cajas,       font=bold, fill=tot_fill, border=thin_border)
-            merge_pair(r, 7, 8, round(total_eq11,2), font=bold, fill=tot_fill, border=thin_border)
+        r += 1
+        tot_fill = PatternFill("solid", fgColor="BBDDFF")
+        bold = Font(bold=True)
+        merge_pair(r, 1, 2, "TOTALES", font=bold, fill=tot_fill, border=thin_border)
+        merge_pair(r, 3, 4, "",        font=bold, fill=tot_fill, border=thin_border)
+        merge_pair(r, 5, 6, total_cajas,        font=bold, fill=tot_fill, border=thin_border)
+        merge_pair(r, 7, 8, round(total_eq11,2), font=bold, fill=tot_fill, border=thin_border)
 
         # --- Exportar ---
         output = BytesIO()
@@ -1240,6 +1191,7 @@ def daily_report(request):
         )
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
 
     # ---- HTML normal ----- 
 
