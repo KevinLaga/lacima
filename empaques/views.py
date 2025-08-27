@@ -569,7 +569,9 @@ from django.conf import settings
 from django.http import HttpResponse
 @login_required
 
-def daily_report(request):
+def daily_report(request, shipment_id=None):
+    ship_id  = request.GET.get('shipment_id') or shipment_id
+    tracking = request.GET.get('tracking')
     if not (request.user.has_perm('empaques.view_shipment') or request.user.has_perm('empaques.export_reports')):
         return HttpResponseForbidden("No tienes permiso para ver reportes.")  # <-- usa HttpResponseForbidden
 
@@ -650,20 +652,51 @@ def daily_report(request):
 
     clientes_slug = [(c, slugify(c)) for c in clientes] 
 
+
     # ---- Fecha a reportar ----
     qdate = request.GET.get('date')
     try:
-        report_date = date.fromisoformat(qdate) if qdate else date.today() 
+        report_date = date.fromisoformat(qdate) if qdate else date.today()
     except ValueError:
         report_date = date.today()
 
-    # Prefetch y orden -id (más reciente primero)
-    qs = (
-        Shipment.objects
-        .filter(date=report_date)
-        .order_by('-id')
-        .prefetch_related('items', 'items__presentation')
-    )
+    if ship_id:
+        try:
+            sid = int(ship_id)
+            qs = (
+                Shipment.objects
+                .filter(id=sid)
+                .prefetch_related('items', 'items__presentation')
+            )
+        except ValueError:
+            qs = Shipment.objects.none()
+    elif tracking:
+        qs = (
+            Shipment.objects
+            .filter(tracking_number=tracking)
+            .prefetch_related('items', 'items__presentation')
+        )
+    else:
+        qs = (
+            Shipment.objects
+            .filter(date=report_date)
+            .order_by('-id')
+            .prefetch_related('items', 'items__presentation')
+        )
+
+    # Si vino selección específica, ajusta report_date para mostrarlo bonito
+    if (ship_id or tracking) and qs.exists():
+        report_date = qs.first().date
+     # Si me pasaron shipment_id o tracking, fuerzo a 1 solo embarque
+    if shipment_id or tracking:
+        base_qs = Shipment.objects.all().prefetch_related('items', 'items__presentation')
+        if shipment_id:
+            qs = base_qs.filter(id=shipment_id)
+        else:
+            qs = base_qs.filter(tracking_number=tracking).order_by('-id')[:1]
+        # ajusta la fecha para que los títulos/encabezados muestren el día real del embarque
+        if qs:
+            report_date = qs[0].date
     
 
     # Totales del día (para el general) - precomputar total_boxes = sum(item.quantity)
@@ -1000,22 +1033,40 @@ def daily_report(request):
 
         # === Selección del embarque del CLIENTE (solo UNO) ===
         shipments_cliente = [s for s in qs if s.items.filter(cliente=cliente).exists()]
+
         ship_id  = request.GET.get('shipment_id')
         tracking = request.GET.get('tracking')
 
         rep_cli = None
+        # 1) Prioriza ?shipment_id= (si viene numérico)
         if ship_id:
-            rep_cli = next((s for s in shipments_cliente if str(s.id) == str(ship_id)), None)
-        elif tracking:
+            try:
+                sid = int(ship_id)
+            except (TypeError, ValueError):
+                sid = None
+            if sid is not None:
+                rep_cli = next((s for s in shipments_cliente if s.id == sid), None)
+
+        # 2) Si no hubo match por id y viene ?tracking=, intenta por tracking_number
+        if rep_cli is None and tracking:
             rep_cli = next((s for s in shipments_cliente if _str(s.tracking_number) == tracking), None)
-        if rep_cli is None:
-            rep_cli = shipments_cliente[0] if shipments_cliente else None
+
+        # 3) Fallback: si no se especificó nada, usa el primero de ese cliente en la fecha
+        if rep_cli is None and shipments_cliente:
+            rep_cli = shipments_cliente[0]
+
 
         # --- Cabecera "EMBARQUE:" (P2:Q2 etiqueta, R2 valor) con NÚMERO POR CLIENTE ---
         label_font = Font(name="Calibri", size=10, bold=True)
         num_font   = Font(name="Calibri", size=10, bold=True, color="FF0000")
         ws.merge_cells(start_row=2, start_column=16, end_row=2, end_column=17)  # P2:Q2
         ws.cell(row=2, column=16, value="EMBARQUE:").font = label_font
+
+        numero_final = ""
+        if rep_cli:
+            num_cli = get_client_order_number(rep_cli, cliente)  # puede ser None/""
+            numero_final = num_cli or _str(rep_cli.tracking_number)
+        ws.cell(row=2, column=18, value=numero_final).font = num_font  # R2
 
         numero_final = ""
         if rep_cli:
@@ -1037,8 +1088,7 @@ def daily_report(request):
         thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
 
         # Ítems SOLO del embarque rep_cli
-        scope_shipments = [rep_cli] if rep_cli else []
-        items_cliente = [it for s in scope_shipments for it in s.items.filter(cliente=cliente)]
+        items_cliente = list(rep_cli.items.filter(cliente=cliente)) if rep_cli else []
 
         def temp_txt(tarima_n):
             for it in items_cliente:
@@ -1110,6 +1160,7 @@ def daily_report(request):
             ws.cell(row=top, column=num_right_col, value=str(t_par))
 
         # ===== Resumen inferior =====
+        from collections import defaultdict
         th_font = Font(name='Calibri', size=16, bold=True, color="FFFFFF")
         th_fill = PatternFill("solid", fgColor="225577")
         thin_border = Border(
@@ -1121,19 +1172,15 @@ def daily_report(request):
         body_font = Font(name='Calibri', size=14)
 
         grid_last_row = grid_start_row + 13*2 - 1
-        summary_top = max(grid_last_row, (rptr - 1) if rptr else 0) + 2
+        data_block_last_row = (rptr - 1) if rep_cli else (datos_start_row - 1)
+        summary_top = max(grid_last_row, data_block_last_row) + 2
 
-        # Agregar/agrup items del cliente del día completo
-        from collections import defaultdict
-        items_cliente_dia = [
-            it
-            for s in qs
-            for it in s.items.filter(cliente=cliente).select_related('presentation')
-        ]
+        # Agregar/agrup ar solo items del rep_cli:
         presentaciones_info = defaultdict(lambda: {'cajas': 0, 'eq11': 0.0})
         total_cajas = 0
         total_eq11  = 0.0
-        for it in items_cliente_dia:
+
+        for it in items_cliente:
             k = (it.presentation.name, it.size)
             presentaciones_info[k]['cajas'] += it.quantity
             eq = it.quantity * float(it.presentation.conversion_factor)
@@ -1152,26 +1199,27 @@ def daily_report(request):
             if value is not None:
                 ws.cell(row=row, column=c1, value=value)
 
+        # Encabezados (2 col por campo)
         header_pairs = [(1,2), (3,4), (5,6), (7,8)]
         headers = ["Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs"]
         for (c1, c2), txt in zip(header_pairs, headers):
             merge_pair(summary_top, c1, c2, txt, font=th_font, fill=th_fill, border=thin_border)
 
+        # Filas
         r = summary_top + 1
         if presentaciones_info:
-            for (pres, size), info in sorted(
-                presentaciones_info.items(),
-                key=lambda kv: (kv[0][0].lower(), str(kv[0][1]).lower())
-            ):
-                merge_pair(r, 1, 2, pres,  font=body_font, border=thin_border)
-                merge_pair(r, 3, 4, size,  font=body_font, border=thin_border)
-                merge_pair(r, 5, 6, info['cajas'], font=body_font, border=thin_border)
-                merge_pair(r, 7, 8, round(info['eq11'], 2), font=body_font, border=thin_border)
+            for (pres, size), info in sorted(presentaciones_info.items(),
+                                     key=lambda kv: (kv[0][0].lower(), str(kv[0][1]).lower())):
+                merge_pair(r, 1, 2, pres,               font=body_font, border=thin_border)
+                merge_pair(r, 3, 4, size,               font=body_font, border=thin_border)
+                merge_pair(r, 5, 6, info['cajas'],      font=body_font, border=thin_border)
+                merge_pair(r, 7, 8, round(info['eq11'],2), font=body_font, border=thin_border)
                 r += 1
         else:
             merge_pair(r, 1, 8, "(Sin datos)", font=body_font, border=thin_border)
             r += 1
 
+        # Totales
         r += 1
         tot_fill = PatternFill("solid", fgColor="BBDDFF")
         bold = Font(bold=True)

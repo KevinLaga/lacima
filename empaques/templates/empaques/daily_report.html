@@ -10,26 +10,40 @@
 <body>
   <h1>Reporte del {{ report_date }}</h1>
 
-  <form method="get">
+  <!-- Filtro por fecha -->
+  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom:.5rem;">
     <label for="id_date">Fecha:</label>
-    <input type="date" id="id_date" name="date"
-           value="{{ report_date|date:'Y-m-d' }}">
+    <input type="date" id="id_date" name="date" value="{{ report_date|date:'Y-m-d' }}">
     <button type="submit">Ver</button>
     <a href="{% url 'shipment_list' %}">Ver todo</a>
   </form>
-{% if perms.empaques.export_reports %}
-  <!-- ÚNICA fila de botones para descargar -->
-  <p>
-  <a href="?date={{ report_date|date:'Y-m-d' }}&format=xlsx"><b>Descargar Excel General</b></a>
-  {% for c, cslug in clientes %}
-    | <a href="?date={{ report_date|date:'Y-m-d' }}&format=xlsx_{{ cslug }}"><b>Descargar Excel {{ c }}</b></a>
-  {% endfor %}
-</p>
-{% endif %}
-{% else %}
-  <p>No tienes permiso para ver esta página.</p>
-{% endif %}
 
+  <!-- Búsqueda por N° de embarque (tracking) -->
+  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom:1rem;">
+    <input type="text" name="tracking" placeholder="Buscar por N° de embarque..." value="{{ request.GET.tracking }}">
+    <button type="submit">Ir</button>
+    {% if request.GET.tracking or request.GET.shipment_id %}
+      <a href="{% url 'daily_report' %}?date={{ report_date|date:'Y-m-d' }}">Volver al día</a>
+    {% endif %}
+  </form>
+
+  {% if perms.empaques.export_reports %}
+  <!-- Botones de descarga (propagan selección actual) -->
+  <p>
+    {% with sid=request.GET.shipment_id trk=request.GET.tracking %}
+      <a href="{% url 'daily_report' %}?format=xlsx{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
+        <b>Descargar Excel General</b>
+      </a>
+      {% for c, cslug in clientes %}
+        | <a href="{% url 'daily_report' %}?format=xlsx_{{ cslug }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
+            <b>Descargar Excel {{ c }}</b>
+          </a>
+      {% endfor %}
+    {% endwith %}
+  </p>
+  {% endif %}
+
+  <!-- Tabla -->
   <table border="1" cellpadding="5" cellspacing="0">
     <thead>
       <tr>
@@ -56,11 +70,11 @@
         <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
         <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
         <td>{{ item.cliente }}</td>
-        <td>{{ subform.temperatura }}</td>
+        <td>{{ item.temperatura }}</td>
       </tr>
       {% endfor %}
     {% empty %}
-      <tr><td colspan="8">No hay embarques para esta fecha.</td></tr>
+      <tr><td colspan="9">No hay embarques para esta fecha.</td></tr>
     {% endfor %}
     </tbody>
     <tfoot>
@@ -69,10 +83,13 @@
         <th style="text-align:right">{{ total_boxes }}</th>
         <th style="text-align:right">{{ total_eq_11lbs|floatformat:"2" }}</th>
         <th style="text-align:right">{{ total_amount|floatformat:"2" }}</th>
-        <th></th>
+        <th colspan="2"></th>
       </tr>
     </tfoot>
   </table>
 
 </body>
 </html>
+{% else %}
+<p>No tienes permiso para ver esta página.</p>
+{% endif %}

@@ -9,54 +9,43 @@
 </head>
 <body>
   <!-- BOTÓN CERRAR SESIÓN (arriba derecha) -->
-<div class="logout-btn-wrap">
-  <form method="post" action="{% url 'logout' %}">
-    {% csrf_token %}
-    <button type="submit" class="logout-btn" title="Cerrar sesión">⎋ Cerrar sesión</button>
-  </form>
-</div>
-<style>
-  .logout-btn-wrap {
-    position: fixed;
-    top: 12px;
-    right: 12px;
-    z-index: 9999;
-  }
-  .logout-btn {
-    background: #ba2121; /* rojo admin */
-    color: #fff;
-    border: 0;
-    border-radius: 6px;
-    padding: .5rem .85rem;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .logout-btn:hover { opacity: .92; }
-</style>
+  <div class="logout-btn-wrap">
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="logout-btn" title="Cerrar sesión">⎋ Cerrar sesión</button>
+    </form>
+  </div>
+  <style>
+    .logout-btn-wrap {
+      position: fixed; top: 12px; right: 12px; z-index: 9999;
+    }
+    .logout-btn {
+      background: #ba2121; color: #fff; border: 0; border-radius: 6px;
+      padding: .5rem .85rem; cursor: pointer; font-weight: 600;
+    }
+    .logout-btn:hover { opacity: .92; }
+    table { border-collapse: collapse; }
+    th, td { padding: 6px 10px; }
+  </style>
 
   <h1>Embarques Registrados</h1>
   <p><a href="{% url 'shipment_create' %}">+ Nuevo Embarque</a></p>
-  {% if perms.empaques.export_reports %}
-    <!-- Formularios/botones de descargar mes/año -->
-  {% endif %}
-{% else %}
-  <p>No tienes permiso para ver embarques.</p>
-{% endif %}
-<!-- Descarga por semana (input type="week") -->
-<form method="get" style="display:inline-block; margin-right:10px;">
-  <label for="id_iso_week">Semana:</label>
-  <input type="week" id="id_iso_week" name="iso_week" />
-  <button type="submit" name="descargar" value="semana">Descargar semana</button>
-</form>
 
-<!-- Descarga por rango de fechas -->
-<form method="get" style="display:inline-block; margin-right:10px;">
-  <label for="id_start">Rango:</label>
-  <input type="date" id="id_start" name="start" required>
-  <span>—</span>
-  <input type="date" id="id_end" name="end" required>
-  <button type="submit" name="descargar" value="rango">Descargar rango</button>
-</form>
+  <!-- Descarga por semana -->
+  <form method="get" style="display:inline-block; margin-right:10px;">
+    <label for="id_iso_week">Semana:</label>
+    <input type="week" id="id_iso_week" name="iso_week" />
+    <button type="submit" name="descargar" value="semana">Descargar semana</button>
+  </form>
+
+  <!-- Descarga por rango de fechas -->
+  <form method="get" style="display:inline-block; margin-right:10px;">
+    <label for="id_start">Rango:</label>
+    <input type="date" id="id_start" name="start" required>
+    <span>—</span>
+    <input type="date" id="id_end" name="end" required>
+    <button type="submit" name="descargar" value="rango">Descargar rango</button>
+  </form>
 
   <!-- Formulario de descarga mensual -->
   <h3>Descargar resumen mensual</h3>
@@ -81,7 +70,11 @@
     <button type="submit">Descargar Año</button>
   </form>
 
-  <br>
+  <!-- Buscador por tracking: abre el reporte específico -->
+  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom: 1rem;">
+    <input type="text" name="tracking" placeholder="Buscar por N° de embarque..." />
+    <button type="submit">Ir</button>
+  </form>
 
   <!-- Tabla de embarques -->
   <table border="1" cellpadding="5" cellspacing="0">
@@ -102,7 +95,11 @@
         <td>{{ s.invoice_number }}</td>
         <td>{{ s.date }}</td>
         <td>
-          <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver Reporte</a>
+          <!-- Ver reporte por fecha (lista del día) -->
+          <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver día</a>
+          &nbsp;|&nbsp;
+          <!-- Ver reporte específico (solo este embarque) -->
+          <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}">Ver Reporte</a>
         </td>
       </tr>
     {% empty %}
@@ -112,3 +109,6 @@
   </table>
 </body>
 </html>
+{% else %}
+<p>No tienes permiso para ver embarques.</p>
+{% endif %}
