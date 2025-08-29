@@ -817,46 +817,54 @@ def daily_report(request, shipment_id=None):
         return ""
     
 
-    def pintar_bloque_tarima(ws_, top_row, left_col, temp_col_left, items_, temp_text):
+    def pintar_bloque_tarima(ws_, top_row, left_col, temp_col, items_, temp_text):
+        
+        from openpyxl.styles import Alignment, Border, Side, Font
+
         thin  = Side(style='thin',   color='999999')
         thick = Side(style='medium', color='000000')
+        thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
 
-        # 8 celdas internas (2 filas x 4 columnas) con marco grueso exterior
+        # Marco 2x4 (bordes internos finos, exteriores gruesos)
         for rr in (top_row, top_row + 1):
             for cc in range(left_col, left_col + 4):
-                cell = ws_.cell(row=rr, column=cc, value=cell.value if (cell := ws_.cell(row=rr, column=cc)).value else "")
+                cell = ws_.cell(row=rr, column=cc, value="")
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 top_side    = thick if rr == top_row else thin
-                bottom_side = thick if rr == top_row + 1 else thin
+                bottom_side = thick if rr == (top_row + 1) else thin
                 left_side   = thick if cc == left_col else thin
-                right_side  = thick if cc == left_col + 3 else thin
+                right_side  = thick if cc == (left_col + 3) else thin
                 cell.border = Border(top=top_side, bottom=bottom_side, left=left_side, right=right_side)
 
-        # Temperatura ocupa 2 columnas ancho x 2 filas alto (fusionamos 2x2)
-        # Estilar primero TODAS las celdas del rectángulo:
+        # Celda única de temperatura (fusionada verticalmente)
+        ws_.merge_cells(start_row=top_row, start_column=temp_col, end_row=top_row + 1, end_column=temp_col)
         for rr in (top_row, top_row + 1):
-            for cc in (temp_col_left, temp_col_left + 1):
-                c = ws_.cell(row=rr, column=cc)
-                c.alignment = Alignment(horizontal="center", vertical="center")
-                c.border = Border(top=thick, bottom=thick, left=thick, right=thick)
-        # Fusionar y escribir SOLO en la esquina superior-izquierda:
-        ws_.merge_cells(start_row=top_row, start_column=temp_col_left, end_row=top_row + 1, end_column=temp_col_left + 1)
-        if temp_text:  # sin "GMT" por defecto; sólo escribe si hay lectura
-            ws_.cell(row=top_row, column=temp_col_left, value=temp_text)
+            c = ws_.cell(row=rr, column=temp_col, value=(temp_text or "") if rr == top_row else None)
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thick_all
 
-        # Poner hasta 2 ítems
-        if not items_:
-            return
-        it1 = items_[0]
-        ws_.cell(row=top_row,     column=left_col,     value=_str(it1.presentation.name))
-        ws_.cell(row=top_row + 1, column=left_col,     value=_str(it1.size))
-        ws_.cell(row=top_row + 1, column=left_col + 1, value=it1.quantity)
+        # Hasta 4 ítems (slots: (fila, col_label, col_qty))
+        slots = [
+            (top_row,     left_col,     left_col + 1),
+            (top_row,     left_col + 2, left_col + 3),
+            (top_row + 1, left_col,     left_col + 1),
+            (top_row + 1, left_col + 2, left_col + 3),
+        ]
 
-        if len(items_) >= 2:
-            it2 = items_[1]
-            ws_.cell(row=top_row,     column=left_col + 2, value=_str(it2.presentation.name))
-            ws_.cell(row=top_row + 1, column=left_col + 2, value=_str(it2.size))
-            ws_.cell(row=top_row + 1, column=left_col + 3, value=it2.quantity)
+        # Un poco más alto para que quepan 2 líneas
+        ws_.row_dimensions[top_row].height     = 32
+        ws_.row_dimensions[top_row + 1].height = 32
+
+        for it, (r, c_label, c_qty) in zip(items_[:4], slots):
+            # Texto con salto de línea: Tipo + Tamaño
+            label_text = f"{_str(it.presentation.name)}\n{_str(it.size)}"
+            lbl = ws_.cell(row=r, column=c_label, value=label_text)
+            lbl.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            qty = ws_.cell(row=r, column=c_qty, value=it.quantity)
+            qty.alignment = Alignment(horizontal="center", vertical="center")
+            qty.font = Font(bold=True)
+
     def write_datos(ws_, start_row, embarque, order_override=None):
         from openpyxl.styles import Font, Alignment
         lf = Font(name='Calibri', size=12, bold=True, color="000000")
@@ -1140,22 +1148,21 @@ def daily_report(request, shipment_id=None):
         # Ajustes de columnas “recorridos 1 a la izquierda”
         ws.column_dimensions['T'].width = 9.57
         ws.column_dimensions['B'].width = 14.86
-        ws.column_dimensions['G'].width = 9.57
+        ws.column_dimensions['G'].width = 5.86
         ws.column_dimensions['F'].width = 8.86
-        ws.column_dimensions['J'].width = 9.57
         ws.column_dimensions['K'].width = 9.57
         ws.column_dimensions['A'].width = 16
         ws.column_dimensions['Q'].width = 9.57
-        ws.column_dimensions['P'].width = 9.57
-        ws.column_dimensions['H'].width = 20.29
-        ws.column_dimensions['N'].width = 20.29
+        ws.column_dimensions['J'].width = 22
+        ws.column_dimensions['H'].width = 22
+        ws.column_dimensions['M'].width = 22
         ws.column_dimensions['I'].width = 10.29
-        ws.column_dimensions['O'].width = 10.29
-        ws.column_dimensions['L'].width = 5.86
-        ws.column_dimensions['M'].width = 5.71
+        ws.column_dimensions['P'].width = 10.29
+        ws.column_dimensions['L'].width = 9.57
+        ws.column_dimensions['N'].width = 10.29
         ws.column_dimensions['R'].width = 5.86
         ws.column_dimensions['S'].width = 5.71
-
+        ws.column_dimensions['O'].width = 22
         for rr in range(5, 57):
             ws.row_dimensions[rr].height = 32.25
 
@@ -1167,9 +1174,9 @@ def daily_report(request, shipment_id=None):
             num_left_col  = 7   # G
             block_left    = 8   # H..K
             temp_left_l   = 12  # L..M
-            block_right   = 14  # N..Q
-            temp_right_l  = 18  # R..S
-            num_right_col = 20  # T
+            block_right   = 13  # N..Q
+            temp_right_l  = 17  # R..S
+            num_right_col = 18  # T
 
             # número izquierdo
             for rr in (top, top + 1):
@@ -1181,11 +1188,11 @@ def daily_report(request, shipment_id=None):
             ws.cell(row=top, column=num_left_col, value=str(t_impar))
 
             # bloque izquierdo + temp
-            items_impar = [it for it in items_cliente if it.tarima == t_impar][:2]
+            items_impar = [it for it in items_cliente if it.tarima == t_impar][:4]
             pintar_bloque_tarima(ws, top, block_left, temp_left_l, items_impar, temp_txt(t_impar))
 
             # bloque derecho + temp
-            items_par = [it for it in items_cliente if it.tarima == t_par][:2]
+            items_par   = [it for it in items_cliente if it.tarima == t_par][:4]
             pintar_bloque_tarima(ws, top, block_right, temp_right_l, items_par, temp_txt(t_par))
 
             # número derecho
