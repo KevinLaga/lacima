@@ -34,14 +34,13 @@ def post_login_redirect(request):
         return redirect("shipment_create")
     return redirect("shipment_list")
 
-
+from django.utils.crypto import get_random_string
+from django.db import transaction
+from django.forms import inlineformset_factory
+from django.contrib.auth.decorators import login_required, permission_required
 @login_required
 @permission_required('empaques.add_shipment', raise_exception=True)
-
 def shipment_create(request):
-    """
-    Vista para capturar un nuevo embarque con sus ítems.
-    """
     ItemFormSet = inlineformset_factory(
         Shipment,
         ShipmentItem,
@@ -51,21 +50,60 @@ def shipment_create(request):
         can_delete=True,
     )
 
+    # Inicializa la lista de tokens usados en sesión
+    used_tokens = request.session.get('used_form_tokens', [])
+    if not isinstance(used_tokens, list):
+        used_tokens = []
+    request.session['used_form_tokens'] = used_tokens
+
     if request.method == 'POST':
+        token = request.POST.get('form_token')
+        used = set(request.session.get('used_form_tokens', []))
+
+        # Si no hay token o ya se usó, no duplica
+        if (not token) or (token in used):
+            return redirect('shipment_list')
+
         form = ShipmentForm(request.POST)
         formset = ItemFormSet(request.POST)
-        if form.is_valid() and formset.is_valid():
-            shipment = form.save()
-            formset.instance = shipment
-            formset.save()
-            return redirect('shipment_list')
-    else:
-        form = ShipmentForm()
-        formset = ItemFormSet()
 
+        if form.is_valid() and formset.is_valid():
+            # Marcamos token como usado ANTES de guardar (bloquea multi-clics)
+            used.add(token)
+            request.session['used_form_tokens'] = list(used)
+            request.session.modified = True
+
+            with transaction.atomic():
+                shipment = form.save()
+                formset.instance = shipment
+                formset.save()
+
+            return redirect('shipment_list')
+
+        # Si hay errores, generamos un nuevo token
+        new_token = get_random_string(32)
+        request.session['current_form_token'] = new_token
+        request.session.modified = True
+        return render(request, 'empaques/shipment_form.html', {
+            'form': form,
+            'formset': formset,
+            'form_token': new_token,
+        })
+
+    # GET: token nuevo
+    token = get_random_string(32)
+    request.session['current_form_token'] = token
+    # Limpieza de tokens antiguos
+    if len(used_tokens) > 100:
+        request.session['used_form_tokens'] = used_tokens[-50:]
+    request.session.modified = True
+
+    form = ShipmentForm()
+    formset = ItemFormSet()
     return render(request, 'empaques/shipment_form.html', {
         'form': form,
         'formset': formset,
+        'form_token': token,
     })
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render

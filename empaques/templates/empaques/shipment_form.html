@@ -32,6 +32,7 @@
   <h1>Registrar Embarque</h1>
   <form method="post">
     {% csrf_token %}
+    <input type="hidden" name="form_token" value="{{ form_token }}">
 
     <fieldset>
       <legend>Datos del Embarque</legend>
@@ -223,7 +224,7 @@
     {% endfor %}
 
     <button type="button" id="add-item-btn">+ Añadir Ítem</button>
-    <button type="submit">Guardar</button>
+    <button type="submit" id="btn-guardar">Guardar</button>
   </form>
 
   <script>
@@ -257,5 +258,27 @@
       });
   });
   </script>
+  <script>
+(function () {
+  const form = document.querySelector('form');
+  const btn  = document.getElementById('btn-guardar');
+  if (!form || !btn) return;
+
+  form.addEventListener('submit', function (e) {
+    // Si la validación HTML5 falla, NO deshabilites el botón
+    if (!form.checkValidity()) {
+      // deja que el navegador muestre los mensajes nativos
+      // y no deshabilites el botón
+      return; // el navegador cancela solo
+    }
+    // Si todo está ok, deshabilita para evitar doble submit
+    btn.disabled = true;
+    // opcional: feedback visual
+    // btn.textContent = 'Guardando...';
+  });
+})();
+</script>
+
+
 </body>
 </html>
