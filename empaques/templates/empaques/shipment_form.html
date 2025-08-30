@@ -14,6 +14,12 @@
       <button type="submit" class="logout-btn" title="Cerrar sesión">⎋ Cerrar sesión</button>
     </form>
   </div>
+  <!-- BOTONES DE NAVEGACIÓN (arriba derecha, junto al cerrar sesión) -->
+<div class="nav-btns-wrap">
+  <a href="{% url 'admin:index' %}" class="nav-btn">⚙️ Admin</a>
+  <a href="{% url 'shipment_list' %}" class="nav-btn secondary">📦 Lista de embarques</a>
+</div>
+
   <style>
     .logout-btn-wrap { position: fixed; top: 12px; right: 12px; z-index: 9999; }
     .logout-btn { background: #ba2121; color: #fff; border: 0; border-radius: 6px; padding: .5rem .85rem; cursor: pointer; font-weight: 600; }
@@ -27,6 +33,23 @@
       margin: .5rem 0 0;
     }
     .orders-grid > div label { font-weight: 600; }
+     /* NUEVO: contenedor de botones de navegación (pegado a logout) */
+  .nav-btns-wrap {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    transform: translateY(42px); /* baja un poco para no chocar con el botón de logout */
+    z-index: 9998;
+  }
+  .nav-btn {
+    background: #1f6feb; color: #fff; border: 0; border-radius: 6px;
+    padding: .5rem .85rem; font-weight: 600; text-decoration: none;
+  }
+  .nav-btn.secondary { background: #4b5563; }
+  .nav-btn:hover { opacity: .92; }
+
   </style>
 
   <h1>Registrar Embarque</h1>
@@ -265,9 +288,9 @@
   if (!form || !btn) return;
 
   form.addEventListener('submit', function (e) {
-    // Si la validación HTML5 falla, NO deshabilites el botón
+    // Si la validación HTML5 falla, NO deshabilites el botón 
     if (!form.checkValidity()) {
-      // deja que el navegador muestre los mensajes nativos
+      // deja que el navegador muestre los mensajes nativos 
       // y no deshabilites el botón
       return; // el navegador cancela solo
     }
