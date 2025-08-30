@@ -682,7 +682,7 @@ def daily_report(request, shipment_id=None):
     ]
     LEGAL_CLIENT_NAME = {
     "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
-    "RC Organics": "RC Organics S. DE R.L DE C.V.",
+    "RC Organics": "Empaque N.1 S. DE R.L. DE C.V.",
     "GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  
     "Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
     "GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
