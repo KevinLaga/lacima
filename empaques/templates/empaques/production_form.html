@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Producción del día – {{ date }}</h1>
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="date" value="{{ date|date:'Y-m-d' }}">
+
+  <p>
+    <b>Embarques del día:</b>
+    {% for s in ships %} #{{ s.tracking_number }} &nbsp;{% empty %}(ninguno){% endfor %}
+  </p>
+
+  <table border="1" cellpadding="6">
+    <thead>
+      <tr>
+        <th>Presentación</th><th>Tamaño</th>
+        <th>Exist. anterior</th>
+        <th>Emb. 1</th><th>Emb. 2</th><th>Emb. 3</th><th>Emb. 4</th>
+        <th>Exist. almacén</th><th>Debe</th><th>Pago</th><th>Presto</th><th>Le pagaron</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.pres }}</td>
+        <td>{{ r.size }}</td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_exist_ant" value="{{ r.exist_ant }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_emb1" value="{{ r.embs.0 }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_emb2" value="{{ r.embs.1 }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_emb3" value="{{ r.embs.2 }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_emb4" value="{{ r.embs.3 }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_exist_store" value="{{ r.exist_store }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_debe" value="{{ r.debe }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_pago" value="{{ r.pago }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_presto" value="{{ r.presto }}"></td>
+        <td><input type="number" name="r{{ forloop.counter0 }}_lepagaron" value="{{ r.lepagaron }}"></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <br>
+  <button type="submit">Guardar y descargar Excel</button>
+</form>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Días de producción</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    ul { list-style: none; padding: 0; }
+    li { margin: .4rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Días de producción guardados</h1>
+  <p><a href="{% url 'production_today' %}">Ir a producción de hoy</a></p>
+  <ul>
+    {% for d in days %}
+      <li>
+        {{ d }} —
+        <a href="{% url 'production_xlsx' prod_date=d %}">Descargar XLSX</a>
+        —
+        <a href="{% url 'production_today' %}?date={{ d }}">Editar</a>
+      </li>
+    {% empty %}
+      <li>(Aún no hay días guardados)</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>

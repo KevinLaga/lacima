@@ -13,13 +13,903 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
 
 
-from .models import Shipment, ShipmentItem
+from .models import Presentation, Shipment, ShipmentItem
 from .forms import (
     ShipmentForm,
     ShipmentItemForm,
     BaseShipmentItemFormSet,
 )
+
 from django.contrib.auth.decorators import login_required, permission_required
+
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from django.views.decorators.http import require_http_methods
+from django.utils.dateparse import parse_date
+from django.shortcuts import render, redirect
+from django.http import HttpResponse, HttpResponseBadRequest
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+from .models import Shipment, ShipmentItem
+from .production_config import ALLOWED_COMBOS, ORDERED_ALIASES
+
+# --- PRODUCCIÓN DEL DÍA (sin migraciones) ------------------------------------
+import json
+from datetime import date as _date
+from django.utils.timezone import localdate
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.http import HttpResponse, Http404
+from django.conf import settings
+from django.utils.text import slugify
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.worksheet.page import PageMargins
+
+from .models import Shipment, ShipmentItem
+from .production_config import ALLOWED_COMBOS, ORDERED_ALIASES
+
+import unicodedata, re
+# ---- Lista de clientes ----
+clientes = [ 
+    "La Cima Produce",
+    "RC Organics",
+    "GH Farms",
+    "Gourmet Baja Farms",
+    "GBF Farms",
+]
+LEGAL_CLIENT_NAME = {
+"La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
+"RC Organics": "Empaque N.1 S. DE R.L. DE C.V.",
+"GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  
+"Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
+"GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
+}
+LOGO_SLUG = {
+    'RC': 'rc-organics',
+    'LACIMA': 'la-cima-produce',
+    'GH': 'gh-farms',
+    'GOURMET': 'gourmet-baja-farms',
+    'GBF': 'gbf-farms',
+}
+
+clientes_slug = [(c, slugify(c)) for c in clientes]
+
+def _canon_client(s: str) -> str:
+    """
+    Normaliza el nombre del cliente a uno de:
+      RC / LACIMA / GH / GOURMET / GBF
+    Acepta variantes como:
+      "La Cima Produce", "RC Organics", "Gourmet Baja Farms",
+      razones sociales largas (S. DE R.L. DE C.V., etc.), puntos, espacios raros, etc.
+    """
+    if not s:
+        return ""
+
+    # 1) quitar acentos y bajar a ascii
+    t = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    t = t.lower()
+
+    # 2) reemplazar separadores raros por espacio, colapsar espacios
+    t = t.replace('&', ' and ')
+    t = t.replace('.', ' ')
+    t = re.sub(r'[^a-z0-9]+', ' ', t)
+    t = ' '.join(t.split())
+
+    # 3) detección por palabras clave
+    #    (no depende de que venga exactamente "la cima" o "rc")
+    if 'cima' in t:                   # la cima produce, la cima spr de rl...
+        return 'LACIMA'
+    if re.search(r'(^| )rc( |$)', t) or 'rcorganics' in t:
+        return 'RC'
+    if 'gourmet' in t:                # gourmet baja farms, ...
+        return 'GOURMET'
+    if re.search(r'(^| )gh( |$)', t) or 'ghfarms' in t:
+        return 'GH'
+    if 'gbf' in t:                    # gbf farms, ...
+        return 'GBF'
+
+    # 4) fallback (no reconocido)
+    return t.upper()
+
+
+
+
+# --- Empresas soportadas (normalización) ---
+COMPANY_CANON = {
+    'rc': 'RC',
+    'lacima': 'LACIMA', 'la cima': 'LACIMA', 'la_cima': 'LACIMA',
+    'gh': 'GH',
+    'gourmet': 'GOURMET',
+    'gbf': 'GBF',
+}
+COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF']
+DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
+
+import unicodedata
+import re
+
+def _canon_size(sz: str) -> str:
+    s = (sz or "").strip().upper()
+    import unicodedata, re
+    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    s = s.replace('-', ' ').replace('_',' ')
+    s = re.sub(r'\s+', ' ', s).strip()
+    aliases = {
+        "X LARGE": "XLARGE",
+        "X-LARGE": "XLARGE",
+        "XL": "XLARGE",
+        "XLG": "XLARGE",
+        "LGE": "LARGE",
+        "LG": "LARGE",
+        "STD": "STANDARD",
+        "STANDAR": "STANDARD",
+        "STANDART": "STANDARD",
+    }
+    s = aliases.get(s, s)
+    return s.replace(" ", "")  # queda "XLARGE", "STANDARD", etc.
+
+def _canon_pair(pres: str, size: str):
+    """(PRESENTACIÓN en MAYÚSCULAS compacta, TAMAÑO canónico)"""
+    return ((pres or "").strip().upper(), _canon_size(size))
+
+
+def canon_company(s: str | None) -> str | None:
+    if not s:
+        return None
+    k = (s or '').strip().lower().replace('_', ' ').replace('-', ' ')
+    return COMPANY_CANON.get(k)
+
+def company_slug(canon: str | None) -> str:
+    return (canon or 'all').lower()
+
+
+
+PROD_DIR = Path(settings.BASE_DIR) / "data" / "production"
+PROD_DIR.mkdir(parents=True, exist_ok=True)
+def _row_has_numbers(saved_row, per4):
+    """Devuelve True si hay algún número > 0 ya sea en manuales o en las 4 columnas de embarques."""
+    if not saved_row:
+        saved_row = {}
+    manuales = [
+        saved_row.get("exist_prev", 0),
+        saved_row.get("exist_almacen", 0),
+        saved_row.get("debe", 0),
+        saved_row.get("pago", 0),
+        saved_row.get("presto", 0),
+        saved_row.get("le_pagaron", 0),
+        saved_row.get("prod_dia", 0),
+    ]
+    return any((x or 0) for x in manuales + list(per4 or []))
+
+
+
+def load_prod(d: date):
+    p = _prod_path(d)
+    if p.exists():
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+def save_prod(d: date, payload: dict):
+    p = _prod_path(d)
+    with p.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+def make_key(pres: str, size: str) -> str:
+    return f"{slugify(pres)}__{slugify(size)}"
+
+@login_required
+def production_yesterday(request):
+    today = date.today()
+    yday = today - timedelta(days=1)
+    data = load_prod(yday)
+
+    ctx = {
+        "prod_date": yday,
+        "data": data,  # puede ser None si nunca se guardó ayer
+    }
+    return render(request, "empaques/production_yesterday.html", ctx)
+
+def _ensure_prod_dir():
+    PROD_DIR.mkdir(parents=True, exist_ok=True)
+
+def _prod_path(d: _date, company: str | None = None) -> Path:
+    subdir = PROD_DIR / company_slug(company)
+    subdir.mkdir(parents=True, exist_ok=True)
+    return subdir / f"{d.isoformat()}.json"
+
+def _load_prod(d: _date, company: str | None = None):
+    p = _prod_path(d, company)
+    if p.exists():
+        return json.loads(p.read_text(encoding="utf-8"))
+    return None
+
+def _save_prod(d: _date, payload: dict, company: str | None = None):
+    p = _prod_path(d, company)
+    p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _combo_key(pres, size):
+    """Alias para mantener compatibilidad: misma normalización que _canon_pair."""
+    return _canon_pair(pres, size)
+
+def _combos_from_db():
+    """
+    TODAS las combinaciones (presentación, tamaño) que existen en la BD,
+    deduplicadas y normalizadas, ordenadas.
+    """
+    qs = (
+        ShipmentItem.objects
+        .select_related('presentation')
+        .values_list('presentation__name', 'size')
+        .distinct()
+    )
+    combos = {_canon_pair(p, s) for (p, s) in qs}
+    return sorted(combos)  # lista de tuplas [(PRES, SIZE), ...]
+
+
+
+def _group_shipments_by_combo(target_date, empresa=None):
+    """
+    Devuelve:
+      - cols: ids (o trackings) de hasta 4 embarques del día para esa empresa
+      - totals: {(PRES,SIZE): total_del_día}
+      - per_ship: {(PRES,SIZE): [q1,q2,q3,q4]}
+      - eq11_by_combo: {(PRES,SIZE): eq_11_lbs_total}
+    """
+    from django.db.models import Q
+
+    qs = (Shipment.objects
+          .filter(date=target_date)
+          .order_by("id")
+          .prefetch_related("items", "items__presentation"))
+
+    ships = list(qs)
+    if not ships:
+        return [], {}, {}, {}
+
+    emp = _canon_client(empresa) if empresa else None
+
+    def shipment_matches_company(s):
+        if not emp:
+            return bool(s.items.all())
+        # 1) ¿Algún item tiene cliente = empresa?
+        item_match = any(_canon_client(it.cliente) == emp for it in s.items.all())
+        if item_match:
+            return True
+        # 2) Respaldo: flags a nivel Shipment (si los usas)
+        flag = False
+        if emp == "LACIMA":
+            flag = bool(getattr(s, "order_lacima", None))
+        elif emp == "RC":
+            flag = bool(getattr(s, "order_rc", None))
+        elif emp == "GOURMET":
+            flag = bool(getattr(s, "order_gourmet", None))
+        elif emp == "GBF":
+            flag = bool(getattr(s, "order_gbf", None))
+        elif emp == "GH":
+            flag = bool(getattr(s, "order_gh", None))
+        return flag
+
+    candidate_ids = [s.id for s in ships if shipment_matches_company(s)]
+    if not candidate_ids:
+        return [], {}, {}, {}
+
+    cols = candidate_ids[:4]
+
+    totals = {}
+    per_ship = {}
+    eq11_by_combo = {}
+
+    for s in ships:
+        col_idx = cols.index(s.id) if s.id in cols else None
+
+        # ¿este embarque fue “asignado” a la empresa por el flag?
+        assigned_to_emp = shipment_matches_company(s) if emp else True
+
+        for it in s.items.select_related("presentation").all():
+            if emp:
+                # usa el item si coincide cliente, o si el item no tiene cliente
+                # pero el embarque está asignado a esa empresa por flag
+                if _canon_client(it.cliente) != emp and not (not it.cliente and assigned_to_emp):
+                    continue
+
+            pres = getattr(it.presentation, "name", "")
+            size = it.size
+            key  = _canon_pair(pres, size)  # <-- usa tamaño canónico
+            qty  = int(it.quantity or 0)
+            cf   = float(getattr(it.presentation, "conversion_factor", 1.0))
+
+            totals[key] = totals.get(key, 0) + qty
+            eq11_by_combo[key] = eq11_by_combo.get(key, 0.0) + qty * cf
+
+            if key not in per_ship:
+                per_ship[key] = [0, 0, 0, 0]
+            if col_idx is not None:
+                per_ship[key][col_idx] += qty
+
+    return cols, totals, per_ship, eq11_by_combo
+
+
+
+def _ordered_combos():
+    # Ordena según ORDERED_ALIASES (si no está, lo manda al final)
+    with_index = []
+    for pres, size in ALLOWED_COMBOS:
+        with_index.append((ORDERED_ALIASES.get((pres, size), 9999), pres, size))
+    with_index.sort(key=lambda x: x[0])
+    return [(p, s) for _, p, s in with_index]
+
+from datetime import timedelta, date as _date
+from django.utils.text import slugify
+from django.http import Http404, HttpResponse
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+
+
+def _all_combos_from_db():
+    pres_list = [ (p or "").strip().upper()
+                  for p in Presentation.objects.values_list('name', flat=True)
+                  if (p or "").strip() ]
+
+    sizes_db = list(ShipmentItem.objects.values_list('size', flat=True).distinct())
+    sizes_allowed = [s for (_, s) in ALLOWED_COMBOS]
+
+    size_set = set()
+    for s in sizes_db + sizes_allowed:
+        cs = _canon_size(s)
+        if cs:
+            size_set.add(cs)
+
+    default_size_order = ["JUMBO", "XLARGE", "LARGE", "STANDARD", "SMALL"]
+    order_map = {name: i for i, name in enumerate(default_size_order, start=1)}
+    ordered_sizes = sorted(size_set, key=lambda s: order_map.get(s, 999))
+
+    combos = [ ( (p or "").strip().upper(), cs ) for p in pres_list for cs in ordered_sizes ]
+    return combos
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def production_today(request):
+
+    from .models import Presentation
+    
+
+    # Empresa (RC/LACIMA/GH/GOURMET/GBF)
+    raw_empresa = request.GET.get("empresa") or request.POST.get("empresa")
+    empresa = canon_company(raw_empresa) or DEFAULT_COMPANY
+
+    # Fecha
+    qdate = request.GET.get("date") or localdate().isoformat()
+    try:
+        prod_date = _date.fromisoformat(qdate)
+    except ValueError:
+        raise Http404("Fecha inválida")
+
+    # Guardados por EMPRESA
+    saved_today = _load_prod(prod_date, empresa) or {}
+    yday = prod_date - timedelta(days=1)
+    saved_yday = _load_prod(yday, empresa) or {}
+    rows_yday = saved_yday.get("rows", {})
+    order_number = (saved_today.get("order_number") or "")
+
+    # Embarques del día (EMPRESA)
+    ship_cols, totals, per_ship, eq11_map = _group_shipments_by_combo(prod_date, empresa)
+
+    # Conjunto de combos
+    combos = _all_combos_from_db() or _ordered_combos()
+
+    # Globales del día ya guardados (si existen)
+    exist_piso_hoy = int((saved_today or {}).get("exist_piso_hoy", 0))
+    cajas_campo_recibidas = int((saved_today or {}).get("cajas_campo_recibidas", 0))
+    exist_piso_ayer = int((saved_yday or {}).get("exist_piso_hoy", 0))
+    total_cajas_trabajar = exist_piso_ayer + cajas_campo_recibidas
+    cajas_campo_trabajadas = total_cajas_trabajar - exist_piso_hoy
+
+    # Mapa de factores por presentación
+    pres_cf = {}
+    for name, cf in Presentation.objects.values_list("name", "conversion_factor"):
+        pres_cf[(name or "").strip().upper()] = float(cf or 1.0)
+
+    # --- Filas de la tabla ---
+    rows = []
+    for pres, size in combos:
+        k_totals = _combo_key(pres, size)
+        k_saved  = f"{pres}|{size}"
+        k_form   = f"{slugify(pres)}__{slugify(size)}"
+
+        exist_prev = int(rows_yday.get(k_saved, {}).get("exist_almacen", 0))
+        row_today  = (saved_today.get("rows") or {}).get(k_saved, {})
+
+        exist_almacen = int(row_today.get("exist_almacen", 0))
+        debe          = int(row_today.get("debe", 0))
+        pago          = int(row_today.get("pago", 0))
+        presto        = int(row_today.get("presto", 0))
+        le_pagaron    = int(row_today.get("le_pagaron", 0))
+
+        per4       = per_ship.get(k_totals, [0, 0, 0, 0])
+        total_emb  = totals.get(k_totals, 0)
+        eq11_today = round(eq11_map.get(k_totals, 0.0), 2)
+
+        prod_dia = exist_almacen - exist_prev - debe + pago + presto - le_pagaron + total_emb
+
+        rows.append({
+            "pres": pres, "size": size,
+            "form_prefix": k_form,
+            "per_ship": per4,
+            "total_emb": total_emb,
+            "exist_prev": exist_prev,
+            "exist_almacen": exist_almacen,
+            "debe": debe, "pago": pago, "presto": presto, "le_pagaron": le_pagaron,
+            "prod_dia": prod_dia,
+            "eq11": eq11_today,
+        })
+
+    # Eq. 11 lb de la PRODUCCIÓN DEL DÍA (con prod_dia)
+    total_eq11_produccion = 0.0
+    for r in rows:
+        cf = pres_cf.get((r["pres"] or "").strip().upper(), 1.0)
+        total_eq11_produccion += (r["prod_dia"] or 0) * cf
+
+    # Base de acumulados AYER:
+    # - si existe JSON de ayer, úsalo
+    # - si NO existe, usa lo capturado “hasta AYER” (y lo persistimos para que no se borre)
+    base_cosechadas_ayer = saved_yday.get("acum_cosechadas")
+    base_empacadas_ayer  = saved_yday.get("acum_empacadas")
+
+    if base_cosechadas_ayer is None:
+        base_cosechadas_ayer = int(saved_today.get("acum_cosechadas_ayer", 0))
+    if base_empacadas_ayer is None:
+        base_empacadas_ayer = float(saved_today.get("acum_empacadas_ayer", 0.0))
+
+    # Acumulados con HOY (para mostrar en pantalla)
+    total_cosechadas_acumulado = int(base_cosechadas_ayer or 0) + int(cajas_campo_trabajadas or 0)
+    total_empacadas_acumulado  = float(base_empacadas_ayer or 0.0) + float(total_eq11_produccion or 0.0)
+    factor_global = (total_empacadas_acumulado / total_cosechadas_acumulado) if total_cosechadas_acumulado else 0.0
+
+    # --- POST: guardar por empresa ---
+    if request.method == "POST":
+        def _num(prefix, name):
+            raw = request.POST.get(f"{prefix}__{name}", "0")
+            try:
+                return int(raw or 0)
+            except ValueError:
+                try:
+                    return float(raw or 0)
+                except ValueError:
+                    return 0
+
+        def _num_global(name):
+            raw = request.POST.get(name, "0")
+            try:
+                return int(raw or 0)
+            except ValueError:
+                try:
+                    return float(raw or 0)
+                except ValueError:
+                    return 0
+
+        # Recalcular filas a partir del POST (y acumular eq11 de la producción del día)
+        new_rows = {}
+        total_eq11_produccion_post = 0.0
+
+        for pres, size in combos:
+            k_saved  = f"{pres}|{size}"
+            k_totals = _combo_key(pres, size)
+            k_form   = f"{slugify(pres)}__{slugify(size)}"
+
+            exist_prev    = int(rows_yday.get(k_saved, {}).get("exist_almacen", 0))
+            exist_almacen = _num(k_form, "exist_almacen")
+            debe          = _num(k_form, "debe")
+            pago          = _num(k_form, "pago")
+            presto        = _num(k_form, "presto")
+            le_pagaron    = _num(k_form, "le_pagaron")
+
+            total_emb = totals.get(k_totals, 0)
+            prod_dia  = exist_almacen - exist_prev - debe + pago + presto - le_pagaron + total_emb
+
+            new_rows[k_saved] = {
+                "exist_prev": exist_prev,
+                "exist_almacen": exist_almacen,
+                "debe": debe, "pago": pago, "presto": presto, "le_pagaron": le_pagaron,
+                "prod_dia": prod_dia,
+            }
+
+            cf = pres_cf.get((pres or "").strip().upper(), 1.0)
+            total_eq11_produccion_post += (prod_dia or 0) * cf
+
+        # Globales del bloque inferior (POST)
+        exist_piso_hoy_post        = _num_global("exist_piso_hoy")
+        cajas_campo_recibidas_post = _num_global("cajas_campo_recibidas")
+        exist_piso_ayer_post       = int((saved_yday or {}).get("exist_piso_hoy", 0))
+        total_cajas_trabajar_post  = exist_piso_ayer_post + cajas_campo_recibidas_post
+        cajas_campo_trabajadas_post = total_cajas_trabajar_post - exist_piso_hoy_post
+
+        # Base de acumulados AYER:
+        bc_ayer = saved_yday.get("acum_cosechadas")
+        be_ayer = saved_yday.get("acum_empacadas")
+        # si no hay JSON de ayer, tomamos lo que capture el usuario
+        if bc_ayer is None:
+            bc_ayer = int(_num_global("acum_cosechadas_ayer"))
+        if be_ayer is None:
+            be_ayer = float(_num_global("acum_empacadas_ayer"))
+
+        # Nuevos acumulados de temporada (con HOY)
+        new_acum_cosechadas = int(bc_ayer or 0) + int(cajas_campo_trabajadas_post or 0)
+        new_acum_empacadas  = float(be_ayer or 0.0) + float(total_eq11_produccion_post or 0.0)
+
+        order_number_post = (request.POST.get("order_number") or "").strip()
+
+        payload = {
+            "date": prod_date.isoformat(),
+            "ship_cols": ship_cols,
+            "rows": new_rows,
+            "exist_piso_hoy": exist_piso_hoy_post,
+            "cajas_campo_recibidas": cajas_campo_recibidas_post,
+
+            # Persistimos para que el primer día no se borren tras guardar
+            "acum_cosechadas_ayer": int(_num_global("acum_cosechadas_ayer")),
+            "acum_empacadas_ayer": float(_num_global("acum_empacadas_ayer")),
+
+            # Acumulados “de temporada” (con HOY ya sumado)
+            "acum_cosechadas": new_acum_cosechadas,
+            "acum_empacadas": round(new_acum_empacadas, 2),
+
+            "order_number": order_number_post, 
+        }
+        _save_prod(prod_date, payload, empresa)
+        return redirect(f"{request.path}?date={prod_date.isoformat()}&empresa={empresa.lower()}")
+
+    # Totales ligeros de la tabla (si los usas en el <tfoot>)
+    totals_row = [0]*11
+    totals_row_eq11 = [0.0]*11
+    # (opcional) puedes llenarlos si los ocupas
+
+    # Contexto COMPLETO (incluye bloque inferior y acumulados)
+    ctx = {
+        "prod_date": prod_date,
+        "rows": rows,
+        "ship_cols_labels": ship_cols,
+        "empresa": empresa,
+        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF"],
+
+        # Bloque inferior (se quedan al recargar)
+        "exist_piso_ayer": exist_piso_ayer,
+        "cajas_campo_recibidas": cajas_campo_recibidas,
+        "total_cajas_trabajar": total_cajas_trabajar,
+        "exist_piso_hoy": exist_piso_hoy,
+        "cajas_campo_trabajadas": cajas_campo_trabajadas,
+
+        # Si no hay JSON de AYER, prellenamos lo que ya se hubiera capturado hoy
+        "acum_cosechadas_ayer": int(saved_today.get("acum_cosechadas_ayer", 0)),
+        "acum_empacadas_ayer": float(saved_today.get("acum_empacadas_ayer", 0.0)),
+
+        # Acumulados de temporada (con HOY)
+        "total_cosechadas_acumulado": total_cosechadas_acumulado,
+        "total_empacadas_acumulado": round(total_empacadas_acumulado, 2),
+        "factor_global": round(factor_global, 4),
+
+        # (si usas estos en el <tfoot>)
+        "totals_row": totals_row,
+        "totals_row_eq11": [round(x,2) for x in totals_row_eq11],
+        "order_number": order_number,
+        "legal_client_name": LEGAL_CLIENT_NAME.get(empresa, empresa),
+    }
+    return render(request, "empaques/production_today.html", ctx)
+
+
+
+
+@login_required
+def production_days(request):
+    raw_empresa = request.GET.get("empresa")
+    empresa = canon_company(raw_empresa) or DEFAULT_COMPANY
+    subdir = PROD_DIR / company_slug(empresa)
+    subdir.mkdir(parents=True, exist_ok=True)
+
+    files = []
+    for fname in sorted(os.listdir(subdir)):
+        if fname.endswith(".json"):
+            files.append(fname[:-5])  # YYYY-MM-DD
+    return render(request, "empaques/production_days.html", {
+        "days": files,
+        "empresa": empresa,
+    })
+
+
+@login_required
+def production_xlsx(request, prod_date):
+    """Excel de Producción del día (filtrado por empresa)."""
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.worksheet.page import PageMargins
+    from openpyxl.drawing.image import Image as XLImage
+    from datetime import timedelta as _timedelta
+    from .models import Presentation
+    import os
+
+    # --- Empresa (canon) + nombre legal + slug de logo ---
+    empresa = canon_company(request.GET.get("empresa")) or DEFAULT_COMPANY
+    LEGAL_COMPANY = {
+        "LACIMA":  "La Cima Produce, S.P.R. DE R.L",
+        "RC":      "Empaque N.1 S. DE R.L. DE C.V.",
+        "GH":      "Empaque N.1 S. DE R.L. DE C.V.",
+        "GOURMET": "Gourmet Baja Farms S. DE R.L. DE C.V.",
+        "GBF":     "GBF Farms S. DE R.L. DE C.V.",
+    }
+    LOGO_SLUG = {
+        "LACIMA":  "la-cima-produce",
+        "RC":      "rc-organics",
+        "GH":      "gh-farms",
+        "GOURMET": "gourmet-baja-farms",
+        "GBF":     "gbf-farms",
+    }
+    legal_name = LEGAL_COMPANY.get(empresa, empresa)
+    logo_slug  = LOGO_SLUG.get(empresa)
+
+    # --- Fecha ---
+    d = _date.fromisoformat(prod_date)
+
+    # --- Estado guardado + embarques del día (FILTRADOS POR EMPRESA) ---
+    saved = _load_prod(d, empresa) or {}
+    ship_cols, totals, per_ship, _eq11_map = _group_shipments_by_combo(d, empresa)
+
+    # --- Combos y factores de conversión ---
+    combos = _all_combos_from_db() or _ordered_combos()
+    pres_cf = {}
+    for name, cf in Presentation.objects.values_list("name", "conversion_factor"):
+        pres_cf[(name or "").strip().upper()] = float(cf or 1.0)
+
+    # --- Excel base ---
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Prod. {empresa}"
+
+    # Estilos básicos
+    title_font = Font(name="Calibri", size=16, bold=True, color="2E67D1")
+    th_font    = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+    th_fill    = PatternFill("solid", fgColor="225577")
+    border     = Border(
+        left=Side(style='thin',  color='AAAAAA'),
+        right=Side(style='thin', color='AAAAAA'),
+        top=Side(style='thin',   color='AAAAAA'),
+        bottom=Side(style='thin',color='AAAAAA'),
+    )
+
+    # --- Encabezado con logo/fecha/títulos/número de hoja ---
+    # Logo en A1
+    if logo_slug:
+        logo_path = os.path.join(settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
+        if os.path.exists(logo_path):
+            try:
+                img = XLImage(logo_path)
+                target_h = 85  # px de alto aprox
+                scale = target_h / float(img.height)
+                img.width  = int(img.width * scale)
+                img.height = int(img.height * scale)
+                ws.add_image(img, "A1")
+            except Exception:
+                pass
+
+    # Fecha bajo el logo (A2)
+    ws.cell(row=2, column=1, value=d.strftime("%d/%m/%Y")).font = Font(name="Calibri", size=11)
+    ws.cell(row=2, column=1).alignment = Alignment(horizontal="left", vertical="center")
+
+    # H1: título
+    ws.merge_cells("H1:K1")
+    c_h1 = ws.cell(row=1, column=8, value="PRODUCCIÓN DIARIA DE EMPAQUE")
+    c_h1.font = Font(name="Calibri", size=16, bold=True)
+    c_h1.alignment = Alignment(horizontal="left", vertical="center")
+
+    # H2: nombre legal
+    ws.merge_cells("H2:K2")
+    c_h2 = ws.cell(row=2, column=8, value=legal_name)
+    c_h2.font = Font(name="Calibri", size=14, bold=True, color="444444")
+    c_h2.alignment = Alignment(horizontal="left", vertical="center")
+
+    # ROTULO "Hoja num.:" (E1) + NÚMERO DE ORDEN (F1)
+    ws.cell(row=1, column=5, value="Hoja num.:").font = Font(name="Calibri", size=11, bold=True)
+    ws.cell(row=1, column=5).alignment = Alignment(horizontal="right", vertical="center")
+    hoja_num = (
+        saved.get("order_number")
+        or saved.get("hoja_num")
+        or ""
+    )
+    ws.cell(row=1, column=6, value=str(hoja_num)).font = Font(name="Calibri", size=12, bold=True, color="1F4E79")
+    ws.cell(row=1, column=6).alignment = Alignment(horizontal="left", vertical="center")
+
+    # (Eliminado cualquier header/footer y "Hoja 1 de 1")
+
+    # Deja un renglón y subtítulo clásico
+    r = 3
+    ws.cell(row=r, column=1, value=f"Fecha – {d.strftime('%d/%m/%Y')}").font = title_font
+    r += 2
+
+    # --- Encabezados de tabla ---
+    headers = [
+        "Empaque", "Exist. anterior", "Producción del día", "Exist. almacén",
+        "Emb. 1", "Emb. 2", "Emb. 3", "Emb. 4",
+        "Debe", "Pago", "Presto", "Le pagaron",
+    ]
+    for c, h in enumerate(headers, start=1):
+        cell = ws.cell(row=r, column=c, value=h)
+        cell.font = th_font
+        cell.fill = th_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+    # Altura del header de tabla
+    ws.row_dimensions[r].height = 28
+    r += 1
+    first_data_row = r  # primer renglón de datos
+
+    # --- Totales auxiliares ---
+    tot_norm = [0]*11
+    tot_eq11 = [0.0]*11
+    total_eq11_produccion = 0.0  # para factor del día
+
+    # --- Filas de datos ---
+    for pres, size in combos:
+        key_saved = f"{pres}|{size}"
+        saved_row = (saved.get("rows") or {}).get(key_saved, {})
+        k_norm    = _combo_key(pres, size)
+        per4      = per_ship.get(k_norm, [0, 0, 0, 0])
+
+        # Si no hay números, omite la fila
+        if not _row_has_numbers(saved_row, per4):
+            continue
+
+        exist_prev   = saved_row.get("exist_prev", 0)
+        prod_dia     = saved_row.get("prod_dia", 0)
+        exist_alm    = saved_row.get("exist_almacen", 0)
+        debe         = saved_row.get("debe", 0)
+        pago         = saved_row.get("pago", 0)
+        presto       = saved_row.get("presto", 0)
+        le_pagaron   = saved_row.get("le_pagaron", 0)
+
+        row_vals = [
+            f"{pres} / {size}",
+            exist_prev, prod_dia, exist_alm,
+            per4[0], per4[1], per4[2], per4[3],
+            debe, pago, presto, le_pagaron,
+        ]
+        for c, v in enumerate(row_vals, start=1):
+            cell = ws.cell(row=r, column=c, value=v)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = border
+        # Empaque alineado a la izquierda
+        ws.cell(row=r, column=1).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        # Altura mayor para cada fila de datos
+        ws.row_dimensions[r].height = 22
+        r += 1
+
+        cf = pres_cf.get((pres or "").strip().upper(), 1.0)
+        nums = row_vals[1:]
+        for i, n in enumerate(nums):
+            n = n or 0
+            tot_norm[i] += n
+            tot_eq11[i] += n * cf
+        total_eq11_produccion += (prod_dia or 0) * cf
+
+    # Si no hubo filas útiles, deja un renglón con mensaje
+    if r == first_data_row:
+        ws.cell(row=r, column=1, value="(Sin datos)").border = border
+        for c in range(2, 13):
+            ws.cell(row=r, column=c).border = border
+        ws.row_dimensions[r].height = 22
+        r += 1
+
+    # --- Totales normales ---
+    ws.cell(row=r, column=1, value="TOTAL").font = Font(bold=True)
+    ws.cell(row=r, column=1).alignment = Alignment(horizontal="right", vertical="center")
+    for i, n in enumerate(tot_norm, start=2):
+        c = ws.cell(row=r, column=i, value=n)
+        c.font = Font(bold=True)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+    ws.row_dimensions[r].height = 24
+    r += 1
+
+    # --- Totales Eq. 11 lbs ---
+    ws.cell(row=r, column=1, value="TOTAL (Eq. 11 lbs)").font = Font(bold=True)
+    ws.cell(row=r, column=1).alignment = Alignment(horizontal="right", vertical="center")
+    for i, n in enumerate(tot_eq11, start=2):
+        c = ws.cell(row=r, column=i, value=round(n, 2))
+        c.font = Font(bold=True)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+    ws.row_dimensions[r].height = 24
+    r += 1
+
+    # === Resumen inferior (incluye acumulados y factores) ===
+    yday = d - _timedelta(days=1)
+    saved_yday = _load_prod(yday, empresa) or {}
+    exist_piso_ayer = int((saved_yday or {}).get("exist_piso_hoy", 0))
+    exist_piso_hoy  = int((saved or {}).get("exist_piso_hoy", 0))
+    cajas_campo_recibidas = int((saved or {}).get("cajas_campo_recibidas", 0))
+    total_cajas_trabajar   = exist_piso_ayer + cajas_campo_recibidas
+    cajas_campo_trabajadas = total_cajas_trabajar - exist_piso_hoy
+
+    # Acumulados (si no están guardados, se recalculan con base AYER)
+    acum_cosechadas = saved.get("acum_cosechadas")
+    acum_empacadas  = saved.get("acum_empacadas")
+    if acum_cosechadas is None or acum_empacadas is None:
+        base_cosechadas_ayer = saved_yday.get("acum_cosechadas")
+        base_empacadas_ayer  = saved_yday.get("acum_empacadas")
+        if base_cosechadas_ayer is None:
+            base_cosechadas_ayer = int(saved.get("acum_cosechadas_ayer", 0))
+        if base_empacadas_ayer is None:
+            base_empacadas_ayer  = float(saved.get("acum_empacadas_ayer", 0.0))
+        acum_cosechadas = int(base_cosechadas_ayer or 0) + int(cajas_campo_trabajadas or 0)
+        acum_empacadas  = float(base_empacadas_ayer or 0.0) + float(total_eq11_produccion or 0.0)
+
+    factor_dia    = (total_eq11_produccion / cajas_campo_trabajadas) if cajas_campo_trabajadas else 0.0
+    factor_global = (float(acum_empacadas) / int(acum_cosechadas)) if acum_cosechadas else 0.0
+
+    r += 2
+    label_font = Font(bold=True)
+    pairs = [
+        ("EXISTENCIA PISO DÍA ANTERIOR:", exist_piso_ayer),
+        ("CAJAS DE CAMPO RECIBIDAS:", cajas_campo_recibidas),
+        ("TOTAL CAJAS A TRABAJAR:", total_cajas_trabajar),
+        ("CAJAS CAMPO TRABAJADAS:", cajas_campo_trabajadas),
+        ("EXISTENCIA DE PISO HOY:", exist_piso_hoy),
+        ("FACTOR DEL DÍA (Eq. 11 lb prod. / Cajas trabajadas):", round(factor_dia, 4)),
+        ("ACUM. COSECHADAS (TEMPORADA):", int(acum_cosechadas or 0)),
+        ("ACUM. EMPACADAS (TEMPORADA, Eq. 11 lb):", round(float(acum_empacadas or 0.0), 2)),
+        ("FACTOR GLOBAL (Empacadas / Cosechadas):", round(float(factor_global or 0.0), 4)),
+    ]
+    for label, value in pairs:
+        ws.cell(row=r, column=1, value=label).font = label_font
+        ws.cell(row=r, column=2, value=value)
+        ws.cell(row=r, column=1).border = border
+        ws.cell(row=r, column=2).border = border
+        ws.row_dimensions[r].height = 22
+        r += 1
+
+    # --- Anchos y alturas por defecto ---
+    ws.sheet_format.defaultRowHeight = 22.5  # altura por defecto más cómoda
+    # Header alto
+    ws.row_dimensions[1].height = 40
+    ws.row_dimensions[2].height = 26
+
+    # Columnas
+    ws.column_dimensions["A"].width = 34
+    for col in "BCDEFGHIJKL":
+        ws.column_dimensions[col].width = 14
+
+    # --- Setup de impresión ---
+    last_col_idx = 12
+    last_col_letter = chr(ord('A') + last_col_idx - 1)
+    ws.print_area = f"A1:{last_col_letter}{r}"
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.page_margins = PageMargins(left=0.25, right=0.25, top=0.3, bottom=0.3, header=0.2, footer=0.2)
+    ws.print_options.horizontalCentered = True
+
+    # --- Respuesta ---
+    out = BytesIO()
+    wb.save(out); out.seek(0)
+    resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="produccion_{empresa.lower()}_{d.isoformat()}.xlsx"'
+    return resp
+
+
+
+
+
+
+def production_list_view(request):
+    # Alias a la lista de días guardados
+    return production_days(request)
+
 def es_capturista(user):
     return user.is_authenticated and user.groups.filter(name="capturista").exists()
 
@@ -672,23 +1562,7 @@ def daily_report(request, shipment_id=None):
             return f"{dias[d.weekday()]} {d.day:02d} DE {meses[d.month-1]} DEL {d.year}"
     
 
-    # ---- Lista de clientes ----
-    clientes = [ 
-        "La Cima Produce",
-        "RC Organics",
-        "GH Farms",
-        "Gourmet Baja Farms",
-        "GBF Farms",
-    ]
-    LEGAL_CLIENT_NAME = {
-    "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
-    "RC Organics": "Empaque N.1 S. DE R.L. DE C.V.",
-    "GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  
-    "Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
-    "GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
-}
-
-    clientes_slug = [(c, slugify(c)) for c in clientes] 
+ 
 
 
     # ---- Fecha a reportar ----

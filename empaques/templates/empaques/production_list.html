@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Producción – días guardados</h1>
+<p><a href="{% url 'production_new' %}">+ Capturar producción de hoy</a> | <a href="{% url 'production_setup' %}">Setup</a></p>
+<table border="1" cellpadding="6">
+  <thead><tr><th>Fecha</th><th>Descargar</th></tr></thead>
+  <tbody>
+  {% for d in days %}
+    <tr>
+      <td>{{ d.date }}</td>
+      <td><a href="{% url 'production_new' %}?date={{ d.date|date:'Y-m-d' }}">Abrir / Descargar</a></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="2">(Sin días guardados)</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

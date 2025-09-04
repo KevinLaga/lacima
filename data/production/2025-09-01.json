@@ -1,0 +1,451 @@
+{
+  "date": "2025-09-01",
+  "ship_cols": [
+    27
+  ],
+  "rows": {
+    "11 LBS|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 120
+    },
+    "11 LBS|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "11 LBS|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 120
+    },
+    "11 LBS|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 240
+    },
+    "11 LBS|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 120
+    },
+    "11X450G  (10.9LB)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "11X450G  (10.9LB)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "11X450G  (10.9LB)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "11X450G 2 PZ|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "14X12OZ BAG (11 LB)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "14X12OZ BAG (11 LB)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "14X12OZ BAG (11 LB)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "20X12OZ    (15 LBS)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "20X12OZ    (15 LBS)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "20X12OZ    (15 LBS)|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "20X250G (11.02LB)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "20X250G (11.02LB)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "25X200G   (11 LBS)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "25X200G   (11 LBS)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "27X180G|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "27X180G|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "27X180G|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "28 LBS|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "28 LBS|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "3.75 LBS 10OZ|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "3.75 LBS 10OZ|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "34X150G (11.24 LB)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "34X150G (11.24 LB)|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "34X150G (11.24 LB)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "34X150G (11.24 LB)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "BAG 11LBS|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "BAG 11LBS|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "BAG 11LBS|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 16X2.25 36LBS|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 16X2.25 36LBS|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 16X2.25 36LBS|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 27 LBS BAG|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 27 LBS BAG|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 27 LBS BAG|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 27 LBS BAG|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 27 LBS BAG|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "COSTCO 27 LBS BAG|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SAMS 16X2LB (32LB)BAG|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SAMS 16X2LB (32LB)BAG|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SAMS 16X2LB (32LB)BAG|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SAMS 16X2LB (32LB)BAG|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "TIPS (15 LB)|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "TIPS (15 LB)|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 100
+    },
+    "WALMART 11 LBS 2PZ|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 100
+    }
+  },
+  "exist_piso_hoy": 387,
+  "cajas_campo_recibidas": 0
+}

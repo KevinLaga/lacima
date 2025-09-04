@@ -18,6 +18,10 @@
 <div class="nav-btns-wrap">
   <a href="{% url 'admin:index' %}" class="nav-btn">⚙️ Admin</a>
   <a href="{% url 'shipment_list' %}" class="nav-btn secondary">📦 Lista de embarques</a>
+  {% now "Y-m-d" as hoy %}
+  <a class="btn" href="{% url 'production_today' %}?date={{ hoy }}" style="padding:6px 10px; background:#225577; color:#fff; text-decoration:none; border-radius:4px;">
+    Ir a Producción del día
+  </a>
 </div>
 
   <style>

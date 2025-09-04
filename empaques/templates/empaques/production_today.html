@@ -1,0 +1,176 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Producción del día</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { margin: 16px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    th { background: #225577; color: #fff; }
+    .actions { margin: 12px 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .actions form { display: flex; gap: 8px; align-items: center; }
+    input[type=number] { width: 100px; }
+  </style>
+</head>
+<body>
+  <h1>Producción del día – {{ prod_date|date:"d/m/Y" }}</h1>
+
+  <div class="actions">
+    <a href="{% url 'production_days' %}?empresa={{ empresa|lower }}">Ver días guardados</a>
+    <a class="btn" href="{% url 'shipment_create' %}" style="padding:6px 10px; background:#225577; color:#fff; text-decoration:none; border-radius:4px;">
+  Nuevo embarque
+</a>
+
+    <form method="get" action="{% url 'production_today' %}">
+      <input type="date" name="date" value="{{ prod_date|date:'Y-m-d' }}">
+      <select name="empresa">
+        {% for c in empresas %}
+          <option value="{{ c|lower }}" {% if empresa == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Ir</button>
+    </form>
+
+    <a href="{% url 'production_xlsx' prod_date=prod_date|date:'Y-m-d' %}?empresa={{ empresa|lower }}">
+      Descargar Excel
+    </a>
+  </div>
+
+  <p><b>Embarques del día ({{ empresa }}):</b>
+    {% if ship_cols_labels and ship_cols_labels|length %}
+      {% for sid in ship_cols_labels %}
+        {% if not forloop.first %}, {% endif %}{{ sid }}
+      {% endfor %}
+    {% else %}
+      (no hay)
+    {% endif %}
+  </p>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="empresa" value="{{ empresa|lower }}">
+    <input type="hidden" name="empresa" value="{{ empresa|lower }}">
+
+    <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
+      <label><b>No. de orden:</b></label>
+      <input type="text" name="order_number" value="{{ order_number|default:'' }}" style="width:180px">
+      <span style="opacity:.7">Empresa: {{ legal_name }}</span>
+    </div>
+
+
+    <table>
+      <thead>
+        <tr>
+          <th>Empaque</th>
+          <th>Exist. anterior</th>
+          <th>Producción del día</th>
+          <th>Exist. almacén</th>
+          <th>Emb. 1</th>
+          <th>Emb. 2</th>
+          <th>Emb. 3</th>
+          <th>Emb. 4</th>
+          <th>Debe</th>
+          <th>Pago</th>
+          <th>Presto</th>
+          <th>Le pagaron</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <!-- Empaque -->
+            <td style="text-align:left">{{ r.pres }} / {{ r.size }}</td>
+
+            <!-- Existencia anterior (solo lectura) -->
+            <td>{{ r.exist_prev }}</td>
+
+            <!-- Producción del día (solo lectura) -->
+            <td>{{ r.prod_dia }}</td>
+
+            <!-- Existencia en almacén (editable) -->
+            <td><input type="number" step="1" name="{{ r.form_prefix }}__exist_almacen" value="{{ r.exist_almacen }}"></td>
+
+            <!-- Embarques del día (solo lectura) -->
+            <td>{{ r.per_ship.0|default:"0" }}</td>
+            <td>{{ r.per_ship.1|default:"0" }}</td>
+            <td>{{ r.per_ship.2|default:"0" }}</td>
+            <td>{{ r.per_ship.3|default:"0" }}</td>
+
+            <!-- Manuales (editables) -->
+            <td><input type="number" step="1" name="{{ r.form_prefix }}__debe" value="{{ r.debe }}"></td>
+            <td><input type="number" step="1" name="{{ r.form_prefix }}__pago" value="{{ r.pago }}"></td>
+            <td><input type="number" step="1" name="{{ r.form_prefix }}__presto" value="{{ r.presto }}"></td>
+            <td><input type="number" step="1" name="{{ r.form_prefix }}__le_pagaron" value="{{ r.le_pagaron }}"></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="12">(Sin filas)</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <hr>
+
+    <div style="margin-top:12px">
+      <div style="margin:6px 0">
+        <b>Existencia piso día anterior:</b>
+        <span>{{ exist_piso_ayer|default:0 }}</span>
+      </div>
+
+      <div style="margin:6px 0">
+        <label><b>Cajas de campo recibidas:</b></label>
+        <input type="number" name="cajas_campo_recibidas"
+               value="{{ cajas_campo_recibidas|default:0 }}" step="1" min="0"
+               style="width:140px;">
+      </div>
+
+      <div style="margin:6px 0">
+        <b>Total cajas a trabajar:</b>
+        <span>{{ total_cajas_trabajar|default:0 }}</span>
+      </div>
+
+      <div style="margin:6px 0">
+        <label><b>Existencia de piso hoy:</b></label>
+        <input type="number" name="exist_piso_hoy"
+               value="{{ exist_piso_hoy|default:0 }}" step="1" min="0"
+               style="width:140px;">
+      </div>
+
+      <div style="margin:6px 0">
+        <b>Cajas campo trabajadas:</b>
+        <span>{{ cajas_campo_trabajadas|default:0 }}</span>
+      </div>
+    </div>
+
+    <hr>
+
+    <h3>Acumulados de temporada</h3>
+
+    <div style="display:flex; flex-wrap:wrap; gap:16px;">
+      <!-- Solo el primer día (si AYER no existe JSON), puedes llenar estos dos: -->
+      <div>
+        <label><strong>Total de cajas de campo cosechadas (acumulado hasta AYER)</strong></label><br>
+        <input type="number" name="acum_cosechadas_ayer" step="1" value="{{ acum_cosechadas_ayer|default:0 }}">
+        <small>Solo el primer día. Después se toma automático del día anterior.</small>
+      </div>
+      <div>
+        <label><strong>Total de cajas empacadas (acumulado hasta AYER, Eq. 11 lb)</strong></label><br>
+        <input type="number" name="acum_empacadas_ayer" step="0.01" value="{{ acum_empacadas_ayer|default:0 }}">
+        <small>Solo el primer día. Después se toma automático del día anterior.</small>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <p><strong>Total de cajas de campo cosechadas (acumulado con HOY):</strong> {{ total_cosechadas_acumulado }}</p>
+      <p><strong>Total de cajas empacadas (acumulado con HOY, Eq. 11 lb):</strong> {{ total_empacadas_acumulado }}</p>
+      <p><strong>Factor global (Empacadas / Cosechadas):</strong> {{ factor_global }}</p>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button type="submit">Guardar</button>
+    </div>
+  </form>
+</body>
+</html>
