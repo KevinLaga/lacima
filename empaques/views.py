@@ -1978,7 +1978,7 @@ def daily_report(request, shipment_id=None):
 
         # --- Cabecera "EMBARQUE:" (P2:Q2 etiqueta, R2 valor) con NÚMERO POR CLIENTE ---
         label_font = Font(name="Calibri", size=10, bold=True)
-        num_font   = Font(name="Calibri", size=10, bold=True, color="FF0000")
+        num_font   = Font(name="Calibri", size=18, bold=True, color="FF0000")
         ws.merge_cells(start_row=2, start_column=16, end_row=2, end_column=17)  # P2:Q2
         ws.cell(row=2, column=16, value="EMBARQUE:").font = label_font
 
@@ -2142,10 +2142,60 @@ def daily_report(request, shipment_id=None):
         r += 1
         tot_fill = PatternFill("solid", fgColor="BBDDFF")
         bold = Font(bold=True)
-        merge_pair(r, 1, 2, "TOTALES", font=bold, fill=tot_fill, border=thin_border)
-        merge_pair(r, 3, 4, "",        font=bold, fill=tot_fill, border=thin_border)
-        merge_pair(r, 5, 6, total_cajas,        font=bold, fill=tot_fill, border=thin_border)
-        merge_pair(r, 7, 8, round(total_eq11,2), font=bold, fill=tot_fill, border=thin_border)
+        tot_label_font = Font(name='Calibri', size=16, bold=True)  # etiqueta "TOTALES"
+        tot_num_font   = Font(name='Calibri', size=18, bold=True)  # números grandes
+        merge_pair(r, 1, 2, "TOTALES",               font=tot_label_font, fill=tot_fill, border=thin_border)
+        merge_pair(r, 3, 4, "",                      font=tot_label_font, fill=tot_fill, border=thin_border)
+        merge_pair(r, 5, 6, total_cajas,             font=tot_num_font,   fill=tot_fill, border=thin_border)
+        merge_pair(r, 7, 8, round(total_eq11, 2),    font=tot_num_font,   fill=tot_fill, border=thin_border)
+
+
+
+        # ===== Totales por Presentación (a la derecha) =====
+        # Arranca en J32 (columna 10), 2 columnas por campo, mismo look & feel
+        tot_pres = defaultdict(lambda: {'cajas': 0, 'eq11': 0.0})
+        for it in items_cliente:  # <- SOLO del embarque rep_cli
+            tot_pres[it.presentation.name]['cajas'] += it.quantity
+            tot_pres[it.presentation.name]['eq11']  += it.quantity * float(it.presentation.conversion_factor)
+
+        right_top_row = 32
+        col_left = 10  # J
+
+        def merge_pair_abs(row, c1, c2, value=None, *, font=None, fill=None, border=None):
+            # Igual que merge_pair pero con columnas absolutas
+            for cc in range(c1, c2 + 1):
+                cell = ws.cell(row=row, column=cc)
+                if font:  cell.font = font
+                if fill:  cell.fill = fill
+                if border: cell.border = border
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            ws.merge_cells(start_row=row, start_column=c1, end_row=row, end_column=c2)
+            if value is not None:
+                ws.cell(row=row, column=c1, value=value)
+
+        # Encabezados: Presentación (J–K), Total (L–M), Equiv. 11 lbs (N–O)
+        merge_pair_abs(right_top_row,     col_left,     col_left+1, "Presentación",   font=th_font, fill=th_fill, border=thin_border)
+        merge_pair_abs(right_top_row,     col_left+2,   col_left+3, "Total",          font=th_font, fill=th_fill, border=thin_border)
+        merge_pair_abs(right_top_row,     col_left+4,   col_left+5, "Equiv. 11 lbs",  font=th_font, fill=th_fill, border=thin_border)
+
+        rr = right_top_row + 1
+        if tot_pres:
+            for pres, agg in sorted(tot_pres.items(), key=lambda kv: kv[0].lower()):
+                merge_pair_abs(rr, col_left,   col_left+1, pres,                 font=body_font, border=thin_border)
+                merge_pair_abs(rr, col_left+2, col_left+3, agg['cajas'],         font=body_font, border=thin_border)
+                merge_pair_abs(rr, col_left+4, col_left+5, round(agg['eq11'],2), font=body_font, border=thin_border)
+                rr += 1
+        else:
+            merge_pair_abs(rr, col_left, col_left+5, "(Sin datos)", font=body_font, border=thin_border)
+            rr += 1
+
+        # Fila de total general (mismo estilo que la izquierda)
+        rr += 1
+        tot_fill_right = PatternFill("solid", fgColor="BBDDFF")
+        merge_pair_abs(rr, col_left,   col_left+1, "TOTAL", font=tot_label_font, fill=tot_fill_right, border=thin_border)
+        merge_pair_abs(rr, col_left+2, col_left+3, sum(v['cajas'] for v in tot_pres.values()), font=tot_num_font, fill=tot_fill_right, border=thin_border)
+        merge_pair_abs(rr, col_left+4, col_left+5, round(sum(v['eq11'] for v in tot_pres.values()), 2), font=tot_num_font, fill=tot_fill_right, border=thin_border)
+
 
         # --- Exportar ---
         output = BytesIO()
