@@ -31,12 +31,25 @@
   <h1>Embarques Registrados</h1>
   <p><a href="{% url 'shipment_create' %}">+ Nuevo Embarque</a></p>
 
-  <!-- Descarga por semana -->
-  <form method="get" style="display:inline-block; margin-right:10px;">
-    <label for="id_iso_week">Semana:</label>
-    <input type="week" id="id_iso_week" name="iso_week" />
-    <button type="submit" name="descargar" value="semana">Descargar semana</button>
-  </form>
+  <!-- Descarga por semana (input type="week" + empresa) -->
+<form method="get" style="display:inline-block; margin-right:10px;">
+  <label for="id_iso_week">Semana:</label>
+  <input type="week" id="id_iso_week" name="iso_week"
+         value="{{ request.GET.iso_week|default:'' }}" required>
+
+  <label for="id_empresa">Empresa:</label>
+  <select id="id_empresa" name="empresa">
+    <option value="general" {% if request.GET.empresa == 'general' %}selected{% endif %}>General (todas)</option>
+    <option value="La Cima Produce" {% if request.GET.empresa == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+    <option value="RC Organics" {% if request.GET.empresa == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+    <option value="GH Farms" {% if request.GET.empresa == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+    <option value="Gourmet Baja Farms" {% if request.GET.empresa == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+    <option value="GBF Farms" {% if request.GET.empresa == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+  </select>
+
+  <button type="submit" name="descargar" value="semana">Descargar semana</button>
+</form>
+
 
   <!-- Descarga por rango de fechas -->
   <form method="get" style="display:inline-block; margin-right:10px;">
