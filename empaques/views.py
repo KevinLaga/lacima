@@ -1157,6 +1157,22 @@ def shipment_list(request):
 
     # ...
     if request.GET.get('descargar') == 'semana':
+        def get_client_order_number_for(embarque, cliente_name):
+            """Devuelve el número de orden específico de ese cliente para 'embarque'."""
+            if not embarque or not cliente_name:
+                return None
+            cname = str(cliente_name).lower()
+            if "cima" in cname:
+                return getattr(embarque, "order_lacima", None)
+            if "rc" in cname:
+                return getattr(embarque, "order_rc", None)
+            if "gh" in cname:
+                return getattr(embarque, "order_gh", None)
+            if "gourmet" in cname:
+                return getattr(embarque, "order_gourmet", None)
+            if "gbf" in cname:
+                return getattr(embarque, "order_gbf", None)
+            return None
         iso_week = request.GET.get('iso_week')  # ej: "2025-W35"
         empresa = (request.GET.get('empresa') or 'general').strip()
 
@@ -1276,7 +1292,11 @@ def shipment_list(request):
                 amt = it.quantity * float(it.presentation.price)
 
                 # Escribir fila
-                ws.cell(row=row, column=1, value=str(s.tracking_number))
+                empresa_lower = empresa.lower()
+                cliente_contexto = it.cliente if empresa_lower == 'general' else empresa
+
+                num_emb = get_client_order_number_for(s, cliente_contexto) or str(s.tracking_number)
+                ws.cell(row=row, column=1, value=num_emb).border = border
                 ws.cell(row=row, column=2, value=str(s.invoice_number))
                 ws.cell(row=row, column=3, value=s.date.strftime('%d/%m/%Y'))
                 ws.cell(row=row, column=4, value=str(it.presentation.name))
