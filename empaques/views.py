@@ -1273,60 +1273,69 @@ def shipment_list(request):
         ws.freeze_panes = "A8"
 
         # --- Filas (desde A8) ---
+        # Filas (AGRUPADAS por num_emb + presentación + tamaño)
         row += 1
+        from collections import defaultdict
+
+        groups = {}  # key -> acumulados
         total_boxes = 0
         total_eq    = 0.0
         total_amt   = 0.0
-
-        # Colores alternados para "zebra"
-        zebra_odd  = PatternFill("solid", fgColor="F7F9FF")
-        zebra_even = None  # sin relleno para la otra
+        empresa_lower = empresa.lower()
 
         for s in weeks_qs:
             for it in s.items.all():
-                # Filtra por empresa si corresponde
-                if empresa.lower() != 'general' and (it.cliente or "").strip() != empresa:
+                # Si hay empresa específica, filtra por cliente exacto
+                if empresa_lower != 'general' and (it.cliente or "").strip() != empresa:
                     continue
 
-                eq  = it.quantity * float(it.presentation.conversion_factor)
-                amt = it.quantity * float(it.presentation.price)
-
-                # Escribir fila
-                empresa_lower = empresa.lower()
+                # Número mostrado: específico por cliente cuando aplique
                 cliente_contexto = it.cliente if empresa_lower == 'general' else empresa
-
                 num_emb = get_client_order_number_for(s, cliente_contexto) or str(s.tracking_number)
-                ws.cell(row=row, column=1, value=num_emb)
-                ws.cell(row=row, column=2, value=str(s.invoice_number))
-                ws.cell(row=row, column=3, value=s.date.strftime('%d/%m/%Y'))
-                ws.cell(row=row, column=4, value=str(it.presentation.name))
-                ws.cell(row=row, column=5, value=str(it.size))
-                ws.cell(row=row, column=6, value=it.quantity)
-                ws.cell(row=row, column=7, value=round(eq, 2))
-                ws.cell(row=row, column=8, value=round(amt, 2))
-                ws.cell(row=row, column=9, value=str(it.cliente))
 
-                # Bordes + alineación + formatos
-                for c in range(1, 9 + 1):
-                    cc = ws.cell(row=row, column=c)
-                    cc.border = thin_border
-                    if c in (6, 7, 8):
-                        cc.alignment = Alignment(horizontal="right", vertical="center")
-                # formatos numéricos
-                ws.cell(row=row, column=6).number_format = '#,##0'
-                ws.cell(row=row, column=7).number_format = '#,##0.00'
-                ws.cell(row=row, column=8).number_format = '$#,##0.00'
+                pres = str(it.presentation.name).strip()
+                size = str(it.size).strip()
+                eq   = it.quantity * float(it.presentation.conversion_factor)
+                amt  = it.quantity * float(it.presentation.price)
 
-                # Zebra
-                fill = zebra_odd if (row - start_row) % 2 == 1 else zebra_even
-                if fill:
-                    for c in range(1, 10):
-                        ws.cell(row=row, column=c).fill = fill
+                # Clave de agrupación:
+                # - num_emb (número que mostramos)
+                # - pres (presentación)
+                # - size (tamaño)
+                # - además mantenemos separadas filas por factura, fecha y cliente
+                #   para no mezclar contextos distintos en un mismo día/semana
+                key = (num_emb, str(s.invoice_number), s.date, pres, size, cliente_contexto)
 
-                total_boxes += it.quantity
-                total_eq    += eq
-                total_amt   += amt
-                row += 1
+                if key in groups:
+                    g = groups[key]
+                    g['qty'] += it.quantity
+                    g['eq']  += eq
+                    g['amt'] += amt
+                else:
+                    groups[key] = {'qty': it.quantity, 'eq': eq, 'amt': amt}
+
+        # Escribir filas agrupadas, ordenando por Fecha, N° Embarque, Presentación, Tamaño
+        for (num_emb, inv, sdate, pres, size, cli), vals in sorted(
+            groups.items(),
+            key=lambda kv: (kv[0][2], kv[0][0], kv[0][3], kv[0][4])
+        ):
+            ws.cell(row=row, column=1, value=num_emb)
+            ws.cell(row=row, column=3, value=sdate.strftime('%d/%m/%Y'))
+            ws.cell(row=row, column=4, value=pres)
+            ws.cell(row=row, column=5, value=size)
+            ws.cell(row=row, column=6, value=vals['qty'])
+            ws.cell(row=row, column=7, value=round(vals['eq'], 2))
+            ws.cell(row=row, column=8, value=round(vals['amt'], 2))
+            ws.cell(row=row, column=9, value=cli)
+
+            for cidx in (6, 7, 8):
+                ws.cell(row=row, column=cidx).alignment = Alignment(horizontal="right")
+
+            total_boxes += vals['qty']
+            total_eq    += vals['eq']
+            total_amt   += vals['amt']
+            row += 1
+
 
         # --- AutoFilter del rango usado ---
         ws.auto_filter.ref = f"A{start_row}:I{max(row-1, start_row)}"
