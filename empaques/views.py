@@ -1296,7 +1296,7 @@ def shipment_list(request):
                 cliente_contexto = it.cliente if empresa_lower == 'general' else empresa
 
                 num_emb = get_client_order_number_for(s, cliente_contexto) or str(s.tracking_number)
-                ws.cell(row=row, column=1, value=num_emb).border = border
+                ws.cell(row=row, column=1, value=num_emb)
                 ws.cell(row=row, column=2, value=str(s.invoice_number))
                 ws.cell(row=row, column=3, value=s.date.strftime('%d/%m/%Y'))
                 ws.cell(row=row, column=4, value=str(it.presentation.name))
