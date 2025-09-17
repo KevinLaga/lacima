@@ -105,14 +105,7 @@ class ShipmentItemAdmin(admin.ModelAdmin):
     autocomplete_fields = ("presentation", "shipment")
 
 
-# -----------------------------
-# Personal / Asistencia
-# -----------------------------
-@admin.register(Worker)
-class WorkerAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "company", "position", "active", "cycle_started_at")
-    list_filter = ("company", "position", "active")
-    search_fields = ("full_name",)
+
 
 
 @admin.register(Field)
@@ -121,21 +114,3 @@ class FieldAdmin(admin.ModelAdmin):
     search_fields = ("name",)
 
 
-class CrewMemberInline(admin.TabularInline):
-    model = CrewMember
-    extra = 0
-
-
-@admin.register(Crew)
-class CrewAdmin(admin.ModelAdmin):
-    list_display = ("name", "field", "leader")
-    list_filter = ("field",)
-    search_fields = ("name", "leader__full_name")
-    inlines = [CrewMemberInline]
-
-
-@admin.register(AttendanceRecord)
-class AttendanceAdmin(admin.ModelAdmin):
-    list_display = ("date", "field", "crew", "worker", "status", "observation", "created_by")
-    list_filter = ("date", "field", "crew", "status", "worker__company")
-    search_fields = ("worker__full_name", "observation")
