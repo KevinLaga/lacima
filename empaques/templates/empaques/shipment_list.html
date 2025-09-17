@@ -26,30 +26,37 @@
     .logout-btn:hover { opacity: .92; }
     table { border-collapse: collapse; }
     th, td { padding: 6px 10px; }
+    /* Asegurar que se vea el texto en los controles */
+    select,
+    input[type="week"],
+    input[type="date"],
+    input[type="number"],
+    input[type="text"] {
+      background: #fff; color: #000;
+    }
   </style>
 
   <h1>Embarques Registrados</h1>
   <p><a href="{% url 'shipment_create' %}">+ Nuevo Embarque</a></p>
 
   <!-- Descarga por semana (input type="week" + empresa) -->
-<form method="get" style="display:inline-block; margin-right:10px;">
-  <label for="id_iso_week">Semana:</label>
-  <input type="week" id="id_iso_week" name="iso_week"
-         value="{{ request.GET.iso_week|default:'' }}" required>
+  <form method="get" style="display:inline-block; margin-right:10px;">
+    <label for="id_iso_week">Semana:</label>
+    <input type="week" id="id_iso_week" name="iso_week"
+           value="{{ request.GET.iso_week|default:'' }}" required>
 
-  <label for="id_empresa">Empresa:</label>
-  <select id="id_empresa" name="empresa">
-    <option value="general" {% if request.GET.empresa == 'general' %}selected{% endif %}>General (todas)</option>
-    <option value="La Cima Produce" {% if request.GET.empresa == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
-    <option value="RC Organics" {% if request.GET.empresa == 'RC Organics' %}selected{% endif %}>RC Organics</option>
-    <option value="GH Farms" {% if request.GET.empresa == 'GH Farms' %}selected{% endif %}>GH Farms</option>
-    <option value="Gourmet Baja Farms" {% if request.GET.empresa == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
-    <option value="GBF Farms" {% if request.GET.empresa == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
-  </select>
+    <label for="id_empresa">Empresa:</label>
+    <select id="id_empresa" name="empresa">
+      <option value="general" {% if request.GET.empresa == 'general' %}selected{% endif %}>General (todas)</option>
+      <option value="La Cima Produce" {% if request.GET.empresa == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+      <option value="RC Organics" {% if request.GET.empresa == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+      <option value="GH Farms" {% if request.GET.empresa == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+      <option value="Gourmet Baja Farms" {% if request.GET.empresa == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+      <option value="GBF Farms" {% if request.GET.empresa == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+    </select>
 
-  <button type="submit" name="descargar" value="semana">Descargar semana</button>
-</form>
-
+    <button type="submit" name="descargar" value="semana">Descargar semana</button>
+  </form>
 
   <!-- Descarga por rango de fechas -->
   <form method="get" style="display:inline-block; margin-right:10px;">
@@ -98,6 +105,12 @@
         <th>Factura</th>
         <th>Fecha</th>
         <th>Detalle</th>
+        <!-- nuevas columnas por empresa -->
+        <th>La Cima</th>
+        <th>RC</th>
+        <th>GH</th>
+        <th>Gourmet</th>
+        <th>GBF</th>
       </tr>
     </thead>
     <tbody>
@@ -114,9 +127,15 @@
           <!-- Ver reporte específico (solo este embarque) -->
           <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}">Ver Reporte</a>
         </td>
+        <!-- números de orden por empresa (sólo mostrar valor si existe) -->
+        <td>{{ s.order_lacima|default_if_none:"" }}</td>
+        <td>{{ s.order_rc|default_if_none:"" }}</td>
+        <td>{{ s.order_gh|default_if_none:"" }}</td>
+        <td>{{ s.order_gourmet|default_if_none:"" }}</td>
+        <td>{{ s.order_gbf|default_if_none:"" }}</td>
       </tr>
     {% empty %}
-      <tr><td colspan="5">No hay embarques aún.</td></tr>
+      <tr><td colspan="10">No hay embarques aún.</td></tr>
     {% endfor %}
     </tbody>
   </table>
