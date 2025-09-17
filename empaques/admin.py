@@ -4,7 +4,6 @@ from django import forms
 
 from .models import (
     Shipment, ShipmentItem, Presentation,
-    Worker, Field, Crew, CrewMember, AttendanceRecord
 )
 
 # -----------------------------
@@ -108,9 +107,5 @@ class ShipmentItemAdmin(admin.ModelAdmin):
 
 
 
-@admin.register(Field)
-class FieldAdmin(admin.ModelAdmin):
-    list_display = ("name",)
-    search_fields = ("name",)
 
 
