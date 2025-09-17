@@ -11,6 +11,7 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
+from collections import defaultdict
 
 
 from .models import Presentation, Shipment, ShipmentItem
@@ -377,7 +378,7 @@ def _all_combos_from_db():
 @login_required
 @require_http_methods(["GET", "POST"])
 def production_today(request):
-
+    from decimal import Decimal, ROUND_HALF_UP
     from .models import Presentation
     
 
@@ -1033,6 +1034,7 @@ def shipment_list(request):
     
 
     def build_summary_xlsx(title_text, subtitle_text, embarques_qs):
+        from collections import defaultdict
         items = ShipmentItem.objects.filter(shipment__in=embarques_qs).select_related('presentation')
 
         # Agregados por presentación/tamaño
@@ -1362,7 +1364,7 @@ def shipment_list(request):
         t_eq.number_format    = '#,##0.00'
         t_amt.number_format   = '$#,##0.00'
 
-        # Unos anchos útiles extra (por si quieres)
+        # Unos anchos útiles extra (por si quieres) 
         # ws.column_dimensions['D'].width = 22
         # ws.column_dimensions['I'].width = 18
 
@@ -1531,7 +1533,7 @@ def shipment_list(request):
         for col, h in enumerate(headers_det, start=1):
             cell = ws.cell(row=row, column=col, value=h)
             cell.font = header_font
-            cell.fill = th_fill
+            cell.fill = th_fill 
             cell.alignment = Alignment(horizontal="center")
             cell.border = border
         row += 1
