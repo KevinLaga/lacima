@@ -1426,6 +1426,10 @@ def shipment_list(request):
     # ================================
     # Descarga mensual o anual (XLSX)
     # ================================
+    from collections import defaultdict
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     if descargar in ('mes', 'ano'):
         if descargar == 'mes':
             embarques = (
