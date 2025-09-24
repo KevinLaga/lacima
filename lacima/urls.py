@@ -18,10 +18,25 @@ from django.contrib import admin
 from django.urls import path
 from django.urls import path, include
 from django.views.generic import RedirectView
+from django.http import HttpResponse
+from django.db import connection
+from django.conf import settings
+def _dbg_db(request):
+    with connection.cursor() as c:
+        c.execute("PRAGMA database_list;")
+        dblist = c.fetchall()
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='empaques_productiondisplay';")
+        has = bool(c.fetchone())
+    return HttpResponse(
+        f"settings.DB_NAME={settings.DATABASES['default']['NAME']}<br>"
+        f"PRAGMA database_list={dblist}<br>"
+        f"has_empaques_productiondisplay={has}"
+    )
 
 urlpatterns = [
     path("", RedirectView.as_view(pattern_name="shipment_create", permanent=False)),
     path('admin/', admin.site.urls),
     path('empaques/', include('empaques.urls')),  # incluimos las de tu app
     path('accounts/', include('django.contrib.auth.urls')),
+    path('__debug_db__', _dbg_db),
 ]
