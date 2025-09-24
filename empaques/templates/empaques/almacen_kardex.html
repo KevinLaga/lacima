@@ -1,0 +1,54 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Historial de movimientos</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { padding: 16px; }
+    table { border-collapse: collapse; width:100%; }
+    th,td { border:1px solid #d0d7de; padding:6px 10px; }
+    th { background:#225577; color:#fff; }
+    .num { text-align:right; }
+  </style>
+</head>
+<body>
+  <p><a href="{% url 'almacen_list' %}">← Volver al Almacén</a></p>
+  <h1>Historial de movimientos: {{ item.sku }} — {{ item.name }}</h1>
+  <p><b>Stock actual:</b>  {{ stock_qty }} {{ item.unit }} — <b>Ubicación:</b> {{ item.location }}</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Tipo</th>
+        <th class="num">Cantidad</th>
+        <th>Ref.</th>
+        <th>Notas</th>
+        <th>Usuario</th>
+        <th class="num">Saldo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        {% with m=row.m s=row.saldo %}
+        <tr>
+          <td>{{ m.date }}</td>
+          <td>
+            {% if m.type == 'IN' %}Entrada{% elif m.type == 'OUT' %}Salida{% else %}Ajuste{% endif %}
+          </td>
+          <td class="num">{{ m.quantity }}</td>
+          <td>{{ m.reference }}</td>
+          <td>{{ m.notes }}</td>
+          <td>{% if m.created_by %}{{ m.created_by.get_full_name|default:m.created_by.username }}{% endif %}</td>
+          <td class="num">{{ s }}</td>
+        </tr>
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="7">Sin movimientos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

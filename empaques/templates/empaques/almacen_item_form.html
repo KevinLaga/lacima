@@ -1,0 +1,81 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Nuevo artículo</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { padding: 16px; }
+    .card { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; }
+    .actions { display:flex; gap:10px; margin-top: 12px; }
+    .btn { background:#225577; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; text-decoration:none; }
+    .btn.secondary { background:#4b5563; }
+    .errors { background:#fde2e2; color:#7f1d1d; border:1px solid #fecaca; border-radius:6px; padding:10px; margin-bottom:12px; }
+    form p { margin: 10px 0; }
+    label { font-weight: 600; display:inline-block; margin-bottom:4px; }
+    input, select { width: 100%; max-width: 420px; padding: 6px 8px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1 style="margin-top:0;">Nuevo artículo</h1>
+
+    {# Muestra mensajes (éxito / error) si usas django.contrib.messages #}
+    {% if messages %}
+      {% for message in messages %}
+        <div class="errors" style="{% if message.tags == 'success' %}background:#e6f4ea;color:#0f5132;border-color:#badbcc;{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {# Muestra errores del form si existen #}
+    {% if form.non_field_errors or form.errors %}
+      <div class="errors">
+        {{ form.non_field_errors }}
+        <ul style="margin:6px 0 0 18px;">
+        {% for field in form %}
+          {% for err in field.errors %}
+            <li><b>{{ field.label }}:</b> {{ err }}</li>
+          {% endfor %}
+        {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'almacen_item_new' %}">
+      {% csrf_token %}
+
+      {# Render controlado (para que sea claro) #}
+      <p>
+        <label for="{{ form.sku.id_for_label }}">Id</label>
+        {{ form.sku }}
+      </p>
+      <p>
+        <label for="{{ form.name.id_for_label }}">Nombre del artículo</label>
+        {{ form.name }}
+      </p>
+      <p>
+        <label for="{{ form.unit.id_for_label }}">Unidad</label>
+        {{ form.unit }}
+      </p>
+      <p>
+        <label for="{{ form.location.id_for_label }}">Ubicación</label>
+        {{ form.location }}
+      </p>
+      <p>
+        <label for="{{ form.min_stock.id_for_label }}">Mínimo</label>
+        {{ form.min_stock }}
+      </p>
+
+      <div class="actions">
+        <button type="submit" class="btn">Guardar</button>
+        <a href="{% url 'almacen_list' %}" class="btn secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+</body>
+</html>

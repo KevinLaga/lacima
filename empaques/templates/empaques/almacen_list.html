@@ -1,0 +1,84 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Almacén</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { padding: 16px; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap: wrap; }
+    .toolbar a.btn { background:#225577; color:#fff; padding:6px 10px; border-radius:6px; text-decoration:none; }
+    .toolbar a.btn.secondary { background:#4b5563; }
+    .search { margin-left:auto; display:flex; gap:6px; }
+    table { border-collapse: collapse; width: 100%; }
+    th,td { padding:8px 10px; border:1px solid #d0d7de; }
+    th { background:#225577; color:#fff; text-align:center; }
+    .qty { font-weight:700; }
+    .actions a { margin-right:6px; }
+    @media (max-width: 760px){
+      .widehide { display:none; }
+      table { font-size: 14px; }
+      .search { width:100%; margin-left:0; }
+      .search input { flex:1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <a href="{% url 'shipment_list' %}" class="btn secondary">← Embarques</a>
+    {% if perms.empaques.add_inventoryitem %}
+      <a href="{% url 'almacen_item_new' %}" class="btn">+ Nuevo artículo</a>
+    {% endif %}
+    {% if perms.empaques.add_inventorymovement %}
+      <a href="{% url 'almacen_movement_new_tipo' 'IN' %}" class="btn">+ Entrada</a>
+      <a href="{% url 'almacen_movement_new_tipo' 'OUT' %}" class="btn">− Salida</a>
+      <a href="{% url 'almacen_movement_new_tipo' 'ADJ' %}" class="btn">± Ajuste</a>
+    {% endif %}
+    <form method="get" class="search">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar Id/Nombre/Ubicación">
+      <button type="submit">Buscar</button>
+    </form>
+  </div>
+
+  <h1>Almacén</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Id</th>
+        <th>Artículo</th>
+        <th class="widehide">Ubicación</th>
+        <th>Stock</th>
+        <th>Unidad</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+        {% with s=it.stock_qty|default:0 %}
+        <tr>
+          <td>{{ it.sku }}</td>
+          <td>{{ it.name }}</td>
+          <td class="widehide">{{ it.location }}</td>
+          <td><span class="qty">{{ s }}</span></td>
+          <td>{{ it.unit }}</td>
+          <td class="actions">
+            {% if perms.empaques.view_inventorymovement %}
+              <a href="{% url 'almacen_kardex' it.id %}">Historial</a>
+            {% endif %}
+            {% if perms.empaques.add_inventorymovement %}
+              · <a href="{% url 'almacen_movement_new_tipo' 'IN' %}?item={{ it.id }}">Entrada</a>
+              · <a href="{% url 'almacen_movement_new_tipo' 'OUT' %}?item={{ it.id }}">Salida</a>
+              · <a href="{% url 'almacen_movement_new_tipo' 'ADJ' %}?item={{ it.id }}">Ajuste</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="6">Sin artículos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

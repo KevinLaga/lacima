@@ -1,4 +1,16 @@
 from django.db import models
+from django.contrib.auth import get_user_model
+from django.db.models import Sum, F, Case, When, Value, DecimalField
+from django.db.models.functions import Coalesce
+from decimal import Decimal
+from django.db.models import Sum, Q, DecimalField, Value as V
+from django.contrib.auth.models import User
+from django.conf import settings
+
+
+
+
+
 
 class Presentation(models.Model):
     
@@ -134,3 +146,115 @@ class ShipmentItem(models.Model):
         help_text="Número de cajas enviadas de esta presentación"
     )
 
+# ===== ALMACÉN (top-level, fuera de Shipment/ShipmentItem) =====
+
+class InventoryItem(models.Model):
+    sku = models.CharField("Id", max_length=32, unique=True, blank=True)  # ← etiqueta "Id"
+    name = models.CharField(max_length=200)
+    location = models.CharField(max_length=120, blank=True)
+    unit = models.CharField(max_length=20, default="pz")
+    min_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inventory_items"
+    )
+
+    def __str__(self):
+        return f"[{self.sku or 'SIN-ID'}] {self.name}"
+
+    def save(self, *args, **kwargs):
+        creating = self.pk is None
+        super().save(*args, **kwargs)
+        if creating and not self.sku:
+            self.sku = f"I{self.pk:05d}"  # p.ej. I00001, I00002...
+            super().save(update_fields=["sku"])
+
+    @property
+    def stock(self):
+        """
+        Stock actual = Entradas + Ajustes - Salidas
+        (cálculo puntual; para listar muchos, usa annotate en la vista)
+        """
+        agg = self.movements.aggregate(
+            ent=Coalesce(
+                Sum('quantity', filter=Q(type='IN'), output_field=DecimalField(max_digits=12, decimal_places=2)),
+                0, output_field=DecimalField(max_digits=12, decimal_places=2)
+            ),
+            sal=Coalesce(
+                Sum('quantity', filter=Q(type='OUT'), output_field=DecimalField(max_digits=12, decimal_places=2)),
+                0, output_field=DecimalField(max_digits=12, decimal_places=2)
+            ),
+            adj=Coalesce(
+                Sum('quantity', filter=Q(type='ADJ'), output_field=DecimalField(max_digits=12, decimal_places=2)),
+                0, output_field=DecimalField(max_digits=12, decimal_places=2)
+            ),
+        )
+        return (agg['ent'] or 0) - (agg['sal'] or 0) + (agg['adj'] or 0)
+
+
+class InventoryMovement(models.Model):
+    TYPE_CHOICES = (
+        ('IN', 'Entrada'),
+        ('OUT', 'Salida'),
+        ('ADJ', 'Ajuste'),
+    )
+    item = models.ForeignKey(InventoryItem, related_name="movements", on_delete=models.PROTECT)
+    date = models.DateField()
+    type = models.CharField(max_length=3, choices=TYPE_CHOICES)
+    quantity = models.DecimalField(max_digits=12, decimal_places=2)
+    reference = models.CharField(max_length=120, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("date", "id")
+
+    def __str__(self):
+        return f"{self.get_type_display()} {self.quantity} {self.item.unit} → {self.item}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.quantity is None or self.quantity <= 0:
+            raise ValidationError("La cantidad debe ser positiva.")
+        if self.type == "OUT":
+            current = self.item.stock
+            if current - self.quantity < 0:
+                raise ValidationError(f"Stock insuficiente. Disponible: {current} {self.item.unit}.")
+            
+
+# empaques/models.py
+from django.db import models
+
+# al inicio del archivo ya debes tener: from django.db import models
+# y Presentation definido
+
+class ProductionDisplay(models.Model):
+    """
+    Catálogo editable desde Admin: define qué (presentación + tamaño)
+    aparecen en Producción diaria y en qué orden.
+    """
+    presentation = models.ForeignKey(
+        Presentation,
+        on_delete=models.CASCADE,
+        related_name="production_displays",
+    )
+    size = models.CharField(
+        max_length=50,
+        help_text="Tamaño EXACTO como se captura en los ítems (p. ej. 'Jumbo')."
+    )
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('presentation', 'size')
+        ordering = ('order', 'presentation__name', 'size')
+        verbose_name = "Presentación en Producción"
+        verbose_name_plural = "Presentaciones en Producción"
+
+    def __str__(self):
+        return f"{self.presentation.name} — {self.size}"

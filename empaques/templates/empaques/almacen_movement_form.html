@@ -1,0 +1,87 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Nuevo movimiento</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { padding:16px; }
+    .card { max-width:720px; margin:0 auto; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:18px; }
+    .actions { display:flex; gap:10px; margin-top:12px; }
+    .btn { background:#225577; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; text-decoration:none; }
+    .btn.secondary { background:#4b5563; }
+    .errors { background:#fde2e2; color:#7f1d1d; border:1px solid #fecaca; border-radius:6px; padding:10px; margin-bottom:12px; }
+    form p { margin:10px 0; }
+    label { font-weight:600; display:inline-block; margin-bottom:4px; }
+    input, select, textarea { width:100%; max-width:420px; padding:6px 8px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1 style="margin-top:0;">Nuevo movimiento {% if tipo %}({{ tipo }}){% endif %}</h1>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="errors" style="{% if message.tags == 'success' %}background:#e6f4ea;color:#0f5132;border-color:#badbcc;{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if form.non_field_errors or form.errors %}
+      <div class="errors">
+        {{ form.non_field_errors }}
+        <ul style="margin:6px 0 0 18px;">
+        {% for field in form %}
+          {% for err in field.errors %}
+            <li><b>{{ field.label }}:</b> {{ err }}</li>
+          {% endfor %}
+        {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <form method="post" action="">
+      {% csrf_token %}
+
+      <p>
+        <label for="{{ form.item.id_for_label }}">Artículo</label>
+        {{ form.item }}
+      </p>
+
+      <p>
+        <label for="{{ form.type.id_for_label }}">Tipo</label>
+        {{ form.type }}
+      </p>
+
+      <p>
+        <label for="{{ form.quantity.id_for_label }}">Cantidad</label>
+        {{ form.quantity }}
+
+
+      <p>
+        <label for="{{ form.date.id_for_label }}">Fecha</label>
+        {{ form.date }}
+      </p>
+
+      <p>
+        <label for="{{ form.reference.id_for_label }}">Referencia</label>
+        {{ form.reference }}
+      </p>
+
+      <p>
+        <label for="{{ form.notes.id_for_label }}">Notas</label>
+        {{ form.notes }}
+      </p>
+
+      <div class="actions">
+        <button type="submit" class="btn">Guardar</button>
+        <a class="btn secondary" href="{% url 'almacen_list' %}">Cancelar</a>
+      </div>
+    </form>
+  </div>
+
+</body>
+</html>

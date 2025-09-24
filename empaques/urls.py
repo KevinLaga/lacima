@@ -13,6 +13,7 @@ urlpatterns = [
     path("produccion/", views.production_today, name="production_today"),
     path("produccion/dias/", views.production_days, name="production_days"),
     path("produccion/<slug:prod_date>/xlsx/", views.production_xlsx, name="production_xlsx"),
+    path("", include("empaques.urls_inventory")),
     path("produccion/ayer/", views.production_yesterday, name="production_yesterday"),
     
 ]

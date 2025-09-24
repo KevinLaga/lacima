@@ -12,6 +12,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
 from collections import defaultdict
+from .models import ProductionDisplay 
+
 
 
 from .models import Presentation, Shipment, ShipmentItem
@@ -374,6 +376,15 @@ def _all_combos_from_db():
 
     combos = [ ( (p or "").strip().upper(), cs ) for p in pres_list for cs in ordered_sizes ]
     return combos
+def _display_combos():
+    """
+    Devuelve la lista [(presentación, tamaño), ...] desde el catálogo admin.
+    """
+    qs = (ProductionDisplay.objects
+          .filter(is_active=True)
+          .select_related("presentation")
+          .order_by("order", "presentation__name", "size"))
+    return [(d.presentation.name, d.size) for d in qs]
 
 @login_required
 @require_http_methods(["GET", "POST"])
@@ -404,7 +415,7 @@ def production_today(request):
     ship_cols, totals, per_ship, eq11_map = _group_shipments_by_combo(prod_date, empresa)
 
     # Conjunto de combos
-    combos = _all_combos_from_db() or _ordered_combos()
+    combos = _display_combos() or (_all_combos_from_db() or _ordered_combos())
 
     # Globales del día ya guardados (si existen)
     exist_piso_hoy = int((saved_today or {}).get("exist_piso_hoy", 0))
