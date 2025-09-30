@@ -5,13 +5,12 @@ from .models import InventoryItem, InventoryMovement
 class InventoryItemForm(forms.ModelForm):
     class Meta:
         model = InventoryItem
-        fields = ["sku", "name", "location", "unit", "min_stock"]
+        fields = ["sku", "name", "location", "unit"]
         labels = {
             "sku": "Id",        # ← renombrado
             "name": "Artículo",
             "location": "Ubicación",
             "unit": "Unidad",
-            "min_stock": "Mínimo",
         }
 
 class InventoryMovementForm(forms.ModelForm):

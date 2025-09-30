@@ -147,13 +147,24 @@ class ShipmentItem(models.Model):
     )
 
 # ===== ALMACÉN (top-level, fuera de Shipment/ShipmentItem) =====
-
+from django.core.validators import MinValueValidator
 class InventoryItem(models.Model):
     sku = models.CharField("Id", max_length=32, unique=True, blank=True)  # ← etiqueta "Id"
     name = models.CharField(max_length=200)
     location = models.CharField(max_length=120, blank=True)
     unit = models.CharField(max_length=20, default="pz")
-    min_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    min_stock = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),      # siempre arranca en 0
+        validators=[MinValueValidator(0)],
+        blank=True,                 # no obligatorio en formularios
+    )
+    def save(self, *args, **kwargs):
+        # fuerza 0 si viene vacío/negativo
+        if self.min_stock is None or self.min_stock < 0:
+            self.min_stock = Decimal("0")
+        super().save(*args, **kwargs)
 
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
