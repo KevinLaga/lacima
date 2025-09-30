@@ -56,6 +56,18 @@ from openpyxl.worksheet.page import PageMargins
 
 from .models import Shipment, ShipmentItem
 from .production_config import ALLOWED_COMBOS, ORDERED_ALIASES
+from .models import Presentation, ProductionDisplay
+def _pd_combos_active():
+    """
+    Devuelve [(presentation_name, size), ...] en el orden de ProductionDisplay (activos).
+    """
+    return list(
+        ProductionDisplay.objects
+        .filter(is_active=True)
+        .select_related("presentation")
+        .order_by("order", "presentation__name", "size")
+        .values_list("presentation__name", "size")
+    )
 
 import unicodedata, re
 # ---- Lista de clientes ----
@@ -674,7 +686,11 @@ def production_xlsx(request, prod_date):
     ship_cols, totals, per_ship, _eq11_map = _group_shipments_by_combo(d, empresa)
 
     # --- Combos y factores de conversión ---
-    combos = _all_combos_from_db() or _ordered_combos()
+    combos = _pd_combos_active()
+    if not combos:
+        # Fallback por si no tienes nada configurado en admin
+        combos = _all_combos_from_db() or _ordered_combos()
+
     pres_cf = {}
     for name, cf in Presentation.objects.values_list("name", "conversion_factor"):
         pres_cf[(name or "").strip().upper()] = float(cf or 1.0)
@@ -773,9 +789,7 @@ def production_xlsx(request, prod_date):
         k_norm    = _combo_key(pres, size)
         per4      = per_ship.get(k_norm, [0, 0, 0, 0])
 
-        # Si no hay números, omite la fila
-        if not _row_has_numbers(saved_row, per4):
-            continue
+
 
         exist_prev   = saved_row.get("exist_prev", 0)
         prod_dia     = saved_row.get("prod_dia", 0)
