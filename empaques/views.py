@@ -1463,8 +1463,11 @@ def shipment_list(request):
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from django.utils.text import slugify
+
     if descargar in ('mes', 'ano'):
-        empresa = _empresa_param(request)
+        empresa = _empresa_param(request)  # None => todas (general)
+
         if descargar == 'mes':
             embarques = (
                 Shipment.objects
@@ -1472,7 +1475,7 @@ def shipment_list(request):
                 .order_by('date', 'tracking_number')
                 .prefetch_related('items', 'items__presentation')
             )
-            filename = f"resumen_mes_{year}_{month:02d}.xlsx"
+            base_filename = f"resumen_mes_{year}_{month:02d}"
             titulo = f"Resumen Mensual {year}-{month:02d}"
         else:
             embarques = (
@@ -1481,19 +1484,29 @@ def shipment_list(request):
                 .order_by('date', 'tracking_number')
                 .prefetch_related('items', 'items__presentation')
             )
-            filename = f"resumen_anual_{year}.xlsx"
+            base_filename = f"resumen_anual_{year}"
             titulo = f"Resumen Anual {year}"
 
-        # Recolecta ítems
-        items = [it for s in embarques for it in s.items.all()]
+        # Si hay empresa específica, anótala en título y archivo
+        if empresa:
+            titulo = f"{titulo} – {empresa}"
+            base_filename = f"{base_filename}_{slugify(empresa)}"
 
-        # Agregados
+        # --- Recolecta ítems (filtrando por empresa si aplica) ---
+        items = []
+        for s in embarques:
+            for it in s.items.all():
+                if empresa and (it.cliente or "").strip() != empresa:
+                    continue
+                items.append((s, it))  # guardamos (embarque, item) para usar fecha/factura
+
+        # --- Agregados por (presentación, tamaño) ---
         presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
         total_cajas = 0
         total_eq_11lbs = 0.0
         total_dinero = 0.0
 
-        for it in items:
+        for s, it in items:
             key = (it.presentation.name, it.size)
             presentaciones_info[key]['cajas'] += it.quantity
             importe = it.quantity * float(it.presentation.price)
@@ -1502,14 +1515,14 @@ def shipment_list(request):
             total_eq_11lbs += it.quantity * float(it.presentation.conversion_factor)
             total_dinero += importe
 
-        # ==== Construir Excel bonito ====
+        # --- Construir libro ---
         wb = Workbook()
         ws = wb.active
         ws.title = "Resumen"
 
-        title_font = Font(name='Calibri', size=18, bold=True, color="3C78D8")
-        header_font = Font(name='Calibri', size=14, bold=True, color="FFFFFF")
-        normal_font = Font(name='Calibri', size=12)
+        title_font = Font(name="Calibri", size=16, bold=True, color="3C78D8")
+        h_font = Font(name="Calibri", size=12, bold=True)
+        th_font = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
         th_fill = PatternFill("solid", fgColor="225577")
         border = Border(
             left=Side(style='thin', color='AAAAAA'),
@@ -1518,93 +1531,89 @@ def shipment_list(request):
             bottom=Side(style='thin', color='AAAAAA'),
         )
 
-        row = 1
-        ws.cell(row=row, column=1, value=titulo).font = title_font
-        row += 2
+        r = 1
+        ws.cell(row=r, column=1, value=titulo).font = title_font
+        r += 2
 
-        ws.cell(row=row, column=1, value="Total de Embarques:").font = Font(bold=True)
-        ws.cell(row=row, column=2, value=len(embarques)).font = normal_font
-        row += 1
-        ws.cell(row=row, column=1, value="Número total de cajas:").font = Font(bold=True)
-        ws.cell(row=row, column=2, value=total_cajas).font = normal_font
-        row += 1
-        ws.cell(row=row, column=1, value="Total equivalente en 11 lbs:").font = Font(bold=True)
-        ws.cell(row=row, column=2, value=round(total_eq_11lbs, 2)).font = normal_font
-        row += 1
-        ws.cell(row=row, column=1, value="Total de dinero:").font = Font(bold=True)
-        ws.cell(row=row, column=2, value=round(total_dinero, 2)).font = normal_font
-        row += 2
-
-        ws.cell(row=row, column=1, value="Presentaciones utilizadas").font = Font(size=14, bold=True)
-        row += 1
-        headers = ["Presentación", "Tamaño", "Total de cajas", "Total de dinero"]
-        for col, h in enumerate(headers, start=1):
-            cell = ws.cell(row=row, column=col, value=h)
-            cell.font = header_font
-            cell.fill = th_fill
+        # Tabla de presentaciones utilizadas
+        ws.cell(row=r, column=1, value="Presentaciones utilizadas").font = h_font
+        r += 1
+        headers_pres = ["Presentación", "Tamaño", "Total cajas", "Total dinero"]
+        for c, txt in enumerate(headers_pres, start=1):
+            cell = ws.cell(row=r, column=c, value=txt)
+            cell.font = th_font; cell.fill = th_fill
             cell.alignment = Alignment(horizontal="center")
             cell.border = border
-        row += 1
+        r += 1
 
-        for (nombre_pres, size), info in sorted(presentaciones_info.items()):
-            ws.cell(row=row, column=1, value=nombre_pres)
-            ws.cell(row=row, column=2, value=size)
-            ws.cell(row=row, column=3, value=info['cajas'])
-            ws.cell(row=row, column=4, value=round(info['dinero'], 2))
-            for col in range(1, 4 + 1):
-                c = ws.cell(row=row, column=col)
-                c.font = normal_font
-                c.alignment = Alignment(horizontal="center")
-                c.border = border
-            row += 1
+        if presentaciones_info:
+            for (n_pres, sz), info in sorted(presentaciones_info.items()):
+                ws.cell(row=r, column=1, value=n_pres)
+                ws.cell(row=r, column=2, value=sz)
+                ws.cell(row=r, column=3, value=info['cajas'])
+                ws.cell(row=r, column=4, value=round(info['dinero'], 2))
+                for c in range(1, 5):
+                    ws.cell(row=r, column=c).border = border
+                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
+                r += 1
+        else:
+            ws.cell(row=r, column=1, value="(Sin datos)")
+            r += 1
 
-        ws.column_dimensions['A'].width = 26
-        ws.column_dimensions['B'].width = 14
-        ws.column_dimensions['C'].width = 18
-        ws.column_dimensions['D'].width = 16
+        r += 1
+        ws.cell(row=r, column=1, value="Número total de cajas:").font = h_font
+        ws.cell(row=r, column=2, value=total_cajas); r += 1
+        ws.cell(row=r, column=1, value="Total equivalente en 11 lbs:").font = h_font
+        ws.cell(row=r, column=2, value=round(total_eq_11lbs, 2)); r += 1
+        ws.cell(row=r, column=1, value="Total de dinero:").font = h_font
+        ws.cell(row=r, column=2, value=round(total_dinero, 2)); r += 2
 
-        row += 2
-
-        ws.cell(row=row, column=1, value="Detalle de embarques").font = Font(size=14, bold=True)
-        row += 1
-        headers_det = ["Fecha", "N# Embarque", "N# Factura", "Presentación", "Tamaño", "Cantidad", "Equiv. 11 lbs", "Importe ($)"]
-        for col, h in enumerate(headers_det, start=1):
-            cell = ws.cell(row=row, column=col, value=h)
-            cell.font = header_font
-            cell.fill = th_fill 
+        # Detalle (filtrado por empresa ya está en 'items')
+        ws.cell(row=r, column=1, value="Detalle de embarques").font = h_font
+        r += 1
+        headers_det = ["Fecha", "N° Embarque", "N° Factura", "Presentación", "Tamaño", "Cantidad", "Importe"]
+        for c, txt in enumerate(headers_det, start=1):
+            cell = ws.cell(row=r, column=c, value=txt)
+            cell.font = th_font; cell.fill = th_fill
             cell.alignment = Alignment(horizontal="center")
             cell.border = border
-        row += 1
+        r += 1
 
-        for s in embarques:
-            for it in s.items.all():
-                eq  = it.quantity * float(it.presentation.conversion_factor)
-                amt = it.quantity * float(it.presentation.price)
-                vals = [
-                    s.date.strftime("%Y-%m-%d"),
-                    s.tracking_number,
-                    s.invoice_number,
-                    it.presentation.name,
-                    it.size,
-                    it.quantity,
-                    round(eq, 2),
-                    round(amt, 2),
-                ]
-                for col, v in enumerate(vals, start=1):
-                    cell = ws.cell(row=row, column=col, value=v)
-                    cell.alignment = Alignment(horizontal="center")
-                    cell.border = border
-                row += 1
+        for s, it in sorted(items, key=lambda si: (si[0].date, si[0].tracking_number, si[1].presentation.name, si[1].size)):
+            importe = it.quantity * float(it.presentation.price)
+            ws.cell(row=r, column=1, value=s.date.strftime("%d/%m/%Y"))
+            ws.cell(row=r, column=2, value=s.tracking_number)
+            ws.cell(row=r, column=3, value=s.invoice_number)
+            ws.cell(row=r, column=4, value=it.presentation.name)
+            ws.cell(row=r, column=5, value=it.size)
+            ws.cell(row=r, column=6, value=it.quantity)
+            ws.cell(row=r, column=7, value=round(importe, 2))
+            for c in range(1, 8):
+                ws.cell(row=r, column=c).border = border
+                ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
+            r += 1
 
-        output = BytesIO()
-        wb.save(output)
-        output.seek(0)
-        response = HttpResponse(
+        # Anchos
+        ws.column_dimensions['A'].width = 14
+        ws.column_dimensions['B'].width = 16
+        ws.column_dimensions['C'].width = 16
+        ws.column_dimensions['D'].width = 26
+        ws.column_dimensions['E'].width = 10
+        ws.column_dimensions['F'].width = 20.29
+        ws.column_dimensions['G'].width = 14
+        ws.column_dimensions['L'].width = 20.29
+
+        # Salida
+        output = BytesIO(); wb.save(output); output.seek(0)
+        filename = f"{base_filename}.xlsx"
+        resp = HttpResponse(
             output,
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
+        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return resp
+
+
 
     # ================================
     # Render normal (sin descargas)
