@@ -1457,154 +1457,215 @@ def shipment_list(request):
         return resp
 
     # ================================
-    # Descarga mensual o anual (XLSX)
+    # Descarga mensual o anual (XLSX) con formato de "semana"
     # ================================
-    from collections import defaultdict
-    from io import BytesIO
+    from django.utils.text import slugify
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-    from django.utils.text import slugify
 
     if descargar in ('mes', 'ano'):
-        empresa = _empresa_param(request)  # None => todas (general)
+        empresa = _empresa_param(request)  # None => general (todas)
 
+        # --- Helper para número de orden por cliente (igual que en semana) ---
+        def get_client_order_number_for(embarque, cliente_name):
+            if not embarque or not cliente_name:
+                return None
+            cname = str(cliente_name).lower()
+            if "cima" in cname:
+                return getattr(embarque, "order_lacima", None)
+            if "rc" in cname:
+                return getattr(embarque, "order_rc", None)
+            if "gh" in cname:
+                return getattr(embarque, "order_gh", None)
+            if "gourmet" in cname:
+                return getattr(embarque, "order_gourmet", None)
+            if "gbf" in cname:
+                return getattr(embarque, "order_gbf", None)
+            return None
+
+        # --- Query base ---
         if descargar == 'mes':
             embarques = (
                 Shipment.objects
                 .filter(date__year=year, date__month=month)
-                .order_by('date', 'tracking_number')
+                .order_by('date', 'id')
                 .prefetch_related('items', 'items__presentation')
             )
             base_filename = f"resumen_mes_{year}_{month:02d}"
-            titulo = f"Resumen Mensual {year}-{month:02d}"
+            titulo = f"Resumen mensual {year}-{month:02d}"
         else:
             embarques = (
                 Shipment.objects
                 .filter(date__year=year)
-                .order_by('date', 'tracking_number')
+                .order_by('date', 'id')
                 .prefetch_related('items', 'items__presentation')
             )
             base_filename = f"resumen_anual_{year}"
-            titulo = f"Resumen Anual {year}"
+            titulo = f"Resumen anual {year}"
 
-        # Si hay empresa específica, anótala en título y archivo
+        # Si viene empresa específica, ajústalo en título/archivo
+        emp_label = (empresa or "general")
         if empresa:
             titulo = f"{titulo} – {empresa}"
             base_filename = f"{base_filename}_{slugify(empresa)}"
 
-        # --- Recolecta ítems (filtrando por empresa si aplica) ---
-        items = []
-        for s in embarques:
-            for it in s.items.all():
-                if empresa and (it.cliente or "").strip() != empresa:
-                    continue
-                items.append((s, it))  # guardamos (embarque, item) para usar fecha/factura
-
-        # --- Agregados por (presentación, tamaño) ---
-        presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
-        total_cajas = 0
-        total_eq_11lbs = 0.0
-        total_dinero = 0.0
-
-        for s, it in items:
-            key = (it.presentation.name, it.size)
-            presentaciones_info[key]['cajas'] += it.quantity
-            importe = it.quantity * float(it.presentation.price)
-            presentaciones_info[key]['dinero'] += importe
-            total_cajas += it.quantity
-            total_eq_11lbs += it.quantity * float(it.presentation.conversion_factor)
-            total_dinero += importe
-
-        # --- Construir libro ---
+        # ===================== Construir Excel (MISMO FORMATO QUE SEMANA) =====================
         wb = Workbook()
         ws = wb.active
         ws.title = "Resumen"
 
-        title_font = Font(name="Calibri", size=16, bold=True, color="3C78D8")
-        h_font = Font(name="Calibri", size=12, bold=True)
-        th_font = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
-        th_fill = PatternFill("solid", fgColor="225577")
-        border = Border(
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.utils import get_column_letter
+        import os
+
+        # --- Estilos base (idénticos) ---
+        title_font   = Font(name='Calibri', size=18, bold=True, color="3C78D8")
+        subtitle_font= Font(name='Calibri', size=11, italic=True, color="6D6D6D")
+        th_font      = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+        th_fill      = PatternFill("solid", fgColor="225577")
+        thin_border  = Border(
             left=Side(style='thin', color='AAAAAA'),
             right=Side(style='thin', color='AAAAAA'),
             top=Side(style='thin', color='AAAAAA'),
             bottom=Side(style='thin', color='AAAAAA'),
         )
 
-        r = 1
-        ws.cell(row=r, column=1, value=titulo).font = title_font
-        r += 2
+        # --- Logo igual que en "semana" ---
+        LOGO_SLUG_MAP = {
+            "La Cima Produce": "la-cima-produce",
+            "RC Organics": "gh-farms",          # RC comparte logo con GH/Empaque N.1
+            "GH Farms": "gh-farms",
+            "Gourmet Baja Farms": "gourmet-baja-farms",
+            "GBF Farms": "gbf-farms",
+        }
+        if emp_label.lower() != "general":
+            logo_slug = LOGO_SLUG_MAP.get(emp_label, slugify(emp_label))
+            logo_path = os.path.join(settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
+            if os.path.exists(logo_path):
+                img = XLImage(logo_path)
+                target_h = 120  # alto aprox
+                scale = target_h / img.height
+                img.width  = int(img.width * scale)
+                img.height = int(img.height * scale)
+                ws.add_image(img, "A1")
 
-        # Tabla de presentaciones utilizadas
-        ws.cell(row=r, column=1, value="Presentaciones utilizadas").font = h_font
-        r += 1
-        headers_pres = ["Presentación", "Tamaño", "Total cajas", "Total dinero"]
-        for c, txt in enumerate(headers_pres, start=1):
-            cell = ws.cell(row=r, column=c, value=txt)
-            cell.font = th_font; cell.fill = th_fill
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = border
-        r += 1
+        # --- Título en D1 (merge) + subtítulo como en semana ---
+        ws.merge_cells(start_row=1, start_column=4, end_row=2, end_column=9)  # D1:I2
+        tcell = ws.cell(row=1, column=4, value=titulo)
+        tcell.font = title_font
+        tcell.alignment = Alignment(horizontal="left", vertical="center")
 
-        if presentaciones_info:
-            for (n_pres, sz), info in sorted(presentaciones_info.items()):
-                ws.cell(row=r, column=1, value=n_pres)
-                ws.cell(row=r, column=2, value=sz)
-                ws.cell(row=r, column=3, value=info['cajas'])
-                ws.cell(row=r, column=4, value=round(info['dinero'], 2))
-                for c in range(1, 5):
-                    ws.cell(row=r, column=c).border = border
-                    ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
-                r += 1
-        else:
-            ws.cell(row=r, column=1, value="(Sin datos)")
-            r += 1
+        scell = ws.cell(row=3, column=4, value="Detalle de embarques y totales")
+        scell.font = subtitle_font
+        scell.alignment = Alignment(horizontal="left")
 
-        r += 1
-        ws.cell(row=r, column=1, value="Número total de cajas:").font = h_font
-        ws.cell(row=r, column=2, value=total_cajas); r += 1
-        ws.cell(row=r, column=1, value="Total equivalente en 11 lbs:").font = h_font
-        ws.cell(row=r, column=2, value=round(total_eq_11lbs, 2)); r += 1
-        ws.cell(row=r, column=1, value="Total de dinero:").font = h_font
-        ws.cell(row=r, column=2, value=round(total_dinero, 2)); r += 2
+        # --- Encabezados (mismos que semana) ---
+        headers = ["N° EMBARQUE", "N° FACTURA", "FECHA", "PRESENTACIÓN", "TAMAÑO",
+                "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)", "CLIENTE"]
+        start_row = 7
+        row = start_row
+        for col, h in enumerate(headers, start=1):
+            c = ws.cell(row=row, column=col, value=h)
+            c.font = th_font
+            c.fill = th_fill
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = thin_border
+        ws.row_dimensions[row].height = 22
+        row += 1
 
-        # Detalle (filtrado por empresa ya está en 'items')
-        ws.cell(row=r, column=1, value="Detalle de embarques").font = h_font
-        r += 1
-        headers_det = ["Fecha", "N° Embarque", "N° Factura", "Presentación", "Tamaño", "Cantidad", "Importe"]
-        for c, txt in enumerate(headers_det, start=1):
-            cell = ws.cell(row=r, column=c, value=txt)
-            cell.font = th_font; cell.fill = th_fill
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = border
-        r += 1
+        # --- Ancho columnas (como semana) ---
+        for col_idx in range(1, 9 + 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = 24
 
-        for s, it in sorted(items, key=lambda si: (si[0].date, si[0].tracking_number, si[1].presentation.name, si[1].size)):
-            importe = it.quantity * float(it.presentation.price)
-            ws.cell(row=r, column=1, value=s.date.strftime("%d/%m/%Y"))
-            ws.cell(row=r, column=2, value=s.tracking_number)
-            ws.cell(row=r, column=3, value=s.invoice_number)
-            ws.cell(row=r, column=4, value=it.presentation.name)
-            ws.cell(row=r, column=5, value=it.size)
-            ws.cell(row=r, column=6, value=it.quantity)
-            ws.cell(row=r, column=7, value=round(importe, 2))
-            for c in range(1, 8):
-                ws.cell(row=r, column=c).border = border
-                ws.cell(row=r, column=c).alignment = Alignment(horizontal="center")
-            r += 1
+        # --- Freeze panes ---
+        ws.freeze_panes = "A8"
 
-        # Anchos
-        ws.column_dimensions['A'].width = 14
-        ws.column_dimensions['B'].width = 16
-        ws.column_dimensions['C'].width = 16
-        ws.column_dimensions['D'].width = 26
-        ws.column_dimensions['E'].width = 10
-        ws.column_dimensions['F'].width = 20.29
-        ws.column_dimensions['G'].width = 14
-        ws.column_dimensions['L'].width = 20.29
+        # --- Recorrido y agrupación idéntica a semana ---
+        groups = {}
+        total_boxes = 0
+        total_eq    = 0.0
+        total_amt   = 0.0
+        empresa_lower = emp_label.lower()
 
-        # Salida
-        output = BytesIO(); wb.save(output); output.seek(0)
+        for s in embarques:
+            for it in s.items.all():
+                # filtro por empresa si aplica
+                if empresa_lower != 'general' and (it.cliente or "").strip() != emp_label:
+                    continue
+
+                cliente_contexto = it.cliente if empresa_lower == 'general' else emp_label
+                num_emb = get_client_order_number_for(s, cliente_contexto) or str(s.tracking_number)
+
+                pres = str(it.presentation.name).strip()
+                size = str(it.size).strip()
+                eq   = it.quantity * float(it.presentation.conversion_factor)
+                amt  = it.quantity * float(it.presentation.price)
+
+                key = (num_emb, str(s.invoice_number), s.date, pres, size, cliente_contexto)
+                if key in groups:
+                    g = groups[key]
+                    g['qty'] += it.quantity
+                    g['eq']  += eq
+                    g['amt'] += amt
+                else:
+                    groups[key] = {'qty': it.quantity, 'eq': eq, 'amt': amt}
+
+        # --- Escribir filas (orden igual) ---
+        for (num_emb, inv, sdate, pres, size, cli), vals in sorted(
+            groups.items(),
+            key=lambda kv: (kv[0][2], kv[0][0], kv[0][3], kv[0][4])
+        ):
+            ws.cell(row=row, column=1, value=num_emb)
+            ws.cell(row=row, column=2, value=inv)
+            ws.cell(row=row, column=3, value=sdate.strftime('%d/%m/%Y'))
+            ws.cell(row=row, column=4, value=pres)
+            ws.cell(row=row, column=5, value=size)
+            ws.cell(row=row, column=6, value=vals['qty'])
+            ws.cell(row=row, column=7, value=round(vals['eq'], 2))
+            ws.cell(row=row, column=8, value=round(vals['amt'], 2))
+            ws.cell(row=row, column=9, value=cli)
+
+            for cidx in range(1, 9 + 1):
+                cc = ws.cell(row=row, column=cidx)
+                cc.border = thin_border
+                if cidx in (6, 7, 8):
+                    cc.alignment = Alignment(horizontal="right")
+                else:
+                    cc.alignment = Alignment(horizontal="center")
+            total_boxes += vals['qty']
+            total_eq    += vals['eq']
+            total_amt   += vals['amt']
+            row += 1
+
+        # --- AutoFilter ---
+        ws.auto_filter.ref = f"A{start_row}:I{max(row-1, start_row)}"
+
+        # --- Totales (banda) ---
+        row += 1
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        lbl = ws.cell(row=row, column=1, value="TOTALES:")
+        lbl.alignment = Alignment(horizontal="right", vertical="center")
+        lbl.font = Font(name='Calibri', size=12, bold=True, color="225577")
+
+        t_cajas = ws.cell(row=row, column=6, value=total_boxes)
+        t_eq    = ws.cell(row=row, column=7, value=round(total_eq, 2))
+        t_amt   = ws.cell(row=row, column=8, value=round(total_amt, 2))
+
+        for c in (6, 7, 8):
+            cc = ws.cell(row=row, column=c)
+            cc.font = Font(name='Calibri', size=12, bold=True)
+            cc.fill = PatternFill("solid", fgColor="BBDDFF")
+            cc.alignment = Alignment(horizontal="right", vertical="center")
+            cc.border = thin_border
+
+        t_cajas.number_format = '#,##0'
+        t_eq.number_format    = '#,##0.00'
+        t_amt.number_format   = '$#,##0.00'
+
+        # --- Salida ---
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
         filename = f"{base_filename}.xlsx"
         resp = HttpResponse(
             output,
