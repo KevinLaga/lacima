@@ -64,29 +64,25 @@
 
   <!-- Formulario de descarga mensual (con empresa) -->
   <h3>Descargar resumen mensual</h3>
-  <form method="get" action="{% url 'shipment_list' %}" class="form-inline">
-    <input type="hidden" name="descargar" value="mes">
-    <label for="year-mes">Año:</label>
-    <input type="number" id="year-mes" name="year" min="2020" max="2100"
-           value="{{ request.GET.year|default:today.year }}">
-    <label for="month-mes">Mes:</label>
-    <input type="number" id="month-mes" name="month" min="1" max="12"
-           value="{{ request.GET.month|default:today.month }}">
+  <form method="get" action="{% url 'shipment_list' %}">
+  <input type="hidden" name="descargar" value="mes">
+  <label>Año:</label>
+  <input type="number" name="year" min="2020" max="2100" value="{{ request.GET.year|default:today.year }}">
+  <label>Mes:</label>
+  <input type="number" name="month" min="1" max="12" value="{{ request.GET.month|default:today.month }}">
 
-    <label for="id_empresa_mes">Empresa:</label>
-    <select id="id_empresa_mes" name="empresa">
-      {% with e=request.GET.empresa|default:'general' %}
-      <option value="general" {% if e == 'general' %}selected{% endif %}>General (todas)</option>
-      <option value="La Cima Produce" {% if e == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
-      <option value="RC Organics" {% if e == 'RC Organics' %}selected{% endif %}>RC Organics</option>
-      <option value="GH Farms" {% if e == 'GH Farms' %}selected{% endif %}>GH Farms</option>
-      <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
-      <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
-      {% endwith %}
-    </select>
+  <label>Empresa:</label>
+  <select name="empresa">
+    <option value="general" {% if request.GET.empresa == 'general' %}selected{% endif %}>General (todas)</option>
+    <option value="La Cima Produce" {% if request.GET.empresa == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+    <option value="RC Organics" {% if request.GET.empresa == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+    <option value="GH Farms" {% if request.GET.empresa == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+    <option value="Gourmet Baja Farms" {% if request.GET.empresa == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+    <option value="GBF Farms" {% if request.GET.empresa == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+  </select>
 
-    <button type="submit">Descargar Mes</button>
-  </form>
+  <button type="submit">Descargar Mes</button>
+</form>
 
   <!-- Formulario de descarga anual (con empresa) -->
   <h3>Descargar resumen anual</h3>

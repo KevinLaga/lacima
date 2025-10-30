@@ -1034,10 +1034,10 @@ EMPRESAS = ["RC", "LACIMA", "GH", "GOURMET", "GBF"]
 
 def _empresa_param(request):
     raw = (request.GET.get("empresa") or "").strip()
-    if not raw:
-        return None  # todas
-    up = raw.upper()
-    return up if up in EMPRESAS else None  # None = todas
+    if not raw or raw.lower() == "general":
+        return None  # None = todas
+    return raw  # devuelve el nombre tal cual: "La Cima Produce", "RC Organics", etc.
+
 @login_required
 def shipment_list(request):
     from datetime import date, timedelta
