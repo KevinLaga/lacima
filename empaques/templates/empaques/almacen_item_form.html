@@ -14,7 +14,7 @@
     .errors { background:#fde2e2; color:#7f1d1d; border:1px solid #fecaca; border-radius:6px; padding:10px; margin-bottom:12px; }
     form p { margin: 10px 0; }
     label { font-weight: 600; display:inline-block; margin-bottom:4px; }
-    input, select { width: 100%; max-width: 420px; padding: 6px 8px; }
+    input, select { width: 100%; max-width: 420px; padding: 6px 8px; } 
   </style>
 </head>
 <body>
@@ -65,7 +65,10 @@
         <label for="{{ form.location.id_for_label }}">Ubicación</label>
         {{ form.location }}
       </p>
-
+      <p>
+        <label for="{{ form.min_stock.id_for_label }}">Mínimo</label>
+        {{ form.min_stock }}
+      </p>
 
       <div class="actions">
         <button type="submit" class="btn">Guardar</button>

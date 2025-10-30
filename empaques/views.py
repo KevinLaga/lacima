@@ -630,6 +630,8 @@ def production_today(request):
 
 
 
+
+
 @login_required
 def production_days(request):
     raw_empresa = request.GET.get("empresa")
@@ -1028,8 +1030,14 @@ from datetime import date
 from collections import defaultdict
 
 from .models import Shipment, ShipmentItem
+EMPRESAS = ["RC", "LACIMA", "GH", "GOURMET", "GBF"]
 
-
+def _empresa_param(request):
+    raw = (request.GET.get("empresa") or "").strip()
+    if not raw:
+        return None  # todas
+    up = raw.upper()
+    return up if up in EMPRESAS else None  # None = todas
 @login_required
 def shipment_list(request):
     from datetime import date, timedelta
@@ -1456,6 +1464,7 @@ def shipment_list(request):
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     if descargar in ('mes', 'ano'):
+        empresa = _empresa_param(request)
         if descargar == 'mes':
             embarques = (
                 Shipment.objects

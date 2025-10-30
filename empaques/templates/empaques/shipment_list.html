@@ -16,60 +16,55 @@
     </form>
   </div>
   <style>
-    .logout-btn-wrap {
-      position: fixed; top: 12px; right: 12px; z-index: 9999;
-    }
-    .logout-btn {
-      background: #ba2121; color: #fff; border: 0; border-radius: 6px;
-      padding: .5rem .85rem; cursor: pointer; font-weight: 600;
-    }
+    .logout-btn-wrap { position: fixed; top: 12px; right: 12px; z-index: 9999; }
+    .logout-btn { background: #ba2121; color: #fff; border: 0; border-radius: 6px;
+      padding: .5rem .85rem; cursor: pointer; font-weight: 600; }
     .logout-btn:hover { opacity: .92; }
     table { border-collapse: collapse; }
     th, td { padding: 6px 10px; }
-    /* Asegurar que se vea el texto en los controles */
-    select,
-    input[type="week"],
-    input[type="date"],
-    input[type="number"],
-    input[type="text"] {
+    select, input[type="week"], input[type="date"], input[type="number"], input[type="text"] {
       background: #fff; color: #000;
     }
+    .form-inline { display:inline-block; margin-right:10px; margin-bottom: 8px; }
+    .form-inline label { margin-right: 4px; }
   </style>
 
   <h1>Embarques Registrados</h1>
   <p><a href="{% url 'shipment_create' %}">+ Nuevo Embarque</a></p>
 
   <!-- Descarga por semana (input type="week" + empresa) -->
-  <form method="get" style="display:inline-block; margin-right:10px;">
+  <form method="get" class="form-inline">
     <label for="id_iso_week">Semana:</label>
     <input type="week" id="id_iso_week" name="iso_week"
            value="{{ request.GET.iso_week|default:'' }}" required>
 
-    <label for="id_empresa">Empresa:</label>
-    <select id="id_empresa" name="empresa">
-      <option value="general" {% if request.GET.empresa == 'general' %}selected{% endif %}>General (todas)</option>
-      <option value="La Cima Produce" {% if request.GET.empresa == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
-      <option value="RC Organics" {% if request.GET.empresa == 'RC Organics' %}selected{% endif %}>RC Organics</option>
-      <option value="GH Farms" {% if request.GET.empresa == 'GH Farms' %}selected{% endif %}>GH Farms</option>
-      <option value="Gourmet Baja Farms" {% if request.GET.empresa == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
-      <option value="GBF Farms" {% if request.GET.empresa == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+    <label for="id_empresa_sem">Empresa:</label>
+    <select id="id_empresa_sem" name="empresa">
+      {% with e=request.GET.empresa|default:'general' %}
+      <option value="general" {% if e == 'general' %}selected{% endif %}>General (todas)</option>
+      <option value="La Cima Produce" {% if e == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+      <option value="RC Organics" {% if e == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+      <option value="GH Farms" {% if e == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+      <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+      <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+      {% endwith %}
     </select>
 
     <button type="submit" name="descargar" value="semana">Descargar semana</button>
   </form>
 
   <!-- Descarga por rango de fechas -->
-  <form method="get" style="display:inline-block; margin-right:10px;">
+  <form method="get" class="form-inline">
     <label for="id_start">Rango:</label>
-    <input type="date" id="id_start" name="start" required>
+    <input type="date" id="id_start" name="start" value="{{ request.GET.start|default:'' }}" required>
     <span>—</span>
-    <input type="date" id="id_end" name="end" required>
+    <input type="date" id="id_end" name="end" value="{{ request.GET.end|default:'' }}" required>
     <button type="submit" name="descargar" value="rango">Descargar rango</button>
   </form>
 
-  <!-- Formulario de descarga mensual -->
+  <!-- Formulario de descarga mensual (con empresa) -->
   <h3>Descargar resumen mensual</h3>
-  <form method="get" action="{% url 'shipment_list' %}">
+  <form method="get" action="{% url 'shipment_list' %}" class="form-inline">
     <input type="hidden" name="descargar" value="mes">
     <label for="year-mes">Año:</label>
     <input type="number" id="year-mes" name="year" min="2020" max="2100"
@@ -77,16 +72,42 @@
     <label for="month-mes">Mes:</label>
     <input type="number" id="month-mes" name="month" min="1" max="12"
            value="{{ request.GET.month|default:today.month }}">
+
+    <label for="id_empresa_mes">Empresa:</label>
+    <select id="id_empresa_mes" name="empresa">
+      {% with e=request.GET.empresa|default:'general' %}
+      <option value="general" {% if e == 'general' %}selected{% endif %}>General (todas)</option>
+      <option value="La Cima Produce" {% if e == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+      <option value="RC Organics" {% if e == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+      <option value="GH Farms" {% if e == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+      <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+      <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+      {% endwith %}
+    </select>
+
     <button type="submit">Descargar Mes</button>
   </form>
 
-  <!-- Formulario de descarga anual -->
+  <!-- Formulario de descarga anual (con empresa) -->
   <h3>Descargar resumen anual</h3>
-  <form method="get" action="{% url 'shipment_list' %}">
+  <form method="get" action="{% url 'shipment_list' %}" class="form-inline">
     <input type="hidden" name="descargar" value="ano">
     <label for="year-ano">Año:</label>
     <input type="number" id="year-ano" name="year" min="2020" max="2100"
            value="{{ request.GET.year|default:today.year }}">
+
+    <label for="id_empresa_ano">Empresa:</label>
+    <select id="id_empresa_ano" name="empresa">
+      {% with e=request.GET.empresa|default:'general' %}
+      <option value="general" {% if e == 'general' %}selected{% endif %}>General (todas)</option>
+      <option value="La Cima Produce" {% if e == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+      <option value="RC Organics" {% if e == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+      <option value="GH Farms" {% if e == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+      <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+      <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+      {% endwith %}
+    </select>
+
     <button type="submit">Descargar Año</button>
   </form>
 
@@ -121,13 +142,10 @@
         <td>{{ s.invoice_number }}</td>
         <td>{{ s.date }}</td>
         <td>
-          <!-- Ver reporte por fecha (lista del día) -->
           <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver día</a>
           &nbsp;|&nbsp;
-          <!-- Ver reporte específico (solo este embarque) -->
           <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}">Ver Reporte</a>
         </td>
-        <!-- números de orden por empresa (sólo mostrar valor si existe) -->
         <td>{{ s.order_lacima|default_if_none:"" }}</td>
         <td>{{ s.order_rc|default_if_none:"" }}</td>
         <td>{{ s.order_gh|default_if_none:"" }}</td>
