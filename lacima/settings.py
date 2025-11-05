@@ -10,6 +10,14 @@ import dj_database_url
 # Rutas base
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "data")))  # <-- usa /srv/lacima/data en prod
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": str(DATA_DIR / "db.sqlite3"),
+    }
+}
 
 # -----------------------------
 # Utilidades
