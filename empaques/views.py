@@ -142,8 +142,9 @@ COMPANY_CANON = {
     'gh': 'GH',
     'gourmet': 'GOURMET',
     'gbf': 'GBF',
+    'AGRICOLA DH & G': 'AGRICOLA DH & G',
 }
-COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF']
+COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G']
 DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
 
 import unicodedata
@@ -601,7 +602,7 @@ def production_today(request):
         "rows": rows,
         "ship_cols_labels": ship_cols,
         "empresa": empresa,
-        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF"],
+        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G"],
 
         # Bloque inferior (se quedan al recargar)
         "exist_piso_ayer": exist_piso_ayer,
@@ -669,6 +670,7 @@ def production_xlsx(request, prod_date):
         "GH":      "Empaque N.1 S. DE R.L. DE C.V.",
         "GOURMET": "Gourmet Baja Farms S. DE R.L. DE C.V.",
         "GBF":     "GBF Farms S. DE R.L. DE C.V.",
+        "AGRICOLA DH & G": "AGRICOLA DH & G",
     }
     LOGO_SLUG = {
         "LACIMA":  "la-cima-produce",
@@ -676,6 +678,7 @@ def production_xlsx(request, prod_date):
         "GH":      "gh-farms",
         "GOURMET": "gourmet-baja-farms",
         "GBF":     "gbf-farms",
+        "AGRICOLA DH & G": "agricola",
     }
     legal_name = LEGAL_COMPANY.get(empresa, empresa)
     logo_slug  = LOGO_SLUG.get(empresa)
@@ -1207,6 +1210,8 @@ def shipment_list(request):
                 return getattr(embarque, "order_gourmet", None)
             if "gbf" in cname:
                 return getattr(embarque, "order_gbf", None)
+            if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
+                return getattr(embarque, "order_dhg", None)
             return None
         iso_week = request.GET.get('iso_week')  # ej: "2025-W35"
         empresa = (request.GET.get('empresa') or 'general').strip()

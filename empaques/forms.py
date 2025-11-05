@@ -49,6 +49,7 @@ class ShipmentForm(forms.ModelForm):
     order_gourmet  = forms.CharField(label='Núm. orden Gourmet Baja',   required=False)
     order_gbf      = forms.CharField(label='Núm. orden GBF Farms',      required=False)
     order_gh      = forms.CharField(label='Núm. orden GH Farms',      required=False)
+    order_dhg      = forms.CharField(label='Núm. orden AGRICOLA DH & G', required=False)
 
     class Meta:
         model = Shipment
@@ -59,7 +60,7 @@ class ShipmentForm(forms.ModelForm):
             'delivery_signature','driver_signature','invoice_number','tarimas_peco', 
 
             # 👇 AÑADE ESTOS CAMPOS AQUÍ
-            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh',
+            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg',
         ]
         labels = {
             'order_lacima':   'Núm. orden CIMA',
@@ -67,6 +68,7 @@ class ShipmentForm(forms.ModelForm):
             'order_gourmet':  'Núm. orden Gourmet Baja',
             'order_gbf':      'Núm. orden GBF Farms',
             'order_gh':      'Núm. orden GH Farms',
+            'order_dhg':      'Núm. orden AGRICOLA DH & G',
         }
 
 
@@ -77,6 +79,7 @@ CLIENTE_CHOICES = [
     ('GH Farms', 'GH Farms'),
     ('Gourmet Baja Farms', 'Gourmet Baja Farms'),
     ('GBF Farms', 'GBF Farms'),
+    ('AGRICOLA DH & G', 'AGRICOLA DH & G'),
 ]
 
 class ShipmentItemForm(ModelForm):

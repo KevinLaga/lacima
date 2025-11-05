@@ -38,6 +38,7 @@
     <input type="week" id="id_iso_week" name="iso_week"
            value="{{ request.GET.iso_week|default:'' }}" required>
 
+<<<<<<< HEAD
     <label for="id_empresa_sem">Empresa:</label>
     <select id="id_empresa_sem" name="empresa">
       {% with e=request.GET.empresa|default:'general' %}
@@ -48,6 +49,18 @@
       <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
       <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
       {% endwith %}
+=======
+    <label for="id_empresa">Empresa:</label>
+    <select id="id_empresa" name="empresa">
+      <option value="general" {% if request.GET.empresa == 'general' %}selected{% endif %}>General (todas)</option>
+      <option value="La Cima Produce" {% if request.GET.empresa == 'La Cima Produce' %}selected{% endif %}>La Cima Produce</option>
+      <option value="RC Organics" {% if request.GET.empresa == 'RC Organics' %}selected{% endif %}>RC Organics</option>
+      <option value="GH Farms" {% if request.GET.empresa == 'GH Farms' %}selected{% endif %}>GH Farms</option>
+      <option value="Gourmet Baja Farms" {% if request.GET.empresa == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
+      <option value="GBF Farms" {% if request.GET.empresa == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
+      <option value="AGRICOLA DH & G" {% if request.GET.empresa == 'AGRICOLA DH & G' %}selected{% endif %}>AGRICOLA DH & G</option>
+
+>>>>>>> 84891f9 (Añado nuevo cliente)
     </select>
 
     <button type="submit" name="descargar" value="semana">Descargar semana</button>
@@ -128,6 +141,7 @@
         <th>GH</th>
         <th>Gourmet</th>
         <th>GBF</th>
+        <th>AGRICOLA DH & G</th>
       </tr>
     </thead>
     <tbody>
@@ -147,6 +161,7 @@
         <td>{{ s.order_gh|default_if_none:"" }}</td>
         <td>{{ s.order_gourmet|default_if_none:"" }}</td>
         <td>{{ s.order_gbf|default_if_none:"" }}</td>
+        <td>{{ s.order_dhg|default_if_none:"" }}</td>
       </tr>
     {% empty %}
       <tr><td colspan="10">No hay embarques aún.</td></tr>
