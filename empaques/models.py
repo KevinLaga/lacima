@@ -18,7 +18,7 @@ class Presentation(models.Model):
     # Factor para convertir a “equivalentes de 11 lbs”
     name = models.CharField(max_length=100, unique=True)
     conversion_factor = models.DecimalField(max_digits=32, decimal_places=16)
-    price = models.DecimalField(max_digits=6, decimal_places=2)
+    price = models.DecimalField(max_digits=32, decimal_places=16)
 
 
     def __str__(self):
@@ -46,7 +46,7 @@ class Shipment(models.Model):
     tractor_plates = models.CharField(max_length=20, verbose_name="Placas tractor", blank=True)
     box_plates = models.CharField(max_length=20, verbose_name="Placas caja", blank=True)
     driver = models.CharField(max_length=50, verbose_name="Operador", blank=True)
-    departure_time = models.CharField(max_length=20, verbose_name="Horario de salida", blank=True)
+    departure_time = models.CharField(max_length=20, verbose_name="Horario de salida", blank=True, required=False)
     box = models.CharField(max_length=30, verbose_name="Caja", blank=True)
     box_conditions = models.CharField(max_length=100, verbose_name="Condiciones de la caja", blank=True)
     box_free_of_odors = models.CharField(max_length=50, verbose_name="Caja libre de olores", blank=True)
