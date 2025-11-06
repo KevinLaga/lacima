@@ -254,18 +254,46 @@ def _season_bounds(hoy=None):
     )
     return season_start, hoy
 
+def _day_increments(fday, empresa):
+    """
+    Devuelve (cajas_trabajadas, eq11_dia) calculados SOLO con datos del día y del día previo real.
+    No usa ni confía en 'acum_*' guardados.
+    """
+    data = _load_prod(fday, empresa) or {}
+
+    exist_piso_hoy  = int(data.get("exist_piso_hoy") or 0)
+    recibidas       = int(data.get("cajas_campo_recibidas") or 0)
+
+    prev = _load_last_before(fday, empresa) or {}
+    exist_piso_ayer = int(prev.get("exist_piso_hoy") or 0)
+
+    cajas_trabajadas = (exist_piso_ayer + recibidas) - exist_piso_hoy
+    if cajas_trabajadas < 0:
+        cajas_trabajadas = 0
+
+    # Eq. 11 lb del día = sum(prod_dia * factor_presentación) por cada fila
+    rows = (data.get("rows") or {})
+    pres_cf = { (n or "").strip().upper(): float(cf or 1.0)
+                for (n, cf) in Presentation.objects.values_list("name", "conversion_factor") }
+    eq11_dia = 0.0
+    for key, r in rows.items():
+        pres = key.split("|", 1)[0] if "|" in key else key
+        cf = pres_cf.get((pres or "").strip().upper(), 1.0)
+        prod_dia = int(r.get("prod_dia", 0))
+        eq11_dia += prod_dia * cf
+
+    return int(cajas_trabajadas or 0), float(eq11_dia or 0.0)
+
 def _season_acum_until(d, empresa):
     """
-    Recalcula SIEMPRE los acumulados de temporada desde el inicio de temporada
-    hasta la fecha 'd' (INCLUIDA si hay JSON ese día). No depende de 'ayer'.
-    Devuelve (acum_cosechadas, acum_empacadas_eq11).
+    Suma incremental estricta desde el inicio de temporada hasta 'd' INCLUIDO.
+    Ignora por completo cualquier 'acum_*' guardado en los JSON.
     """
     start, _ = _season_bounds(d)
     subdir = PROD_DIR / company_slug(empresa)
     if not subdir.exists():
         return (0, 0.0)
 
-    # Recorremos todos los JSON de la temporada hasta 'd'
     acum_cosechadas = 0
     acum_empacadas  = 0.0
 
@@ -279,48 +307,12 @@ def _season_acum_until(d, empresa):
         if fday < start or fday > d:
             continue
 
-        data = _load_prod(fday, empresa) or {}
+        ct, eq11 = _day_increments(fday, empresa)
+        acum_cosechadas += ct
+        acum_empacadas  += eq11
 
-        # Si ya están guardados los acumulados del día, úsalos directo:
-        ac = data.get("acum_cosechadas")
-        ae = data.get("acum_empacadas")
-        if ac is not None and ae is not None:
-            # OJO: estos valores ya son "hasta ese día", no son incrementales.
-            # Para tener el valor "hasta d" nos quedamos con el ÚLTIMO del rango.
-            acum_cosechadas = int(ac or 0)
-            acum_empacadas  = float(ae or 0.0)
-            continue
+    return int(acum_cosechadas or 0), float(acum_empacadas or 0.0)
 
-        # Si ese JSON es viejo y no trae 'acum_*', lo reconstruimos “a mano”:
-        #   cajas_trabajadas = (exist_piso_ayer + recibidas) - exist_piso_hoy
-        exist_piso_hoy  = int((data.get("exist_piso_hoy") or 0))
-        recibidas       = int((data.get("cajas_campo_recibidas") or 0))
-        # Para 'exist_piso_ayer' necesitamos leer el día previo real:
-        prev = _load_last_before(fday, empresa) or {}
-        exist_piso_ayer = int((prev.get("exist_piso_hoy") or 0))
-        cajas_trabajadas = (exist_piso_ayer + recibidas) - exist_piso_hoy
-        if cajas_trabajadas < 0:
-            cajas_trabajadas = 0  # por seguridad
-
-        # Eq 11 lb de producción del día (si no está guardado, lo calculamos)
-        # Suma prod_dia * factor por cada combo guardado
-        eq11_dia = 0.0
-        rows = (data.get("rows") or {})
-        # Necesitamos factores de conversión:
-        pres_cf = { (n or "").strip().upper(): float(cf or 1.0)
-                    for (n, cf) in Presentation.objects.values_list("name", "conversion_factor") }
-        for key, r in rows.items():
-            # key = "PRESENTACION|TAMANO"
-            pres = key.split("|", 1)[0] if "|" in key else key
-            cf = pres_cf.get((pres or "").strip().upper(), 1.0)
-            prod_dia = int(r.get("prod_dia", 0))
-            eq11_dia += prod_dia * cf
-
-        # Estos son incrementales; acumulamos sobre el último total que llevábamos
-        acum_cosechadas += int(cajas_trabajadas or 0)
-        acum_empacadas  += float(eq11_dia or 0.0)
-
-    return (int(acum_cosechadas or 0), float(acum_empacadas or 0.0))
 
 
 def _save_prod(d: _date, payload: dict, company: str | None = None):
@@ -606,9 +598,7 @@ def production_today(request):
     if base_empacadas_ayer is None:
         base_empacadas_ayer  = float(saved_today.get("acum_empacadas_ayer", 0.0))
 
-   # Acumulados de temporada hasta HOY, robustos (no dependen de 'ayer'):
-    total_cosechadas_acumulado, total_empacadas_acumulado = _season_acum_until(prod_date, empresa)
-    factor_global = (total_empacadas_acumulado / total_cosechadas_acumulado) if total_cosechadas_acumulado else 0.0
+
 
 
     # --- POST: guardar por empresa ---
@@ -670,8 +660,8 @@ def production_today(request):
         cajas_campo_trabajadas_post = total_cajas_trabajar_post - exist_piso_hoy_post
 
         # Base de acumulados AYER:
-        bc_ayer = saved_yday.get("acum_cosechadas")
-        be_ayer = saved_yday.get("acum_empacadas")
+        acum_cosechadas_hasta_ayer, acum_empacadas_hasta_ayer = _season_acum_until(prod_date - timedelta(days=1), empresa)
+
         # si no hay JSON de ayer, tomamos lo que capture el usuario
         if bc_ayer is None:
             bc_ayer = int(_num_global("acum_cosechadas_ayer"))
@@ -679,8 +669,8 @@ def production_today(request):
             be_ayer = float(_num_global("acum_empacadas_ayer"))
 
         # Nuevos acumulados de temporada (con HOY)
-        new_acum_cosechadas = int(bc_ayer or 0) + int(cajas_campo_trabajadas_post or 0)
-        new_acum_empacadas  = float(be_ayer or 0.0) + float(total_eq11_produccion_post or 0.0)
+        new_acum_cosechadas = int(acum_cosechadas_hasta_ayer or 0) + int(cajas_campo_trabajadas_post or 0)
+        new_acum_empacadas  = float(acum_empacadas_hasta_ayer or 0.0) + float(total_eq11_produccion_post or 0.0)
 
         order_number_post = (request.POST.get("order_number") or "").strip()
 
@@ -691,13 +681,12 @@ def production_today(request):
             "exist_piso_hoy": exist_piso_hoy_post,
             "cajas_campo_recibidas": cajas_campo_recibidas_post,
 
-            # Persistimos para que el primer día no se borren tras guardar
-            "acum_cosechadas_ayer": int(_num_global("acum_cosechadas_ayer")),
-            "acum_empacadas_ayer": float(_num_global("acum_empacadas_ayer")),
+            "acum_cosechadas_ayer": int(request.POST.get("acum_cosechadas_ayer", 0) or 0),
+            "acum_empacadas_ayer": float(request.POST.get("acum_empacadas_ayer", 0) or 0.0),
 
-            # Acumulados “de temporada” (con HOY ya sumado)
-            "acum_cosechadas": _season_acum_until(prod_date, empresa)[0],
-            "acum_empacadas": round(_season_acum_until(prod_date, empresa)[1], 2),
+            # Acumulados ESTRICTOS de temporada (con HOY):
+            "acum_cosechadas": int(new_acum_cosechadas),
+            "acum_empacadas": round(float(new_acum_empacadas), 2),
 
             "order_number": order_number_post, 
         }
@@ -709,6 +698,13 @@ def production_today(request):
     totals_row_eq11 = [0.0]*11
     # (opcional) puedes llenarlos si los ocupas
 
+    # --- Acumulado hasta AYER (estricto, no confía en JSONs viejos) ---
+    prev_day = prod_date - timedelta(days=1)
+    acum_cosechadas_hasta_ayer, acum_empacadas_hasta_ayer = _season_acum_until(prev_day, empresa)
+
+    # --- Acumulado hasta HOY (estricto, para la tarjeta grande) ---
+    total_cosechadas_acumulado, total_empacadas_acumulado = _season_acum_until(prod_date, empresa)
+    factor_global = (total_empacadas_acumulado / total_cosechadas_acumulado) if total_cosechadas_acumulado else 0.0
     # Contexto COMPLETO (incluye bloque inferior y acumulados)
     ctx = {
         "prod_date": prod_date,
@@ -727,6 +723,8 @@ def production_today(request):
         # Si no hay JSON de AYER, prellenamos lo que ya se hubiera capturado hoy
         "acum_cosechadas_ayer": int(saved_today.get("acum_cosechadas_ayer", 0)),
         "acum_empacadas_ayer": float(saved_today.get("acum_empacadas_ayer", 0.0)),
+        "acum_cosechadas_hasta_ayer": int(acum_cosechadas_hasta_ayer or 0),
+        "acum_empacadas_hasta_ayer": round(float(acum_empacadas_hasta_ayer or 0.0), 2),
 
         # Acumulados de temporada (con HOY)
         "total_cosechadas_acumulado": total_cosechadas_acumulado,

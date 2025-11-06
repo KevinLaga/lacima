@@ -205,21 +205,47 @@
             <h5 class="mb-3">Acumulados de temporada</h5>
 
             <div class="row g-3">
+              <!-- COSECHADAS (acumulado hasta AYER, calculado) -->
               <div class="col-12">
-                <label class="form-label"><strong>Total de cajas de campo cosechadas (acumulado hasta AYER)</strong></label>
-                <input type="number" name="acum_cosechadas_ayer" step="1"
-                      value="{{ acum_cosechadas_ayer|default:0 }}"
-                      class="form-control w-qty">
-                <div class="help-tiny">Solo el primer día. Después se toma automático del día anterior.</div>
+                <label class="form-label">
+                  <strong>Total de cajas de campo cosechadas (acumulado hasta AYER)</strong>
+                </label>
+
+                <!-- Muestra el valor calculado y bloqueado -->
+                <input type="number" step="1" class="form-control w-qty"
+                      value="{{ acum_cosechadas_hasta_ayer|default:0 }}" readonly>
+
+                <!-- (opcional) aún enviamos lo que el usuario ponga el primer día;
+                    si no quieres guardar nada manual, elimina este hidden -->
+                <input type="hidden" name="acum_cosechadas_ayer"
+                      value="{{ acum_cosechadas_ayer|default:0 }}">
+
+                <div class="help-tiny">
+                  Calculado automáticamente con el último día previo. El hidden solo se usa el primer día.
+                </div>
               </div>
+
+              <!-- EMPACADAS (acumulado hasta AYER, calculado) -->
               <div class="col-12">
-                <label class="form-label"><strong>Total de cajas empacadas (acumulado hasta AYER, Eq. 11 lb)</strong></label>
-                <input type="number" name="acum_empacadas_ayer" step="0.01"
-                      value="{{ acum_empacadas_ayer|default:0 }}"
-                      class="form-control w-qty">
-                <div class="help-tiny">Solo el primer día. Después se toma automático del día anterior.</div>
+                <label class="form-label">
+                  <strong>Total de cajas empacadas (acumulado hasta AYER, Eq. 11 lb)</strong>
+                </label>
+
+                <!-- Muestra el valor calculado y bloqueado -->
+                <input type="number" step="0.01" class="form-control w-qty"
+                      value="{{ acum_empacadas_hasta_ayer|default:0 }}" readonly>
+
+                <!-- (opcional) hidden de respaldo para el primer día -->
+                <input type="hidden" name="acum_empacadas_ayer"
+                      value="{{ acum_empacadas_ayer|default:0 }}">
+
+                <div class="help-tiny">
+                  Calculado automáticamente con el último día previo. El hidden solo se usa el primer día.
+                </div>
               </div>
             </div>
+          </div>
+        </div>
 
             <hr class="my-3">
 
