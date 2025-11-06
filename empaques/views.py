@@ -1854,6 +1854,7 @@ def shipment_list(request):
 
     # ...
     if request.GET.get('descargar') == 'semana':
+        from collections import defaultdict
         from io import BytesIO
         from datetime import date, timedelta
         from openpyxl import Workbook
@@ -2152,6 +2153,7 @@ def shipment_list(request):
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
     if descargar in ('mes', 'ano'):
+        from collections import defaultdict
         empresa = _empresa_param(request)  # None => general (todas)
 
 
