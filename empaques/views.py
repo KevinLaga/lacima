@@ -2,6 +2,7 @@ import os
 import csv
 from datetime import date
 from collections import defaultdict
+import collections
 
 from django.conf import settings
 from django.shortcuts import render, redirect
@@ -218,6 +219,145 @@ def _row_has_numbers(saved_row, per4):
     return any((x or 0) for x in manuales + list(per4 or []))
 
 
+# === HELPERS DE DISEÑO PARA SEMANAL ===
+def _week_single_company_sheet(wb, monday, sunday, empresa_label, rows_iter):
+    """Hoja estilo 'anterior' para una sola empresa."""
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.utils import get_column_letter
+    import os
+
+    ws = wb.create_sheet(f"Semana - {empresa_label}")
+    ws.title = f"Semana - {empresa_label}"
+
+    # Estilos
+    title_font   = Font(name='Calibri', size=18, bold=True, color="3C78D8")
+    subtitle_font= Font(name='Calibri', size=11, italic=True, color="6D6D6D")
+    th_font      = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+    th_fill      = PatternFill("solid", fgColor="225577")
+    thin_border  = Border(
+        left=Side(style='thin', color='AAAAAA'),
+        right=Side(style='thin', color='AAAAAA'),
+        top=Side(style='thin', color='AAAAAA'),
+        bottom=Side(style='thin', color='AAAAAA'),
+    )
+
+    # Logo
+    LOGO_SLUG_MAP = {
+        "La Cima Produce": "la-cima-produce",
+        "RC Organics": "gh-farms",
+        "GH Farms": "gh-farms",
+        "Gourmet Baja Farms": "gourmet-baja-farms",
+        "GBF Farms": "gbf-farms",
+        "AGRICOLA DH & G": "agricola",
+    }
+    logo_slug = LOGO_SLUG_MAP.get(empresa_label)
+    if logo_slug:
+        logo_path = os.path.join(settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
+        if os.path.exists(logo_path):
+            img = XLImage(logo_path)
+            target_h = 120
+            scale = target_h / img.height
+            img.width  = int(img.width * scale)
+            img.height = int(img.height * scale)
+            ws.add_image(img, "A1")
+
+    # Título
+    ws.merge_cells(start_row=1, start_column=4, end_row=2, end_column=10)  # D1:J2
+    title = f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {empresa_label}"
+    tcell = ws.cell(row=1, column=4, value=title)
+    tcell.font = title_font
+    tcell.alignment = Alignment(horizontal="left", vertical="center")
+
+    ws.cell(row=3, column=4, value="Detalle de embarques y totales por semana") \
+      .font = subtitle_font
+
+    # Encabezados
+    headers = ["N° EMBARQUE", "N° FACTURA", "FECHA", "PRESENTACIÓN", "TAMAÑO",
+               "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)"]
+    row = 7
+    for col, h in enumerate(headers, start=1):
+        c = ws.cell(row=row, column=col, value=h)
+        c.font = th_font; c.fill = th_fill
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = thin_border
+    ws.row_dimensions[row].height = 22
+    row += 1
+
+    # Ancho cómodo (grande)
+    for idx in range(1, len(headers)+1):
+        ws.column_dimensions[get_column_letter(idx)].width = 24
+    ws.freeze_panes = "A8"
+
+    total_boxes = 0
+    total_eq    = 0.0
+    total_amt   = 0.0
+
+    # rows_iter: iterable de dicts con keys: num_emb, inv, date, pres, size, qty, eq, amt
+    for r in rows_iter:
+        ws.cell(row=row, column=1, value=r["num_emb"])
+        ws.cell(row=row, column=2, value=r["inv"])
+        ws.cell(row=row, column=3, value=r["date"].strftime('%d/%m/%Y'))
+        ws.cell(row=row, column=4, value=r["pres"])
+        ws.cell(row=row, column=5, value=r["size"])
+        ws.cell(row=row, column=6, value=r["qty"])
+        ws.cell(row=row, column=7, value=round(r["eq"], 2))
+        ws.cell(row=row, column=8, value=round(r["amt"], 2))
+        for c in range(1, 9):
+            ws.cell(row=row, column=c).border = thin_border
+            if c in (6, 7, 8):
+                ws.cell(row=row, column=c).alignment = Alignment(horizontal="right")
+            else:
+                ws.cell(row=row, column=c).alignment = Alignment(horizontal="center")
+        total_boxes += r["qty"]; total_eq += r["eq"]; total_amt += r["amt"]
+        row += 1
+
+    # Totales
+    row += 1
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+    ws.cell(row=row, column=1, value="TOTALES:") \
+      .font = Font(name='Calibri', size=12, bold=True, color="225577")
+    ws.cell(row=row, column=6, value=total_boxes).font = Font(bold=True)
+    ws.cell(row=row, column=7, value=round(total_eq, 2)).font = Font(bold=True)
+    ws.cell(row=row, column=8, value=round(total_amt, 2)).font = Font(bold=True)
+    return ws
+
+
+def _week_multi_company_sheet(wb, monday, sunday, company_sections, grand_totals):
+    """Hoja multiempresa (nueva) con secciones por empresa y totales generales."""
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    ws = wb.create_sheet("Resumen por empresa")
+
+    title_font   = Font(name='Calibri', size=18, bold=True, color="3C78D8")
+    th_font      = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+    th_fill      = PatternFill("solid", fgColor="225577")
+    thin_border  = Border(
+        left=Side(style='thin', color='AAAAAA'),
+        right=Side(style='thin', color='AAAAAA'),
+        top=Side(style='thin', color='AAAAAA'),
+        bottom=Side(style='thin', color='AAAAAA'),
+    )
+
+    r = 1
+    ws.cell(row=r, column=1, value=f"Resumen semanal {monday:%d/%m/%Y} – {sunday:%d/%m/%Y}").font = title_font
+    r += 2
+
+    # company_sections: iterable de (empresa_label, pres_info, totals, detalle_rows)
+    for comp, write_func in company_sections:
+        r = write_func(ws, r, thin_border, th_font, th_fill, comp)
+
+    # Totales generales
+    ws.cell(row=r, column=1, value="TOTALES GENERALES").font = Font(size=14, bold=True); r += 1
+    headers_tot = ["Métrica", "Total"]
+    for c, txt in enumerate(headers_tot, start=1):
+        cell = ws.cell(row=r, column=c, value=txt)
+        cell.font = th_font; cell.fill = th_fill
+    r += 1
+    for label, val in grand_totals:
+        ws.cell(row=r, column=1, value=label)
+        ws.cell(row=r, column=2, value=val)
+        r += 1
+    return ws
 
 def load_prod(d: date):
     p = _prod_path(d)
@@ -594,7 +734,7 @@ def _compute_company_summary(company_name, tuples_cs):
     - detalle_items: lista [(fecha, tracking, factura, pres, size, qty, importe)]
     """
     from collections import defaultdict
-    presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
+    presentaciones_info = collections.defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
     detalle = []
     total_cajas = 0
     total_eq11  = 0.0
@@ -1593,7 +1733,7 @@ def shipment_list(request):
         items = ShipmentItem.objects.filter(shipment__in=embarques_qs).select_related('presentation')
 
         # Agregados por presentación/tamaño
-        presentaciones_info = defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
+        presentaciones_info = collections.defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
         for it in items:
             k = (it.presentation.name, it.size)
             presentaciones_info[k]['cajas'] += it.quantity
@@ -1720,6 +1860,7 @@ def shipment_list(request):
         from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
         from openpyxl.utils import get_column_letter
         from decimal import Decimal
+        import collections  # ← evita UnboundLocalError al usar defaultdict
 
         iso_week = request.GET.get('iso_week')  # ej: "2025-W35"
         empresa  = (request.GET.get('empresa') or 'general').strip()
@@ -1754,9 +1895,9 @@ def shipment_list(request):
             bottom=Side(style='thin', color='AAAAAA'),
         )
 
-        # ------------------------------------------------------------------
-        # 1) DISEÑO EMPRESA ESPECÍFICA (una sola tabla, como antes)
-        # ------------------------------------------------------------------
+        # ================================================================
+        # 1) DISEÑO EMPRESA ESPECÍFICA (una sola tabla, como el “anterior”)
+        # ================================================================
         if empresa.lower() != 'general':
             wb = Workbook()
             ws = wb.active
@@ -1769,6 +1910,7 @@ def shipment_list(request):
             tcell.font = Font(size=18, bold=True, color="3C78D8")
             ws.cell(row=3, column=1, value="Detalle de embarques").font = Font(italic=True, color="6D6D6D")
 
+            # Encabezados “clásicos”
             headers = ["N° EMBARQUE", "N° FACTURA", "FECHA", "PRESENTACIÓN", "TAMAÑO",
                     "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)"]
             r = 5
@@ -1778,6 +1920,12 @@ def shipment_list(request):
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.border = thin
             r += 1
+
+            # Anchos amplios + freeze panes (igual “sensación” de antes)
+            for idx in range(1, len(headers)+1):
+                ws.column_dimensions[get_column_letter(idx)].width = 24
+            ws.freeze_panes = "A6"
+            ws.auto_filter.ref = f"A5:H5"
 
             total_boxes = 0
             total_eq    = 0.0
@@ -1824,20 +1972,19 @@ def shipment_list(request):
             resp["Content-Disposition"] = f'attachment; filename="{filename}"'
             return resp
 
-        # ------------------------------------------------------------------
-        # 2) DISEÑO GENERAL (dos hojas)
-        #    - "Resumen por empresa": sección por empresa con totales
-        #    - "GENERAL": matriz Semana | Rango | empresas... | TOTAL_EQ11
-        # ------------------------------------------------------------------
+        # ================================================================
+        # 2) DISEÑO GENERAL (dos hojas):
+        #    - "Resumen por empresa" (secciones por empresa)
+        #    - "GENERAL" (matriz Semana | Rango | empresas... | TOTAL_EQ11)
+        # ================================================================
         # Mapa {empresa: [(shipment,item), ...]}
-        from collections import defaultdict
-        company_pairs = defaultdict(list)
+        company_pairs = collections.defaultdict(list)
         for comp, s, it in _iter_company_items(weeks_qs, None):
             company_pairs[comp].append((s, it))
 
         wb = Workbook()
 
-        # 2.1 Hoja por empresa
+        # 2.1 Hoja por empresa (usa tu writer de sección)
         ws = wb.active
         ws.title = "Resumen por empresa"
         ws.cell(row=1, column=1, value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – GENERAL") \
@@ -1847,7 +1994,6 @@ def shipment_list(request):
         grand_cajas = grand_eq = grand_amt = 0.0
         for comp in sorted(company_pairs.keys(), key=lambda x: x.upper()):
             pres_info, totals, detalle = _compute_company_summary(comp, company_pairs[comp])
-            # reutiliza el writer que formatea sección completa
             r = _write_company_section(ws, r, thin, th_font, th_fill, comp, pres_info, totals, detalle)
             grand_cajas += totals["total_cajas"]
             grand_eq    += totals["total_eq11"]
@@ -1870,7 +2016,7 @@ def shipment_list(request):
             cell.font = th_font; cell.fill = th_fill
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        # semana y rango
+        # Etiquetas semana/rango
         if weeks_qs:
             d1 = min(s.date for s in weeks_qs); d2 = max(s.date for s in weeks_qs)
             week_label = f"{d1.isocalendar().week}"
@@ -1878,7 +2024,7 @@ def shipment_list(request):
         else:
             week_label = ""; rango = ""
 
-        # importes por empresa + total eq11
+        # Importes por empresa + total eq11
         per_company_amt = {e: 0.0 for e in empresas}
         per_company_eq  = {e: 0.0 for e in empresas}
         total_eq11 = 0.0
@@ -1890,7 +2036,7 @@ def shipment_list(request):
             per_company_eq[comp]  += qty * cf
             per_company_amt[comp] += qty * prc
 
-        # ajuste especial por empresa (AGRICOLA DH & G)
+        # Ajuste especial por empresa (AGRICOLA DH & G)
         for comp in empresas:
             if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
                 per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq[comp])))
@@ -1903,7 +2049,7 @@ def shipment_list(request):
             ws2.cell(row=row, column=c, value=round(per_company_amt[emp], 2)); c += 1
         ws2.cell(row=row, column=c, value=round(total_eq11, 2))
 
-        # Anchos
+        # Anchos cómodos
         ws2.column_dimensions['A'].width = 10
         ws2.column_dimensions['B'].width = 28
         for col_idx in range(3, 3 + len(empresas) + 1):
@@ -1915,7 +2061,6 @@ def shipment_list(request):
         resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
-
 
 
 
@@ -2019,7 +2164,7 @@ def shipment_list(request):
         empresa_filter = empresa  # ya viene de _empresa_param(request) (None => general)
 
         # Arma mapa {empresa: [(s,it), ...]}
-        company_map = defaultdict(list)
+        company_map = collections.defaultdict(list)
         for comp, s, it in _iter_company_items(embarques, empresa_filter):
             company_map[comp].append((s, it))
 
@@ -2108,7 +2253,7 @@ def shipment_list(request):
 
         # Agrupa los embarques del periodo por ISO-week
         # (ya vienen filtrados por mes o año arriba en 'embarques')
-        weeks_map = defaultdict(list)   # {(y,w): [(s,it), ...]}
+        weeks_map = collections.defaultdict(list) 
         for comp, s, it in _iter_company_items(embarques, None):
             yw = s.date.isocalendar()   # (year, week, weekday)
             key = (yw.year, yw.week)
