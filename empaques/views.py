@@ -246,13 +246,6 @@ def _load_prod(d: _date, company: str | None = None):
         return json.loads(p.read_text(encoding="utf-8"))
     return None
 
-def _season_bounds(hoy=None):
-    hoy = hoy or timezone.localdate()
-    season_start = _date(
-        hoy.year if hoy.month >= SEASON_START_MONTH else hoy.year - 1,
-        SEASON_START_MONTH, SEASON_START_DAY
-    )
-    return season_start, hoy
 
 def _day_increments(fday, empresa):
     """
@@ -428,31 +421,52 @@ from django.utils import timezone
 SEASON_START_MONTH = 4
 SEASON_START_DAY   = 1
 
-
+def _season_bounds(hoy=None):
+    hoy = hoy or timezone.localdate()
+    season_start = _date(hoy.year if hoy.month >= SEASON_START_MONTH else hoy.year - 1,
+                         SEASON_START_MONTH, SEASON_START_DAY)
+    return season_start, hoy
 
 def _load_last_before(d, empresa):
-    """
-    Carga el último JSON guardado ANTES de la fecha d (no solo 'ayer').
-    Si no existe, devuelve {}.
-    """
     subdir = PROD_DIR / company_slug(empresa)
     if not subdir.exists():
         return {}
-
     best_day = None
     for fname in os.listdir(subdir):
         if not fname.endswith(".json"):
             continue
         try:
-            fday = _date.fromisoformat(fname[:-5])  # YYYY-MM-DD.json
+            fday = _date.fromisoformat(fname[:-5])
         except ValueError:
             continue
         if fday < d and (best_day is None or fday > best_day):
             best_day = fday
+    return _load_prod(best_day, empresa) or {} if best_day else {}
 
-    if best_day:
-        return _load_prod(best_day, empresa) or {}
-    return {}
+def _effective_acum_base(day, empresa, saved_today):
+    """
+    Devuelve (base_cosechadas, base_empacadas) para 'hasta AYER'.
+    Si 'use_manual_acum' está activo en el día, usa campos manuales del día.
+    Si no, usa el último día previo con JSON. Si tampoco hay, usa los manuales del propio día (primer día).
+    """
+    prev = _load_prod(day - timedelta(days=1), empresa) or _load_last_before(day, empresa) or {}
+    base_c_auto = prev.get("acum_cosechadas")
+    base_e_auto = prev.get("acum_empacadas")
+
+    man_c = saved_today.get("acum_cosechadas_ayer")
+    man_e = saved_today.get("acum_empacadas_ayer")
+    use_manual = bool(saved_today.get("use_manual_acum"))
+
+    if use_manual:
+        return int(man_c or 0), float(man_e or 0.0)
+
+    base_c = base_c_auto if base_c_auto is not None else int(saved_today.get("acum_cosechadas_ayer", 0))
+    base_e = base_e_auto if base_e_auto is not None else float(saved_today.get("acum_empacadas_ayer", 0.0))
+    return int(base_c or 0), float(base_e or 0.0)
+
+
+
+
 
 
 
@@ -504,11 +518,8 @@ def _display_combos():
 @login_required
 @require_http_methods(["GET", "POST"])
 def production_today(request):
-    from decimal import Decimal, ROUND_HALF_UP
     from .models import Presentation
-    
 
-    # Empresa (RC/LACIMA/GH/GOURMET/GBF)
     raw_empresa = request.GET.get("empresa") or request.POST.get("empresa")
     empresa = canon_company(raw_empresa) or DEFAULT_COMPANY
 
@@ -519,33 +530,26 @@ def production_today(request):
     except ValueError:
         raise Http404("Fecha inválida")
 
-    # Guardados por EMPRESA
+    # Estado del día actual + 'ayer'
     saved_today = _load_prod(prod_date, empresa) or {}
-    yday = prod_date - timedelta(days=1)
-    saved_yday = _load_prod(yday, empresa) or {}
-    rows_yday = saved_yday.get("rows", {})
+    saved_yday  = _load_prod(prod_date - timedelta(days=1), empresa) or {}
+    rows_yday   = saved_yday.get("rows", {})
     order_number = (saved_today.get("order_number") or "")
 
-    # Embarques del día (EMPRESA)
+    # Embarques del día (filtrados por empresa)
     ship_cols, totals, per_ship, eq11_map = _group_shipments_by_combo(prod_date, empresa)
 
-    # Conjunto de combos
+    # Combos a mostrar
     combos = _display_combos() or (_all_combos_from_db() or _ordered_combos())
 
-    # Globales del día ya guardados (si existen)
-    exist_piso_hoy = int((saved_today or {}).get("exist_piso_hoy", 0))
-    cajas_campo_recibidas = int((saved_today or {}).get("cajas_campo_recibidas", 0))
-    exist_piso_ayer = int((saved_yday or {}).get("exist_piso_hoy", 0))
-    total_cajas_trabajar = exist_piso_ayer + cajas_campo_recibidas
-    cajas_campo_trabajadas = total_cajas_trabajar - exist_piso_hoy
+    # Factores por presentación
+    pres_cf = { (n or "").strip().upper(): float(cf or 1.0)
+                for n, cf in Presentation.objects.values_list("name", "conversion_factor") }
 
-    # Mapa de factores por presentación
-    pres_cf = {}
-    for name, cf in Presentation.objects.values_list("name", "conversion_factor"):
-        pres_cf[(name or "").strip().upper()] = float(cf or 1.0)
-
-    # --- Filas de la tabla ---
+    # --- Filas y total eq. 11 lb de la PRODUCCIÓN DEL DÍA ---
     rows = []
+    total_eq11_produccion = 0.0
+
     for pres, size in combos:
         k_totals = _combo_key(pres, size)
         k_saved  = f"{pres}|{size}"
@@ -578,30 +582,25 @@ def production_today(request):
             "eq11": eq11_today,
         })
 
-    # Eq. 11 lb de la PRODUCCIÓN DEL DÍA (con prod_dia)
-    total_eq11_produccion = 0.0
-    for r in rows:
-        cf = pres_cf.get((r["pres"] or "").strip().upper(), 1.0)
-        total_eq11_produccion += (r["prod_dia"] or 0) * cf
+        cf = pres_cf.get((pres or "").strip().upper(), 1.0)
+        total_eq11_produccion += (prod_dia or 0) * cf
 
-    # === BASE DE ACUMULADOS (usa el último día existente, no solo 'ayer') ===
-    # Si 'ayer' no existe (porque se saltaron 1–2 días), tomamos el último día previo guardado
-    if not saved_yday:
-        saved_yday = _load_last_before(prod_date, empresa) or {}
+    # --- Bloque inferior del día ---
+    exist_piso_hoy  = int((saved_today or {}).get("exist_piso_hoy", 0))
+    cajas_campo_recibidas = int((saved_today or {}).get("cajas_campo_recibidas", 0))
+    exist_piso_ayer = int((saved_yday  or {}).get("exist_piso_hoy", 0))
+    total_cajas_trabajar   = exist_piso_ayer + cajas_campo_recibidas
+    cajas_campo_trabajadas = total_cajas_trabajar - exist_piso_hoy
 
-    base_cosechadas_ayer = saved_yday.get("acum_cosechadas")
-    base_empacadas_ayer  = saved_yday.get("acum_empacadas")
+    # --- Base efectiva "hasta AYER" ---
+    base_c_hayer, base_e_hayer = _effective_acum_base(prod_date, empresa, saved_today)
 
-    # Fallback: si tampoco hay JSON anterior con acumulados, usamos lo que el usuario tenga capturado “hasta AYER”
-    if base_cosechadas_ayer is None:
-        base_cosechadas_ayer = int(saved_today.get("acum_cosechadas_ayer", 0))
-    if base_empacadas_ayer is None:
-        base_empacadas_ayer  = float(saved_today.get("acum_empacadas_ayer", 0.0))
+    # --- Acumulados mostrados (con HOY) ---
+    total_cosechadas_acumulado = int(base_c_hayer) + int(cajas_campo_trabajadas or 0)
+    total_empacadas_acumulado  = float(base_e_hayer) + float(total_eq11_produccion or 0.0)
+    factor_global = (total_empacadas_acumulado / total_cosechadas_acumulado) if total_cosechadas_acumulado else 0.0
 
-
-
-
-    # --- POST: guardar por empresa ---
+    # --- POST: Guardar ---
     if request.method == "POST":
         def _num(prefix, name):
             raw = request.POST.get(f"{prefix}__{name}", "0")
@@ -623,10 +622,8 @@ def production_today(request):
                 except ValueError:
                     return 0
 
-        # Recalcular filas a partir del POST (y acumular eq11 de la producción del día)
         new_rows = {}
         total_eq11_produccion_post = 0.0
-
         for pres, size in combos:
             k_saved  = f"{pres}|{size}"
             k_totals = _combo_key(pres, size)
@@ -652,25 +649,33 @@ def production_today(request):
             cf = pres_cf.get((pres or "").strip().upper(), 1.0)
             total_eq11_produccion_post += (prod_dia or 0) * cf
 
-        # Globales del bloque inferior (POST)
         exist_piso_hoy_post        = _num_global("exist_piso_hoy")
         cajas_campo_recibidas_post = _num_global("cajas_campo_recibidas")
         exist_piso_ayer_post       = int((saved_yday or {}).get("exist_piso_hoy", 0))
         total_cajas_trabajar_post  = exist_piso_ayer_post + cajas_campo_recibidas_post
         cajas_campo_trabajadas_post = total_cajas_trabajar_post - exist_piso_hoy_post
 
-        # Base de acumulados AYER:
-        acum_cosechadas_hasta_ayer, acum_empacadas_hasta_ayer = _season_acum_until(prod_date - timedelta(days=1), empresa)
+        # Manual vs automático
+        use_manual_acum = bool(request.POST.get("use_manual_acum"))
+        man_c = int(_num_global("acum_cosechadas_ayer") or 0)
+        man_e = float(_num_global("acum_empacadas_ayer") or 0.0)
 
-        # si no hay JSON de ayer, tomamos lo que capture el usuario
-        if bc_ayer is None:
-            bc_ayer = int(_num_global("acum_cosechadas_ayer"))
-        if be_ayer is None:
-            be_ayer = float(_num_global("acum_empacadas_ayer"))
+        if use_manual_acum:
+            base_c = man_c
+            base_e = man_e
+        else:
+            prev = _load_prod(prod_date - timedelta(days=1), empresa) or _load_last_before(prod_date, empresa) or {}
+            base_c = prev.get("acum_cosechadas")
+            base_e = prev.get("acum_empacadas")
+            if base_c is None:
+                base_c = int(saved_today.get("acum_cosechadas_ayer", 0))
+            if base_e is None:
+                base_e = float(saved_today.get("acum_empacadas_ayer", 0.0))
+            base_c = int(base_c or 0)
+            base_e = float(base_e or 0.0)
 
-        # Nuevos acumulados de temporada (con HOY)
-        new_acum_cosechadas = int(acum_cosechadas_hasta_ayer or 0) + int(cajas_campo_trabajadas_post or 0)
-        new_acum_empacadas  = float(acum_empacadas_hasta_ayer or 0.0) + float(total_eq11_produccion_post or 0.0)
+        new_acum_cosechadas = base_c + int(cajas_campo_trabajadas_post or 0)
+        new_acum_empacadas  = base_e + float(total_eq11_produccion_post or 0.0)
 
         order_number_post = (request.POST.get("order_number") or "").strip()
 
@@ -681,31 +686,25 @@ def production_today(request):
             "exist_piso_hoy": exist_piso_hoy_post,
             "cajas_campo_recibidas": cajas_campo_recibidas_post,
 
-            "acum_cosechadas_ayer": int(request.POST.get("acum_cosechadas_ayer", 0) or 0),
-            "acum_empacadas_ayer": float(request.POST.get("acum_empacadas_ayer", 0) or 0.0),
+            # guardamos lo manual capturado y la bandera
+            "acum_cosechadas_ayer": man_c,
+            "acum_empacadas_ayer": round(man_e, 2),
+            "use_manual_acum": use_manual_acum,
 
-            # Acumulados ESTRICTOS de temporada (con HOY):
+            # Acumulados de temporada (con HOY)
             "acum_cosechadas": int(new_acum_cosechadas),
             "acum_empacadas": round(float(new_acum_empacadas), 2),
 
-            "order_number": order_number_post, 
+            "order_number": order_number_post,
         }
         _save_prod(prod_date, payload, empresa)
         return redirect(f"{request.path}?date={prod_date.isoformat()}&empresa={empresa.lower()}")
 
-    # Totales ligeros de la tabla (si los usas en el <tfoot>)
+    # Totales ligeros (si los usas en <tfoot>)
     totals_row = [0]*11
     totals_row_eq11 = [0.0]*11
-    # (opcional) puedes llenarlos si los ocupas
 
-    # --- Acumulado hasta AYER (estricto, no confía en JSONs viejos) ---
-    prev_day = prod_date - timedelta(days=1)
-    acum_cosechadas_hasta_ayer, acum_empacadas_hasta_ayer = _season_acum_until(prev_day, empresa)
-
-    # --- Acumulado hasta HOY (estricto, para la tarjeta grande) ---
-    total_cosechadas_acumulado, total_empacadas_acumulado = _season_acum_until(prod_date, empresa)
-    factor_global = (total_empacadas_acumulado / total_cosechadas_acumulado) if total_cosechadas_acumulado else 0.0
-    # Contexto COMPLETO (incluye bloque inferior y acumulados)
+    # Contexto
     ctx = {
         "prod_date": prod_date,
         "rows": rows,
@@ -713,31 +712,34 @@ def production_today(request):
         "empresa": empresa,
         "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G"],
 
-        # Bloque inferior (se quedan al recargar)
+        # Bloque inferior
         "exist_piso_ayer": exist_piso_ayer,
         "cajas_campo_recibidas": cajas_campo_recibidas,
         "total_cajas_trabajar": total_cajas_trabajar,
         "exist_piso_hoy": exist_piso_hoy,
         "cajas_campo_trabajadas": cajas_campo_trabajadas,
 
-        # Si no hay JSON de AYER, prellenamos lo que ya se hubiera capturado hoy
+        # Manual capturado + checkbox
         "acum_cosechadas_ayer": int(saved_today.get("acum_cosechadas_ayer", 0)),
         "acum_empacadas_ayer": float(saved_today.get("acum_empacadas_ayer", 0.0)),
-        "acum_cosechadas_hasta_ayer": int(acum_cosechadas_hasta_ayer or 0),
-        "acum_empacadas_hasta_ayer": round(float(acum_empacadas_hasta_ayer or 0.0), 2),
+        "use_manual_acum": bool(saved_today.get("use_manual_acum")),
 
-        # Acumulados de temporada (con HOY)
+        # Calculado (base efectiva hasta AYER) para mostrar en los campos “Calculado”
+        "acum_cosechadas_hasta_ayer": int(base_c_hayer),
+        "acum_empacadas_hasta_ayer": round(float(base_e_hayer), 2),
+
+        # Acumulado con HOY (la tarjeta grande)
         "total_cosechadas_acumulado": total_cosechadas_acumulado,
         "total_empacadas_acumulado": round(total_empacadas_acumulado, 2),
         "factor_global": round(factor_global, 4),
 
-        # (si usas estos en el <tfoot>)
         "totals_row": totals_row,
-        "totals_row_eq11": [round(x,2) for x in totals_row_eq11],
+        "totals_row_eq11": [round(x, 2) for x in totals_row_eq11],
         "order_number": order_number,
         "legal_client_name": LEGAL_CLIENT_NAME.get(empresa, empresa),
     }
     return render(request, "empaques/production_today.html", ctx)
+
 
 
 
@@ -763,7 +765,7 @@ def production_days(request):
 
 @login_required
 def production_xlsx(request, prod_date):
-    """Excel de Producción del día (filtrado por empresa)."""
+    """Excel de Producción del día (filtrado por empresa) — alineado con la vista."""
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -806,9 +808,8 @@ def production_xlsx(request, prod_date):
     if not combos:
         combos = _all_combos_from_db() or _ordered_combos()
 
-    pres_cf = {}
-    for name, cf in Presentation.objects.values_list("name", "conversion_factor"):
-        pres_cf[(name or "").strip().upper()] = float(cf or 1.0)
+    pres_cf = { (n or "").strip().upper(): float(cf or 1.0)
+                for n, cf in Presentation.objects.values_list("name", "conversion_factor") }
 
     # --- Excel base ---
     wb = Workbook()
@@ -833,7 +834,7 @@ def production_xlsx(request, prod_date):
         if os.path.exists(logo_path):
             try:
                 img = XLImage(logo_path)
-                target_h = 85  # px de alto aprox
+                target_h = 85
                 scale = target_h / float(img.height)
                 img.width  = int(img.width * scale)
                 img.height = int(img.height * scale)
@@ -857,20 +858,14 @@ def production_xlsx(request, prod_date):
     c_h2.font = Font(name="Calibri", size=14, bold=True, color="444444")
     c_h2.alignment = Alignment(horizontal="left", vertical="center")
 
-    # ROTULO "Hoja num.:" (E1) + NÚMERO DE ORDEN (F1)
+    # "Hoja num.:" (E1) + NÚMERO DE ORDEN (F1)
     ws.cell(row=1, column=5, value="Hoja num.:").font = Font(name="Calibri", size=11, bold=True)
     ws.cell(row=1, column=5).alignment = Alignment(horizontal="right", vertical="center")
-    hoja_num = (
-        saved.get("order_number")
-        or saved.get("hoja_num")
-        or ""
-    )
+    hoja_num = saved.get("order_number") or saved.get("hoja_num") or ""
     ws.cell(row=1, column=6, value=str(hoja_num)).font = Font(name="Calibri", size=12, bold=True, color="1F4E79")
     ws.cell(row=1, column=6).alignment = Alignment(horizontal="left", vertical="center")
 
-    # (Eliminado cualquier header/footer y "Hoja 1 de 1")
-
-    # Deja un renglón y subtítulo clásico
+    # Subtítulo
     r = 3
     ws.cell(row=r, column=1, value=f"Fecha – {d.strftime('%d/%m/%Y')}").font = title_font
     r += 2
@@ -887,15 +882,14 @@ def production_xlsx(request, prod_date):
         cell.fill = th_fill
         cell.alignment = Alignment(horizontal="center")
         cell.border = border
-    # Altura del header de tabla
     ws.row_dimensions[r].height = 28
     r += 1
-    first_data_row = r  # primer renglón de datos
+    first_data_row = r
 
     # --- Totales auxiliares ---
     tot_norm = [0]*11
     tot_eq11 = [0.0]*11
-    total_eq11_produccion = 0.0  # para factor del día
+    total_eq11_produccion = 0.0  # Eq. 11 lb de la PRODUCCIÓN DEL DÍA
 
     # --- Filas de datos ---
     for pres, size in combos:
@@ -903,8 +897,6 @@ def production_xlsx(request, prod_date):
         saved_row = (saved.get("rows") or {}).get(key_saved, {})
         k_norm    = _combo_key(pres, size)
         per4      = per_ship.get(k_norm, [0, 0, 0, 0])
-
-
 
         exist_prev   = saved_row.get("exist_prev", 0)
         prod_dia     = saved_row.get("prod_dia", 0)
@@ -924,9 +916,7 @@ def production_xlsx(request, prod_date):
             cell = ws.cell(row=r, column=c, value=v)
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = border
-        # Empaque alineado a la izquierda
         ws.cell(row=r, column=1).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-        # Altura mayor para cada fila de datos
         ws.row_dimensions[r].height = 22
         r += 1
 
@@ -938,7 +928,6 @@ def production_xlsx(request, prod_date):
             tot_eq11[i] += n * cf
         total_eq11_produccion += (prod_dia or 0) * cf
 
-    # Si no hubo filas útiles, deja un renglón con mensaje
     if r == first_data_row:
         ws.cell(row=r, column=1, value="(Sin datos)").border = border
         for c in range(2, 13):
@@ -969,8 +958,7 @@ def production_xlsx(request, prod_date):
     r += 1
 
     # === Resumen inferior (incluye acumulados y factores) ===
-    # Totales del propio día (para factor del día):
-    #   ya tienes 'total_eq11_produccion' arriba
+    # Bloque del propio día (coincide con la vista)
     yday = d - _timedelta(days=1)
     saved_yday = _load_prod(yday, empresa) or {}
     exist_piso_ayer = int((saved_yday or {}).get("exist_piso_hoy", 0))
@@ -978,10 +966,18 @@ def production_xlsx(request, prod_date):
     cajas_campo_recibidas = int((saved or {}).get("cajas_campo_recibidas", 0))
     total_cajas_trabajar   = exist_piso_ayer + cajas_campo_recibidas
     cajas_campo_trabajadas = total_cajas_trabajar - exist_piso_hoy
-    factor_dia = (total_eq11_produccion / cajas_campo_trabajadas) if cajas_campo_trabajadas else 0.0
 
-    # Acumulados de temporada HASTA 'd' (robustos):
-    acum_cosechadas, acum_empacadas = _season_acum_until(d, empresa)
+    # MISMA base efectiva “hasta AYER” que la vista (respeta manual si use_manual_acum)
+    base_c_hayer, base_e_hayer = _effective_acum_base(d, empresa, saved)
+
+    # Si el día actual no guardó los acumulados, recalcular como en la vista usando la base efectiva + HOY
+    acum_cosechadas = saved.get("acum_cosechadas")
+    acum_empacadas  = saved.get("acum_empacadas")
+    if acum_cosechadas is None or acum_empacadas is None:
+        acum_cosechadas = int(base_c_hayer) + int(cajas_campo_trabajadas or 0)
+        acum_empacadas  = float(base_e_hayer) + float(total_eq11_produccion or 0.0)
+
+    factor_dia    = (total_eq11_produccion / cajas_campo_trabajadas) if cajas_campo_trabajadas else 0.0
     factor_global = (float(acum_empacadas) / int(acum_cosechadas)) if acum_cosechadas else 0.0
 
     r += 2
@@ -1006,12 +1002,10 @@ def production_xlsx(request, prod_date):
         r += 1
 
     # --- Anchos y alturas por defecto ---
-    ws.sheet_format.defaultRowHeight = 22.5  # altura por defecto más cómoda
-    # Header alto
+    ws.sheet_format.defaultRowHeight = 22.5
     ws.row_dimensions[1].height = 40
     ws.row_dimensions[2].height = 26
 
-    # Columnas
     ws.column_dimensions["A"].width = 34
     for col in "BCDEFGHIJKL":
         ws.column_dimensions[col].width = 14
@@ -1032,6 +1026,7 @@ def production_xlsx(request, prod_date):
     resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     resp["Content-Disposition"] = f'attachment; filename="produccion_{empresa.lower()}_{d.isoformat()}.xlsx"'
     return resp
+
 
 
 
