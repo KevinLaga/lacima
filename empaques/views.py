@@ -2277,6 +2277,8 @@ def shipment_list(request):
         ws.column_dimensions['F'].width = 14
         ws.column_dimensions['G'].width = 16
 
+        thin = thin_border
+
         # ======= MATRIZ (RESUMEN) — al final de la hoja =======
         from openpyxl.utils import get_column_letter
         from decimal import Decimal
