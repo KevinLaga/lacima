@@ -169,6 +169,20 @@ def _canon_size(sz: str) -> str:
     }
     s = aliases.get(s, s)
     return s.replace(" ", "")  # queda "XLARGE", "STANDARD", etc.
+from decimal import Decimal, ROUND_HALF_UP
+
+SPECIAL_EQ11_ROUND_CLIENTS = {"AGRICOLA DH & G", "BAJA MIST"}
+
+def _canon_company(name: str | None) -> str | None:
+    if not name:
+        return None
+    n = (name or "").strip().upper()
+    if n in {"AGRICOLA DH & G", "BAJA MIST"}:
+        return "AGRICOLA DH & G"
+    return n
+
+def _round_half_up_to_int(x) -> int:
+    return int(Decimal(str(x)).quantize(Decimal('0'), rounding=ROUND_HALF_UP))
 
 def _canon_pair(pres: str, size: str):
     """(PRESENTACIÓN en MAYÚSCULAS compacta, TAMAÑO canónico)"""
@@ -1471,6 +1485,12 @@ def shipment_list(request):
             total_eq    += vals['eq']
             total_amt   += vals['amt']
             row += 1
+
+        # --- Ajuste especial AGRICOLA DH & G: Total = round_half_up(Eq11_total) * 3.40
+        empresa_norm = _canon_company(empresa)
+        if empresa_norm in SPECIAL_EQ11_ROUND_CLIENTS:
+            eq11_billable = _round_half_up_to_int(total_eq)  # .49 ↓, .50/.51 ↑
+            total_amt = float(Decimal('3.40') * Decimal(eq11_billable))
 
 
         # --- AutoFilter del rango usado ---
