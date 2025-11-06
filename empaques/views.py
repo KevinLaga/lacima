@@ -655,7 +655,7 @@ def _write_company_section(ws, start_row, border, th_font, th_fill, company_name
     ws.cell(row=r, column=1, value="TOTAL Eq. 11 lbs").border = border
     ws.cell(row=r, column=2, value=totals['total_eq11']).border = border
     r += 1
-    ws.cell(row=r, column=1, value="TOTAL IMPORTE (ajustado si aplica)").border = border
+    ws.cell(row=r, column=1, value="TOTAL IMPORTE ").border = border
     ws.cell(row=r, column=2, value=totals['total_dinero']).border = border
     r += 2
 
