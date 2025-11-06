@@ -352,6 +352,44 @@ def _group_shipments_by_combo(target_date, empresa=None):
 
     return cols, totals, per_ship, eq11_by_combo
 
+from datetime import date as _date
+from django.utils import timezone
+
+# Ajusta aquí tu inicio de temporada real
+SEASON_START_MONTH = 4
+SEASON_START_DAY   = 1
+
+def _season_bounds(hoy=None):
+    """Devuelve (inicio_temporada, hoy_local)."""
+    hoy = hoy or timezone.localdate()
+    season_start = _date(hoy.year if hoy.month >= SEASON_START_MONTH else hoy.year - 1,
+                         SEASON_START_MONTH, SEASON_START_DAY)
+    return season_start, hoy
+
+def _load_last_before(d, empresa):
+    """
+    Carga el último JSON guardado ANTES de la fecha d (no solo 'ayer').
+    Si no existe, devuelve {}.
+    """
+    subdir = PROD_DIR / company_slug(empresa)
+    if not subdir.exists():
+        return {}
+
+    best_day = None
+    for fname in os.listdir(subdir):
+        if not fname.endswith(".json"):
+            continue
+        try:
+            fday = _date.fromisoformat(fname[:-5])  # YYYY-MM-DD.json
+        except ValueError:
+            continue
+        if fday < d and (best_day is None or fday > best_day):
+            best_day = fday
+
+    if best_day:
+        return _load_prod(best_day, empresa) or {}
+    return {}
+
 
 
 def _ordered_combos():
@@ -482,21 +520,25 @@ def production_today(request):
         cf = pres_cf.get((r["pres"] or "").strip().upper(), 1.0)
         total_eq11_produccion += (r["prod_dia"] or 0) * cf
 
-    # Base de acumulados AYER:
-    # - si existe JSON de ayer, úsalo
-    # - si NO existe, usa lo capturado “hasta AYER” (y lo persistimos para que no se borre)
+    # === BASE DE ACUMULADOS (usa el último día existente, no solo 'ayer') ===
+    # Si 'ayer' no existe (porque se saltaron 1–2 días), tomamos el último día previo guardado
+    if not saved_yday:
+        saved_yday = _load_last_before(prod_date, empresa) or {}
+
     base_cosechadas_ayer = saved_yday.get("acum_cosechadas")
     base_empacadas_ayer  = saved_yday.get("acum_empacadas")
 
+    # Fallback: si tampoco hay JSON anterior con acumulados, usamos lo que el usuario tenga capturado “hasta AYER”
     if base_cosechadas_ayer is None:
         base_cosechadas_ayer = int(saved_today.get("acum_cosechadas_ayer", 0))
     if base_empacadas_ayer is None:
-        base_empacadas_ayer = float(saved_today.get("acum_empacadas_ayer", 0.0))
+        base_empacadas_ayer  = float(saved_today.get("acum_empacadas_ayer", 0.0))
 
     # Acumulados con HOY (para mostrar en pantalla)
     total_cosechadas_acumulado = int(base_cosechadas_ayer or 0) + int(cajas_campo_trabajadas or 0)
     total_empacadas_acumulado  = float(base_empacadas_ayer or 0.0) + float(total_eq11_produccion or 0.0)
     factor_global = (total_empacadas_acumulado / total_cosechadas_acumulado) if total_cosechadas_acumulado else 0.0
+
 
     # --- POST: guardar por empresa ---
     if request.method == "POST":
@@ -691,9 +733,8 @@ def production_xlsx(request, prod_date):
     ship_cols, totals, per_ship, _eq11_map = _group_shipments_by_combo(d, empresa)
 
     # --- Combos y factores de conversión ---
-    combos = _pd_combos_active()
+    combos = _display_combos()
     if not combos:
-        # Fallback por si no tienes nada configurado en admin
         combos = _all_combos_from_db() or _ordered_combos()
 
     pres_cf = {}
@@ -858,16 +899,20 @@ def production_xlsx(request, prod_date):
     ws.row_dimensions[r].height = 24
     r += 1
 
-    # === Resumen inferior (incluye acumulados y factores) ===
+        # === Resumen inferior (incluye acumulados y factores) ===
+    # Igual que la vista: si 'ayer' no existe, busca el último día previo
     yday = d - _timedelta(days=1)
     saved_yday = _load_prod(yday, empresa) or {}
+    if not saved_yday:
+        saved_yday = _load_last_before(d, empresa) or {}
+
     exist_piso_ayer = int((saved_yday or {}).get("exist_piso_hoy", 0))
     exist_piso_hoy  = int((saved or {}).get("exist_piso_hoy", 0))
     cajas_campo_recibidas = int((saved or {}).get("cajas_campo_recibidas", 0))
     total_cajas_trabajar   = exist_piso_ayer + cajas_campo_recibidas
     cajas_campo_trabajadas = total_cajas_trabajar - exist_piso_hoy
 
-    # Acumulados (si no están guardados, se recalculan con base AYER)
+    # Acumulados (si no están guardados en el día actual, recalcula con base del último día previo)
     acum_cosechadas = saved.get("acum_cosechadas")
     acum_empacadas  = saved.get("acum_empacadas")
     if acum_cosechadas is None or acum_empacadas is None:
@@ -879,6 +924,7 @@ def production_xlsx(request, prod_date):
             base_empacadas_ayer  = float(saved.get("acum_empacadas_ayer", 0.0))
         acum_cosechadas = int(base_cosechadas_ayer or 0) + int(cajas_campo_trabajadas or 0)
         acum_empacadas  = float(base_empacadas_ayer or 0.0) + float(total_eq11_produccion or 0.0)
+
 
     factor_dia    = (total_eq11_produccion / cajas_campo_trabajadas) if cajas_campo_trabajadas else 0.0
     factor_global = (float(acum_empacadas) / int(acum_cosechadas)) if acum_cosechadas else 0.0
