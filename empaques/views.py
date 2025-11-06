@@ -536,12 +536,37 @@ SPECIAL_EQ11_ROUND_CLIENTS = {"AGRICOLA DH & G", "BAJA MIST"}
 
 def _canon_company_label(name: str | None) -> str:
     if not name:
-        return "SIN CLIENTE"
-    n = (name or "").strip()
-    up = n.upper()
-    if up in {"BAJA MIST", "AGRICOLA DH & G"}:
-        return "AGRICOLA DH & G"
-    return n
+        return ""
+    n = str(name).strip().lower()
+    if "cima" in n:
+        return "La Cima Produce"
+    if n.startswith("rc"):
+        return "RC Organics"
+    if "gourmet" in n:
+        return "Gourmet Baja Farms"
+    if n == "gbf" or "gbf" in n:
+        return "GBF Farms"
+    if "gh" in n:
+        return "GH Farms"
+    if "agricola" in n or "dh & g" in n or "dhg" in n or "baja mist" in n:
+        return "AGRICOLA DH & G"   # ← tu cliente especial
+    return name.strip()
+
+def _client_order_for(shipment, company_label):
+    lbl = (company_label or "").lower()
+    if "cima" in lbl:
+        return getattr(shipment, "order_lacima", None)
+    if lbl.startswith("rc"):
+        return getattr(shipment, "order_rc", None)
+    if "gh" in lbl and "rc" not in lbl:
+        return getattr(shipment, "order_gh", None)
+    if "gourmet" in lbl:
+        return getattr(shipment, "order_gourmet", None)
+    if "gbf" in lbl:
+        return getattr(shipment, "order_gbf", None)
+    if "agricola" in lbl or "dhg" in lbl:
+        return getattr(shipment, "order_dhg", None)
+    return None
 
 def _round_half_up_to_int(x: float | Decimal) -> int:
     return int(Decimal(str(x)).quantize(Decimal('0'), rounding=ROUND_HALF_UP))
@@ -675,6 +700,242 @@ def _write_company_section(ws, start_row, border, th_font, th_fill, company_name
 
     r += 2
     return r
+def _weekly_general_build(weeks_qs):
+    """Workbook con:
+       - 'Resumen por empresa' (secciones por empresa)
+       - 'GENERAL' (matriz una fila: Semana, Rango, columnas por empresa, TOTAL_EQ11)
+    """
+    wb = Workbook()
+    th_font = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+    th_fill = PatternFill("solid", fgColor="225577")
+    thin = Border(left=Side(style='thin', color='AAAAAA'),
+                  right=Side(style='thin', color='AAAAAA'),
+                  top=Side(style='thin', color='AAAAAA'),
+                  bottom=Side(style='thin', color='AAAAAA'))
+
+    # 1) Hoja por empresa
+    ws = wb.active
+    ws.title = "Resumen por empresa"
+    ws.cell(row=1, column=1, value="Resumen semanal – General por empresa").font = Font(size=18, bold=True, color="3C78D8")
+    r = 3
+
+    from collections import defaultdict
+    company_pairs = defaultdict(list)  # lbl -> [(shipment,item),...]
+    for comp, s, it in _iter_company_items(weeks_qs, None):
+        company_pairs[comp].append((s, it))
+
+    grand_cajas = grand_eq = grand_amt = 0.0
+    for comp in sorted(company_pairs.keys(), key=lambda x: x.upper()):
+        pres_info, totals, detalle = _compute_company_summary(comp, company_pairs[comp])
+        r = _write_company_section(ws, r, thin, th_font, th_fill, comp, pres_info, totals, detalle)
+        grand_cajas += totals["total_cajas"]
+        grand_eq    += totals["total_eq11"]
+        grand_amt   += totals["total_dinero"]
+
+    ws.cell(row=r, column=1, value="TOTALES GENERALES").font = Font(size=14, bold=True); r += 1
+    for label, val in [("TOTAL CAJAS", int(grand_cajas)),
+                       ("TOTAL Eq. 11 lbs", round(grand_eq, 2)),
+                       ("TOTAL IMPORTE", round(grand_amt, 2))]:
+        ws.cell(row=r, column=1, value=label).border = thin
+        ws.cell(row=r, column=2, value=val).border = thin
+        r += 1
+
+    # 2) Hoja matriz GENERAL
+    ws2 = wb.create_sheet("GENERAL")
+    empresas = sorted(company_pairs.keys(), key=lambda s: s.upper())
+    headers = ["Semana", "Rango"] + empresas + ["TOTAL_EQ11"]
+    for c, h in enumerate(headers, start=1):
+        cell = ws2.cell(row=1, column=c, value=h)
+        cell.font = th_font; cell.fill = th_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    if weeks_qs:
+        d1 = min(s.date for s in weeks_qs)
+        d2 = max(s.date for s in weeks_qs)
+        week_label = f"{d1.isocalendar().week}"
+        rango = f"{d1.strftime('%d/%m/%Y')} – {d2.strftime('%d/%m/%Y')}"
+    else:
+        week_label = ""; rango = ""
+
+    # Importe por empresa + Eq11 total
+    from collections import defaultdict as _dd
+    per_company_amt = {e: 0.0 for e in empresas}
+    comp_eq11 = _dd(float)
+    total_eq11 = 0.0
+    for comp, s, it in _iter_company_items(weeks_qs, None):
+        qty = int(it.quantity or 0)
+        cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
+        prc = float(getattr(it.presentation, "price", 0.0))
+        total_eq11 += qty * cf
+        comp_eq11[comp] += qty * cf
+        per_company_amt[comp] += qty * prc
+
+    # Ajuste especial por empresa
+    for comp in empresas:
+        if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+            per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(comp_eq11[comp])))
+
+    row = 2
+    ws2.cell(row=row, column=1, value=week_label)
+    ws2.cell(row=row, column=2, value=rango)
+    c = 3
+    for emp in empresas:
+        ws2.cell(row=row, column=c, value=round(per_company_amt[emp], 2)); c += 1
+    ws2.cell(row=row, column=c, value=round(total_eq11, 2))
+
+    # anchos
+    ws2.column_dimensions['A'].width = 10
+    ws2.column_dimensions['B'].width = 28
+    for i in range(3, 3+len(empresas)+1):
+        ws2.column_dimensions[chr(ord('A')+i-1)].width = 16
+
+    return wb
+def _month_weeks_iter(year:int, month:int):
+    """Devuelve lista de (monday, sunday) que cubren TODAS las semanas que tocan ese mes."""
+    import calendar
+    from datetime import timedelta, date
+    first = date(year, month, 1)
+    last  = date(year, month, calendar.monthrange(year, month)[1])
+    # ir al lunes de la semana del 'first'
+    monday = first - timedelta(days=(first.weekday()))  # weekday: 0=Mon
+    buckets = []
+    while monday <= last:
+        sunday = monday + timedelta(days=6)
+        # si la semana toca el mes
+        if monday.month == month or sunday.month == month:
+            buckets.append((monday, sunday))
+        monday += timedelta(days=7)
+    return buckets
+
+def _matrix_sheet_for_month(wb, year, month, empresa_filter):
+    """Agrega hoja 'GENERAL SEMANAS' con filas por semana del mes (solo GENERAL)."""
+    from openpyxl.styles import Font, Alignment, PatternFill
+    from collections import defaultdict
+
+    ws = wb.create_sheet("GENERAL SEMANAS")
+    th_font = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+    th_fill = PatternFill("solid", fgColor="225577")
+
+    # Descubrimos empresas presentes en el mes
+    # (usamos _canon_company_label para normalizar nombres)
+    companies = set()
+    for s in Shipment.objects.filter(date__year=year, date__month=month).prefetch_related('items','items__presentation'):
+        for it in s.items.all():
+            companies.add(_canon_company_label(getattr(it, "cliente", None)))
+    empresas = sorted(companies, key=lambda x: x.upper())
+
+    headers = ["Semana", "Rango"] + empresas + ["TOTAL_EQ11"]
+    for c, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=c, value=h)
+        cell.font = th_font; cell.fill = th_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    row = 2
+    for monday, sunday in _month_weeks_iter(year, month):
+        qs = (Shipment.objects
+              .filter(date__range=(monday, sunday))
+              .order_by('date','id')
+              .prefetch_related('items','items__presentation'))
+
+        per_company_amt = {e: 0.0 for e in empresas}
+        comp_eq11 = defaultdict(float)
+        total_eq11 = 0.0
+
+        for s in qs:
+            for it in s.items.all():
+                comp = _canon_company_label(getattr(it, "cliente", None))
+                qty  = int(it.quantity or 0)
+                cf   = float(getattr(it.presentation, "conversion_factor", 1.0))
+                prc  = float(getattr(it.presentation, "price", 0.0))
+                total_eq11 += qty * cf
+                per_company_amt[comp] += qty * prc
+                comp_eq11[comp] += qty * cf
+
+        # Ajuste BAJA MIST/AGRICOLA
+        for comp in empresas:
+            if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+                per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(comp_eq11[comp])))
+
+        week_no = monday.isocalendar().week
+        ws.cell(row=row, column=1, value=week_no)
+        ws.cell(row=row, column=2, value=f"{monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')}")
+        c = 3
+        for emp in empresas:
+            ws.cell(row=row, column=c, value=round(per_company_amt[emp], 2)); c += 1
+        ws.cell(row=row, column=c, value=round(total_eq11, 2))
+        row += 1
+
+    # anchos
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 28
+    for i in range(3, 3+len(empresas)+1):
+        ws.column_dimensions[chr(ord('A')+i-1)].width = 16
+
+def _matrix_sheet_for_year(wb, year):
+    """Agrega hoja 'GENERAL MESES' con filas por MES del año (solo GENERAL)."""
+    from collections import defaultdict
+    from openpyxl.styles import Font, Alignment, PatternFill
+    ws = wb.create_sheet("GENERAL MESES")
+    th_font = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+    th_fill = PatternFill("solid", fgColor="225577")
+
+    # Empresas observadas en todo el año
+    companies = set()
+    qs_all = (Shipment.objects.filter(date__year=year)
+              .order_by('date','id')
+              .prefetch_related('items','items__presentation'))
+    for s in qs_all:
+        for it in s.items.all():
+            companies.add(_canon_company_label(getattr(it, "cliente", None)))
+    empresas = sorted(companies, key=lambda x: x.upper())
+
+    headers = ["Mes", "Rango"] + empresas + ["TOTAL_EQ11"]
+    for c, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=c, value=h)
+        cell.font = th_font; cell.fill = th_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    from datetime import date as _d, timedelta as _td
+    row = 2
+    for month in range(1,13):
+        # rango del mes
+        import calendar
+        d1 = _d(year, month, 1)
+        d2 = _d(year, month, calendar.monthrange(year, month)[1])
+        qs = (Shipment.objects.filter(date__range=(d1, d2))
+              .order_by('date','id')
+              .prefetch_related('items','items__presentation'))
+
+        per_company_amt = {e: 0.0 for e in empresas}
+        comp_eq11 = defaultdict(float)
+        total_eq11 = 0.0
+        for s in qs:
+            for it in s.items.all():
+                comp = _canon_company_label(getattr(it, "cliente", None))
+                qty  = int(it.quantity or 0)
+                cf   = float(getattr(it.presentation, "conversion_factor", 1.0))
+                prc  = float(getattr(it.presentation, "price", 0.0))
+                total_eq11 += qty * cf
+                per_company_amt[comp] += qty * prc
+                comp_eq11[comp] += qty * cf
+
+        for comp in empresas:
+            if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+                per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(comp_eq11[comp])))
+
+        ws.cell(row=row, column=1, value=month)
+        ws.cell(row=row, column=2, value=f"{d1.strftime('%d/%m/%Y')} – {d2.strftime('%d/%m/%Y')}")
+        c = 3
+        for emp in empresas:
+            ws.cell(row=row, column=c, value=round(per_company_amt[emp], 2)); c += 1
+        ws.cell(row=row, column=c, value=round(total_eq11, 2))
+        row += 1
+
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = 28
+    for i in range(3, 3+len(empresas)+1):
+        ws.column_dimensions[chr(ord('A')+i-1)].width = 16
+
 
 
 @login_required
@@ -1453,26 +1714,15 @@ def shipment_list(request):
 
     # ...
     if request.GET.get('descargar') == 'semana':
-        def get_client_order_number_for(embarque, cliente_name):
-            """Devuelve el número de orden específico de ese cliente para 'embarque'."""
-            if not embarque or not cliente_name:
-                return None
-            cname = str(cliente_name).lower()
-            if "cima" in cname:
-                return getattr(embarque, "order_lacima", None)
-            if "rc" in cname:
-                return getattr(embarque, "order_rc", None)
-            if "gh" in cname:
-                return getattr(embarque, "order_gh", None)
-            if "gourmet" in cname:
-                return getattr(embarque, "order_gourmet", None)
-            if "gbf" in cname:
-                return getattr(embarque, "order_gbf", None)
-            if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
-                return getattr(embarque, "order_dhg", None)
-            return None
+        from io import BytesIO
+        from datetime import date, timedelta
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        from decimal import Decimal
+
         iso_week = request.GET.get('iso_week')  # ej: "2025-W35"
-        empresa = (request.GET.get('empresa') or 'general').strip()
+        empresa  = (request.GET.get('empresa') or 'general').strip()
 
         if not iso_week:
             return HttpResponse("Falta la semana (iso_week).", status=400)
@@ -1480,14 +1730,13 @@ def shipment_list(request):
         # Parsear ISO week -> lunes..domingo
         try:
             year_str, week_str = iso_week.split('-W')
-            year = int(year_str)
-            week = int(week_str)
+            year = int(year_str); week = int(week_str)
             monday = date.fromisocalendar(year, week, 1)  # 1 = lunes
             sunday = monday + timedelta(days=6)
         except Exception:
             return HttpResponse("Semana inválida.", status=400)
 
-        # Shipments de esa semana
+        # Query base de la semana
         weeks_qs = (
             Shipment.objects
             .filter(date__range=(monday, sunday))
@@ -1495,97 +1744,178 @@ def shipment_list(request):
             .prefetch_related('items', 'items__presentation')
         )
 
-        # ===================== Construir Excel (SEMANA) – MULTIEMPRESA =====================
-        from openpyxl.utils import get_column_letter
-
-        empresa = (empresa or 'general').strip()
-        empresa_filter = None if empresa.lower() == 'general' else empresa
-
-        # Arma mapa {empresa: [(s,it), ...]}
-        company_map = defaultdict(list)
-        for comp, s, it in _iter_company_items(weeks_qs, empresa_filter):
-            company_map[comp].append((s, it))
-
-        # Si es empresa específica, fuerza a una sola sección
-        if empresa_filter:
-            company_map = { _canon_company_label(empresa_filter): company_map.get(_canon_company_label(empresa_filter), []) }
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Resumen por empresa"
-
-        title_font   = Font(name='Calibri', size=18, bold=True, color="3C78D8")
-        th_font      = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
-        th_fill      = PatternFill("solid", fgColor="225577")
-        thin_border  = Border(
+        # ===== Estilos comunes =====
+        th_font = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
+        th_fill = PatternFill("solid", fgColor="225577")
+        thin    = Border(
             left=Side(style='thin', color='AAAAAA'),
             right=Side(style='thin', color='AAAAAA'),
             top=Side(style='thin', color='AAAAAA'),
             bottom=Side(style='thin', color='AAAAAA'),
         )
 
-        r = 1
-        titulo = f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')}"
-        if empresa_filter:
-            titulo += f" – {empresa_filter}"
-        ws.cell(row=r, column=1, value=titulo).font = title_font
-        r += 2
+        # ------------------------------------------------------------------
+        # 1) DISEÑO EMPRESA ESPECÍFICA (una sola tabla, como antes)
+        # ------------------------------------------------------------------
+        if empresa.lower() != 'general':
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Semana"
 
-        grand_cajas = 0
-        grand_eq11  = 0.0
-        grand_dinero = 0.0
+            emp_label = _canon_company_label(empresa)
+            title = f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {emp_label}"
+            ws.merge_cells('A1:H2')
+            tcell = ws.cell(row=1, column=1, value=title)
+            tcell.font = Font(size=18, bold=True, color="3C78D8")
+            ws.cell(row=3, column=1, value="Detalle de embarques").font = Font(italic=True, color="6D6D6D")
 
-        for comp in sorted(company_map.keys(), key=lambda x: x.upper()):
-            tuples_cs = company_map[comp]
-            pres_info, totals, detalle = _compute_company_summary(comp, tuples_cs)
-
-            r = _write_company_section(ws, r, thin_border, th_font, th_fill, comp,
-                                    pres_info, totals, detalle)
-
-            grand_cajas  += totals['total_cajas']
-            grand_eq11   += float(totals['total_eq11'] or 0.0)
-            grand_dinero += float(totals['total_dinero'] or 0.0)
-
-        # ===== TOTALES GENERALES =====
-        ws.cell(row=r, column=1, value="TOTALES GENERALES").font = Font(name="Calibri", size=14, bold=True)
-        r += 1
-        headers_tot = ["Métrica", "Total"]
-        for c, txt in enumerate(headers_tot, start=1):
-            cell = ws.cell(row=r, column=c, value=txt)
-            cell.font = th_font; cell.fill = th_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center"); cell.border = thin_border
-        r += 1
-        pairs = [
-            ("TOTAL CAJAS", int(grand_cajas)),
-            ("TOTAL Eq. 11 lbs", round(grand_eq11, 2)),
-            ("TOTAL IMPORTE", round(grand_dinero, 2)),
-        ]
-        for label, val in pairs:
-            ws.cell(row=r, column=1, value=label).border = thin_border
-            ws.cell(row=r, column=2, value=val).border = thin_border
-            ws.cell(row=r, column=1).alignment = Alignment(horizontal="right")
-            ws.cell(row=r, column=2).alignment = Alignment(horizontal="center")
+            headers = ["N° EMBARQUE", "N° FACTURA", "FECHA", "PRESENTACIÓN", "TAMAÑO",
+                    "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)"]
+            r = 5
+            for c, h in enumerate(headers, start=1):
+                cell = ws.cell(row=r, column=c, value=h)
+                cell.font = th_font; cell.fill = th_fill
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = thin
             r += 1
 
-        # Anchos cómodos
-        ws.column_dimensions['A'].width = 32
-        ws.column_dimensions['B'].width = 16
-        ws.column_dimensions['C'].width = 16
-        ws.column_dimensions['D'].width = 26
-        ws.column_dimensions['E'].width = 12
-        ws.column_dimensions['F'].width = 14
-        ws.column_dimensions['G'].width = 16
+            total_boxes = 0
+            total_eq    = 0.0
+            total_amt   = 0.0
+
+            for comp, s, it in _iter_company_items(weeks_qs, emp_label):
+                qty = int(it.quantity or 0)
+                cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
+                prc = float(getattr(it.presentation, "price", 0.0))
+                num_emb = _client_order_for(s, emp_label) or str(s.tracking_number)
+
+                vals = [num_emb, s.invoice_number, s.date.strftime('%d/%m/%Y'),
+                        str(it.presentation.name).strip(), str(it.size).strip(),
+                        qty, round(qty*cf, 2), round(qty*prc, 2)]
+                for c, v in enumerate(vals, start=1):
+                    cc = ws.cell(row=r, column=c, value=v)
+                    cc.border = thin
+                    cc.alignment = Alignment(horizontal="right" if c in (6,7,8) else "center")
+                r += 1
+
+                total_boxes += qty
+                total_eq    += qty * cf
+                total_amt   += qty * prc
+
+            # Ajuste especial AGRICOLA DH & G (redondeo .49↓ .50/.51↑ y * 3.40)
+            if emp_label.upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+                total_amt = float(Decimal('3.40') * Decimal(_round_half_up_to_int(total_eq)))
+
+            # Totales
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
+            ws.cell(row=r, column=1, value="TOTALES:").font = Font(bold=True, color="225577")
+            ws.cell(row=r, column=6, value=total_boxes)
+            ws.cell(row=r, column=7, value=round(total_eq, 2))
+            ws.cell(row=r, column=8, value=round(total_amt, 2))
+            for c in (6,7,8):
+                cc = ws.cell(row=r, column=c)
+                cc.font = Font(bold=True); cc.fill = PatternFill("solid", fgColor="BBDDFF")
+                cc.alignment = Alignment(horizontal="right"); cc.border = thin
+
+            # Salida
+            out = BytesIO(); wb.save(out); out.seek(0)
+            filename = f"semana_{year}-W{week}_{emp_label}.xlsx"
+            resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+            return resp
+
+        # ------------------------------------------------------------------
+        # 2) DISEÑO GENERAL (dos hojas)
+        #    - "Resumen por empresa": sección por empresa con totales
+        #    - "GENERAL": matriz Semana | Rango | empresas... | TOTAL_EQ11
+        # ------------------------------------------------------------------
+        # Mapa {empresa: [(shipment,item), ...]}
+        from collections import defaultdict
+        company_pairs = defaultdict(list)
+        for comp, s, it in _iter_company_items(weeks_qs, None):
+            company_pairs[comp].append((s, it))
+
+        wb = Workbook()
+
+        # 2.1 Hoja por empresa
+        ws = wb.active
+        ws.title = "Resumen por empresa"
+        ws.cell(row=1, column=1, value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – GENERAL") \
+        .font = Font(size=18, bold=True, color="3C78D8")
+        r = 3
+
+        grand_cajas = grand_eq = grand_amt = 0.0
+        for comp in sorted(company_pairs.keys(), key=lambda x: x.upper()):
+            pres_info, totals, detalle = _compute_company_summary(comp, company_pairs[comp])
+            # reutiliza el writer que formatea sección completa
+            r = _write_company_section(ws, r, thin, th_font, th_fill, comp, pres_info, totals, detalle)
+            grand_cajas += totals["total_cajas"]
+            grand_eq    += totals["total_eq11"]
+            grand_amt   += totals["total_dinero"]
+
+        ws.cell(row=r, column=1, value="TOTALES GENERALES").font = Font(size=14, bold=True); r += 1
+        for label, val in [("TOTAL CAJAS", int(grand_cajas)),
+                        ("TOTAL Eq. 11 lbs", round(grand_eq, 2)),
+                        ("TOTAL IMPORTE", round(grand_amt, 2))]:
+            ws.cell(row=r, column=1, value=label).border = thin
+            ws.cell(row=r, column=2, value=val).border = thin
+            r += 1
+
+        # 2.2 Hoja matriz GENERAL
+        ws2 = wb.create_sheet("GENERAL")
+        empresas = sorted(company_pairs.keys(), key=lambda s: s.upper())
+        headers = ["Semana", "Rango"] + empresas + ["TOTAL_EQ11"]
+        for c, h in enumerate(headers, start=1):
+            cell = ws2.cell(row=1, column=c, value=h)
+            cell.font = th_font; cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # semana y rango
+        if weeks_qs:
+            d1 = min(s.date for s in weeks_qs); d2 = max(s.date for s in weeks_qs)
+            week_label = f"{d1.isocalendar().week}"
+            rango = f"{monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')}"
+        else:
+            week_label = ""; rango = ""
+
+        # importes por empresa + total eq11
+        per_company_amt = {e: 0.0 for e in empresas}
+        per_company_eq  = {e: 0.0 for e in empresas}
+        total_eq11 = 0.0
+        for comp, s, it in _iter_company_items(weeks_qs, None):
+            qty = int(it.quantity or 0)
+            cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
+            prc = float(getattr(it.presentation, "price", 0.0))
+            total_eq11 += qty * cf
+            per_company_eq[comp]  += qty * cf
+            per_company_amt[comp] += qty * prc
+
+        # ajuste especial por empresa (AGRICOLA DH & G)
+        for comp in empresas:
+            if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+                per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq[comp])))
+
+        row = 2
+        ws2.cell(row=row, column=1, value=week_label)
+        ws2.cell(row=row, column=2, value=rango)
+        c = 3
+        for emp in empresas:
+            ws2.cell(row=row, column=c, value=round(per_company_amt[emp], 2)); c += 1
+        ws2.cell(row=row, column=c, value=round(total_eq11, 2))
+
+        # Anchos
+        ws2.column_dimensions['A'].width = 10
+        ws2.column_dimensions['B'].width = 28
+        for col_idx in range(3, 3 + len(empresas) + 1):
+            ws2.column_dimensions[get_column_letter(col_idx)].width = 18
 
         # Salida
-        output = BytesIO(); wb.save(output); output.seek(0)
-        emp_slug = 'general' if not empresa_filter else empresa_filter
-        filename = f"semana_{year}-W{week}_{emp_slug}.xlsx"
-        resp = HttpResponse(
-            output,
-            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
-        resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+        out = BytesIO(); wb.save(out); out.seek(0)
+        filename = f"semana_{year}-W{week}_general.xlsx"
+        resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
+
 
 
 
@@ -1610,8 +1940,9 @@ def shipment_list(request):
 
         if end_d < start_d:
             return HttpResponse("El fin de rango no puede ser menor que el inicio.", status=400)
+        else:
 
-        embarques = Shipment.objects.filter(date__range=(start_d, end_d))
+            embarques = Shipment.objects.filter(date__range=(start_d, end_d))
 
         wb = build_summary_xlsx(
             "Resumen de Embarques – Rango de fechas",
@@ -1637,6 +1968,7 @@ def shipment_list(request):
 
     if descargar in ('mes', 'ano'):
         empresa = _empresa_param(request)  # None => general (todas)
+
 
         # --- Helper para número de orden por cliente (igual que en semana) ---
         def get_client_order_number_for(embarque, cliente_name):
@@ -1757,6 +2089,77 @@ def shipment_list(request):
         ws.column_dimensions['E'].width = 12
         ws.column_dimensions['F'].width = 14
         ws.column_dimensions['G'].width = 16
+
+        # ======== HOJA 2: MATRIZ "GENERAL" (una fila por semana del periodo) ========
+        from openpyxl.utils import get_column_letter
+        from decimal import Decimal
+        import math
+
+        ws2 = wb.create_sheet("GENERAL")
+
+        # Columnas: Semana, Rango, (empresas...), TOTAL_EQ11
+        empresas = sorted(company_map.keys(), key=lambda s: s.upper())
+        headers = ["Semana", "Rango"] + empresas + ["TOTAL_EQ11"]
+        for c, h in enumerate(headers, start=1):
+            cell = ws2.cell(row=1, column=c, value=h)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Agrupa los embarques del periodo por ISO-week
+        # (ya vienen filtrados por mes o año arriba en 'embarques')
+        weeks_map = defaultdict(list)   # {(y,w): [(s,it), ...]}
+        for comp, s, it in _iter_company_items(embarques, None):
+            yw = s.date.isocalendar()   # (year, week, weekday)
+            key = (yw.year, yw.week)
+            weeks_map[key].append((comp, s, it))
+
+        # Escribe una fila por semana
+        row = 2
+        for (yy, ww) in sorted(weeks_map.keys()):
+            pairs = weeks_map[(yy, ww)]
+
+            # Rango lunes-domingo de esa ISO week
+            monday = date.fromisocalendar(yy, ww, 1)
+            sunday = monday + timedelta(days=6)
+            week_label = f"{yy}-W{ww:02d}"
+            rango = f"{monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')}"
+
+            # Totales por empresa y total eq11 de la semana
+            per_company_amt = {e: 0.0 for e in empresas}
+            per_company_eq  = {e: 0.0 for e in empresas}
+            total_eq11_week = 0.0
+
+            for comp, s, it in pairs:
+                qty = int(it.quantity or 0)
+                cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
+                prc = float(getattr(it.presentation, "price", 0.0))
+                per_company_eq[comp]  += qty * cf
+                per_company_amt[comp] += qty * prc
+                total_eq11_week       += qty * cf
+
+            # Ajuste especial por empresa (AGRICOLA DH & G)
+            for comp in empresas:
+                if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+                    per_company_amt[comp] = float(
+                        Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq[comp]))
+                    )
+
+            # Escribir la fila
+            ws2.cell(row=row, column=1, value=week_label)
+            ws2.cell(row=row, column=2, value=rango)
+            c = 3
+            for emp in empresas:
+                ws2.cell(row=row, column=c, value=round(per_company_amt[emp], 2)); c += 1
+            ws2.cell(row=row, column=c, value=round(total_eq11_week, 2))
+            row += 1
+
+        # Anchos de columnas
+        ws2.column_dimensions['A'].width = 12
+        ws2.column_dimensions['B'].width = 28
+        for col_idx in range(3, 3 + len(empresas) + 1):
+            ws2.column_dimensions[get_column_letter(col_idx)].width = 18
+
 
         # Salida
         output = BytesIO(); wb.save(output); output.seek(0)
