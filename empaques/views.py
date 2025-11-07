@@ -2096,6 +2096,55 @@ def shipment_list(request):
         for i in range(3, 3 + len(empresas) + 1):
             ws.column_dimensions[get_column_letter(i)].width = 18
 
+        # ======= COBRO DE MAQUILA (debajo de la Matriz) =======
+        r += 2
+        ws.cell(row=r, column=1, value="Cobro de maquila").font = Font(size=13, bold=True, color="225577")
+        r += 1
+
+        # Excluir La Cima y RC (por etiqueta “bonita”)
+        EXCLUDE = {"LA CIMA PRODUCE", "RC ORGANICS"}
+        empresas_mq = [e for e in empresas if _canon_company_label(e).upper() not in EXCLUDE]
+
+        # Encabezados: Semana | Rango | <empresas sin LC/RC> | TOTAL_IMPORTE
+        headers_mq = ["Semana", "Rango"] + empresas_mq + ["TOTAL_IMPORTE"]
+        for c, h in enumerate(headers_mq, start=1):
+            cell = ws.cell(row=r, column=c, value=h)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin
+        r += 1
+
+        # Fila de datos (reutiliza week_label, rango, per_company_amt calculados arriba)
+        cidx = 1
+        c = ws.cell(row=r, column=cidx, value=week_label); c.border = thin; c.alignment = Alignment(horizontal="center"); cidx += 1
+        c = ws.cell(row=r, column=cidx, value=rango);      c.border = thin; c.alignment = Alignment(horizontal="center"); cidx += 1
+
+        total_importe_mq = 0.0
+        for emp in empresas_mq:
+            amt = round(float(per_company_amt.get(emp, 0.0)), 2)
+            cell = ws.cell(row=r, column=cidx, value=amt)
+            cell.border = thin
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+            cell.number_format = '$#,##0.00'
+            total_importe_mq += amt
+            cidx += 1
+
+        # Total importe (suma de importes de las empresas incluidas)
+        cell = ws.cell(row=r, column=cidx, value=round(total_importe_mq, 2))
+        cell.border = thin
+        cell.alignment = Alignment(horizontal="right", vertical="center")
+        cell.number_format = '$#,##0.00'
+
+        # Ajuste de anchos (opcional)
+        ws.column_dimensions['A'].width = max(ws.column_dimensions.get('A').width or 0, 12)
+        ws.column_dimensions['B'].width = max(ws.column_dimensions.get('B').width or 0, 28)
+        from openpyxl.utils import get_column_letter
+        for i in range(3, 3 + len(empresas_mq) + 1):
+            col = get_column_letter(i)
+            ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
+
+
         # Salida
         out = BytesIO(); wb.save(out); out.seek(0)
         filename = f"semana_{year}-W{week}_general.xlsx"
