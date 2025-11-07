@@ -2055,6 +2055,7 @@ def shipment_list(request):
             cell.font = th_font; cell.fill = th_fill
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = thin
+
         r += 1
 
         # Etiquetas
@@ -2143,6 +2144,58 @@ def shipment_list(request):
         for i in range(3, 3 + len(empresas_mq) + 1):
             col = get_column_letter(i)
             ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
+
+        # ======= COBRO LC + RC por Eq. 11 lbs (x $6.00) =======
+        r += 2
+        ws.cell(row=r, column=1, value="Cobro LC + RC (Eq. 11 lbs × $6.00)").font = Font(size=13, bold=True, color="225577")
+        r += 1
+
+        # Helpers para encontrar el nombre "bonito" tal como aparece en 'empresas'
+        def _find_display_name(label_list, canon_target):
+            canon_target = canon_target.upper()
+            for e in label_list:
+                if _canon_company_label(e).upper() == canon_target:
+                    return e
+            # Si no lo encontró, regresa el canon como fallback
+            return canon_target.title()
+
+        LC_LABEL = _find_display_name(empresas, "LA CIMA PRODUCE")
+        RC_LABEL = _find_display_name(empresas, "RC ORGANICS")
+
+        headers_lcrc = ["Semana", "Rango", LC_LABEL, RC_LABEL, "TOTAL Eq. 11 lbs", "IMPORTE ($)"]
+        for c, h in enumerate(headers_lcrc, start=1):
+            cell = ws.cell(row=r, column=c, value=h)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin
+        r += 1
+
+        # Eq. 11 lbs por empresa (columna por empresa)
+        eq_lc = float(per_company_eq.get(LC_LABEL, 0.0))
+        eq_rc = float(per_company_eq.get(RC_LABEL, 0.0))
+        total_eq_lcrc = eq_lc + eq_rc
+        importe_lcrc = round(total_eq_lcrc * 6.0, 2)
+
+        # Fila de datos
+        cidx = 1
+        c = ws.cell(row=r, column=cidx, value=week_label); c.border = thin; c.alignment = Alignment(horizontal="center"); cidx += 1
+        c = ws.cell(row=r, column=cidx, value=rango);      c.border = thin; c.alignment = Alignment(horizontal="center"); cidx += 1
+
+        c = ws.cell(row=r, column=cidx, value=round(eq_lc, 2)); c.border = thin; c.alignment = Alignment(horizontal="right"); c.number_format = '#,##0.00'; cidx += 1
+        c = ws.cell(row=r, column=cidx, value=round(eq_rc, 2)); c.border = thin; c.alignment = Alignment(horizontal="right"); c.number_format = '#,##0.00'; cidx += 1
+
+        c = ws.cell(row=r, column=cidx, value=round(total_eq_lcrc, 2)); c.border = thin; c.alignment = Alignment(horizontal="right"); c.number_format = '#,##0.00'; cidx += 1
+        c = ws.cell(row=r, column=cidx, value=importe_lcrc);             c.border = thin; c.alignment = Alignment(horizontal="right"); c.number_format = '$#,##0.00'
+
+        # Anchos cómodos (opcional)
+        from openpyxl.utils import get_column_letter
+        ws.column_dimensions['A'].width = max(ws.column_dimensions.get('A').width or 0, 12)
+        ws.column_dimensions['B'].width = max(ws.column_dimensions.get('B').width or 0, 28)
+        for i in range(3, 7):  # columnas C..F
+            col = get_column_letter(i)
+            ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
+
 
 
         # Salida
