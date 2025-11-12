@@ -1895,119 +1895,157 @@ def shipment_list(request):
             bottom=Side(style='thin', color='AAAAAA'),
         )
 
-        # ================================================================
-        # 1) DISEÑO EMPRESA ESPECÍFICA (AGREGADO POR PRESENTACIÓN/TAMAÑO)
-        #    — versión "bonita"
-        # ================================================================
+        # ------------------------------------------------------------------
+        # 1) DISEÑO EMPRESA ESPECÍFICA (igual al de la captura)
+        # ------------------------------------------------------------------
         if empresa.lower() != 'general':
+            from decimal import Decimal
+            from openpyxl.drawing.image import Image as XLImage
+            import os
+
             wb = Workbook()
             ws = wb.active
             ws.title = "Semana"
 
             emp_label = _canon_company_label(empresa)
 
-            # --- Estilos ---
-            title_font   = Font(size=18, bold=True, color="1F4E79")
-            subtitle_font= Font(size=11, italic=True, color="666666")
-            th_font      = Font(name='Calibri', size=12, bold=True, color="FFFFFF")
-            th_fill      = PatternFill("solid", fgColor="1F4E79")
-            zebra_fill   = PatternFill("solid", fgColor="F7FAFF")
-            total_fill   = PatternFill("solid", fgColor="D9E8FB")
-            thin         = Border(
-                left=Side(style='thin', color='B7B7B7'),
-                right=Side(style='thin', color='B7B7B7'),
-                top=Side(style='thin', color='B7B7B7'),
-                bottom=Side(style='thin', color='B7B7B7'),
-            )
+            # --- Logo en A1 (escalado) ---
+            LOGO_SLUG_MAP = {
+                "La Cima Produce": "la-cima-produce",
+                "RC Organics": "gh-farms",              # comparte logo con Empaque N.1/GH
+                "GH Farms": "gh-farms",
+                "Gourmet Baja Farms": "gourmet-baja-farms",
+                "GBF Farms": "gbf-farms",
+                "Agricola DH & G": "agricola",
+            }
+            logo_slug = LOGO_SLUG_MAP.get(emp_label)
+            if logo_slug:
+                logo_path = os.path.join(settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
+                if os.path.exists(logo_path):
+                    try:
+                        img = XLImage(logo_path)
+                        target_h = 120  # px aprox
+                        scale = target_h / float(img.height)
+                        img.width  = int(img.width * scale)
+                        img.height = int(img.height * scale)
+                        ws.add_image(img, "A1")
+                    except Exception:
+                        pass
 
-            # --- Título / subtítulo ---
-            ws.merge_cells('A1:E1')
-            ws.merge_cells('A2:E2')
-            ws['A1'] = f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {emp_label}"
-            ws['A1'].font = title_font
-            ws['A2'] = "Totales por presentación y tamaño (agrupado)"
-            ws['A2'].font = subtitle_font
-            ws.row_dimensions[1].height = 26
-            ws.row_dimensions[2].height = 20
+            # --- Título en D1 (merge) + subtítulo D3 ---
+            ws.merge_cells(start_row=1, start_column=4, end_row=2, end_column=9)  # D1:I2
+            tcell = ws.cell(row=1, column=4,
+                            value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {emp_label}")
+            tcell.font = Font(name='Calibri', size=18, bold=True, color="3C78D8")
+            tcell.alignment = Alignment(horizontal="left", vertical="center")
+            scell = ws.cell(row=3, column=4, value="Detalle de embarques y totales por semana")
+            scell.font = Font(name='Calibri', size=11, italic=True, color="6D6D6D")
+            scell.alignment = Alignment(horizontal="left")
 
-            # --- Encabezados ---
-            headers = ["PRESENTACIÓN", "TAMAÑO", "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)"]
-            r = 4
+            # --- Encabezados (fila 7) ---
+            headers = ["N° EMBARQUE", "N° FACTURA", "FECHA", "PRESENTACIÓN",
+                    "TAMAÑO", "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)", "CLIENTE"]
+            r = 7
             for c, h in enumerate(headers, start=1):
                 cell = ws.cell(row=r, column=c, value=h)
-                cell.font = th_font; cell.fill = th_fill
+                cell.font = th_font
+                cell.fill = th_fill
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.border = thin
             ws.row_dimensions[r].height = 22
+            ws.auto_filter.ref = f"A{r}:I{r}"
             r += 1
 
-            # --- Agrupar por (presentación, tamaño) ---
-            from collections import defaultdict
-            agg = defaultdict(lambda: {'qty': 0, 'eq': 0.0, 'amt': 0.0})
-            for comp, s, it in _iter_company_items(weeks_qs, emp_label):
-                pres = str(it.presentation.name).strip()
-                size = str(it.size).strip()
-                qty  = int(it.quantity or 0)
-                cf   = float(getattr(it.presentation, "conversion_factor", 1.0))
-                prc  = float(getattr(it.presentation, "price", 0.0))
-                k = (pres, size)
-                agg[k]['qty'] += qty
-                agg[k]['eq']  += qty * cf
-                agg[k]['amt'] += qty * prc
+            # --- Anchos + freeze panes como en la captura ---
+            for col_idx in range(1, 9 + 1):
+                ws.column_dimensions[get_column_letter(col_idx)].width = 24
+            ws.freeze_panes = "A8"
 
-            # --- Escribir filas (zebra) + formatos numéricos ---
-            total_boxes = 0; total_eq = 0.0; total_amt = 0.0
-            for (pres, size) in sorted(agg.keys(), key=lambda k: (k[0], k[1])):
-                vals = agg[(pres, size)]
-                row_vals = [pres, size, int(vals['qty']), round(vals['eq'], 2), round(vals['amt'], 2)]
-                for c, v in enumerate(row_vals, start=1):
+            # --- Filas (por embarque, SIN agrupar por tamaño: exactamente como la foto) ---
+            total_boxes = 0
+            total_eq    = 0.0
+            total_amt   = 0.0
+
+            # Helper para número de orden mostrado (si no lo tienes ya definido)
+            def _client_order_for(embarque, cliente_name):
+                cname = (cliente_name or "").lower()
+                if "cima" in cname:
+                    return getattr(embarque, "order_lacima", None)
+                if "rc" in cname:
+                    return getattr(embarque, "order_rc", None)
+                if "gh" in cname:
+                    return getattr(embarque, "order_gh", None)
+                if "gourmet" in cname:
+                    return getattr(embarque, "order_gourmet", None)
+                if "gbf" in cname:
+                    return getattr(embarque, "order_gbf", None)
+                if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
+                    return getattr(embarque, "order_dhg", None)
+                return None
+
+            # Recorremos sólo ítems de la empresa seleccionada (una fila por item)
+            for comp, s, it in _iter_company_items(weeks_qs, emp_label):
+                qty = int(it.quantity or 0)
+                cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
+                prc = float(getattr(it.presentation, "price", 0.0))
+                num_emb = _client_order_for(s, emp_label) or str(s.tracking_number)
+
+                vals = [
+                    num_emb,
+                    s.invoice_number,
+                    s.date.strftime('%d/%m/%Y'),
+                    str(it.presentation.name).strip(),
+                    str(it.size).strip(),
+                    qty,
+                    round(qty * cf, 2),
+                    round(qty * prc, 2),
+                    emp_label,
+                ]
+                for c, v in enumerate(vals, start=1):
                     cc = ws.cell(row=r, column=c, value=v)
                     cc.border = thin
-                    if c in (3,4,5):
-                        cc.alignment = Alignment(horizontal="right", vertical="center")
-                        cc.number_format = '#,##0' if c == 3 else ('$#,##0.00' if c == 5 else '#,##0.00')
+                    if c in (6, 7, 8):
+                        cc.alignment = Alignment(horizontal="right")
                     else:
-                        cc.alignment = Alignment(horizontal="center", vertical="center")
-                    # zebra
-                    if (r % 2) == 0:
-                        cc.fill = zebra_fill
-                ws.row_dimensions[r].height = 20
+                        cc.alignment = Alignment(horizontal="center")
                 r += 1
 
-                total_boxes += vals['qty']
-                total_eq    += vals['eq']
-                total_amt   += vals['amt']
+                total_boxes += qty
+                total_eq    += qty * cf
+                total_amt   += qty * prc
 
-            # Ajuste especial AGRICOLA DH & G
-            from decimal import Decimal
+            # --- Ajuste especial AGRICOLA DH & G (importe por Eq11 * 3.40 con round half-up) ---
             if emp_label.upper() in SPECIAL_EQ11_ROUND_CLIENTS:
                 total_amt = float(Decimal('3.40') * Decimal(_round_half_up_to_int(total_eq)))
 
-            # --- Totales ---
-            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
-            lab = ws.cell(row=r, column=1, value="TOTALES:")
-            lab.font = Font(bold=True, color="1F4E79"); lab.alignment = Alignment(horizontal="right", vertical="center")
-            for col, val, nf in [(3, int(total_boxes), '#,##0'), (4, round(total_eq, 2), '#,##0.00'), (5, round(total_amt, 2), '$#,##0.00')]:
-                cc = ws.cell(row=r, column=col, value=val)
-                cc.font = Font(bold=True); cc.fill = total_fill; cc.border = thin
-                cc.alignment = Alignment(horizontal="right", vertical="center")
-                cc.number_format = nf
-            ws.row_dimensions[r].height = 22
+            # --- Fila de TOTALES (banda azul claro) ---
+            ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
+            lbl = ws.cell(row=r, column=1, value="TOTALES:")
+            lbl.font = Font(name='Calibri', size=12, bold=True, color="225577")
+            lbl.alignment = Alignment(horizontal="right", vertical="center")
 
-            # --- Anchos + freeze panes ---
-            ws.column_dimensions['A'].width = 28
-            ws.column_dimensions['B'].width = 16
-            ws.column_dimensions['C'].width = 16
-            ws.column_dimensions['D'].width = 18
-            ws.column_dimensions['E'].width = 18
-            ws.freeze_panes = "A5"
+            c_cajas = ws.cell(row=r, column=6, value=total_boxes)
+            c_eq    = ws.cell(row=r, column=7, value=round(total_eq, 2))
+            c_amt   = ws.cell(row=r, column=8, value=round(total_amt, 2))
+            for c in (6, 7, 8):
+                cc = ws.cell(row=r, column=c)
+                cc.font = Font(name='Calibri', size=12, bold=True)
+                cc.fill = PatternFill("solid", fgColor="BBDDFF")
+                cc.alignment = Alignment(horizontal="right", vertical="center")
+                cc.border = thin
+            c_cajas.number_format = '#,##0'
+            c_eq.number_format    = '#,##0.00'
+            c_amt.number_format   = '$#,##0.00'
 
             # --- Salida ---
-            out = BytesIO(); wb.save(out); out.seek(0)
-            filename = f"semana_{year}-W{week}_{emp_label}.xlsx"
+            out = BytesIO()
+            wb.save(out)
+            out.seek(0)
+            filename = f"semana_{year}-W{week}_{slugify(emp_label)}.xlsx"
             resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+            resp["Content-Disposition"] = f'attachment; filename=\"{filename}\"'
             return resp
+
 
         # ================================================================
         # 2) DISEÑO GENERAL (misma hoja + matriz al final)
