@@ -1916,7 +1916,7 @@ def shipment_list(request):
                 "GH Farms": "gh-farms",
                 "Gourmet Baja Farms": "gourmet-baja-farms",
                 "GBF Farms": "gbf-farms",
-                "Agricola DH & G": "agricola",
+                "Agricola DH & G": "AGRICOLA",
             }
             logo_slug = LOGO_SLUG_MAP.get(emp_label)
             if logo_slug:
