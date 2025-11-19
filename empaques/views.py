@@ -2456,37 +2456,44 @@ def shipment_list(request):
             rango_label = f"{d1.strftime('%d/%m/%Y')} – {d2.strftime('%d/%m/%Y')}"
 
         # Importes por empresa + total eq11 del periodo
-        per_company_amt = {e: 0.0 for e in empresas}
+        per_company_amt = {e: 0.0 for e in empresas}   # 'empresas' ya viene normalizado desde company_map.keys()
         per_company_eq  = {e: 0.0 for e in empresas}
         total_eq11 = 0.0
 
-        # Recorremos TODO el queryset (embarques) usando el mismo iterador por empresa
+        # Recorremos TODO el queryset (embarques) usando SIEMPRE etiqueta normalizada
         for comp, s, it in _iter_company_items(embarques, None):
+            label = _canon_company_label(comp)  # <-- NORMALIZA LA CLAVE AQUÍ
             qty = int(it.quantity or 0)
             cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
             prc = float(getattr(it.presentation, "price", 0.0))
+
             total_eq11 += qty * cf
-            per_company_eq[comp]  += qty * cf
-            per_company_amt[comp] += qty * prc
+            # Usa .get(...) para blindarte si aparece una empresa no listada en 'empresas'
+            per_company_eq[label]  = per_company_eq.get(label, 0.0) + qty * cf
+            per_company_amt[label] = per_company_amt.get(label, 0.0) + qty * prc
 
         # Ajuste especial por empresa (AGRICOLA DH & G)
-        for comp in empresas:
-            if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
-                per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq[comp])))
+        for emp in empresas:  # 'empresas' ya son etiquetas normalizadas
+            if _canon_company_label(emp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+                per_company_amt[emp] = float(
+                    Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq.get(emp, 0.0)))
+                )
 
         # Escribir fila de la matriz
         ws.cell(row=r, column=1, value=periodo_label).border = thin
-        ws.cell(row=r, column=2, value=rango_label).border = thin
+        ws.cell(row=r, column=2, value=rango_label).border  = thin
         ws.cell(row=r, column=1).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(row=r, column=2).alignment = Alignment(horizontal="center", vertical="center")
 
         cidx = 3
         for emp in empresas:
-            cell = ws.cell(row=r, column=cidx, value=round(per_company_amt[emp], 2))
+            val = round(per_company_amt.get(emp, 0.0), 2)
+            cell = ws.cell(row=r, column=cidx, value=val)
             cell.border = thin
             cell.alignment = Alignment(horizontal="right", vertical="center")
             cell.number_format = '$#,##0.00'
             cidx += 1
+
         cell = ws.cell(row=r, column=cidx, value=round(total_eq11, 2))
         cell.border = thin
         cell.alignment = Alignment(horizontal="right", vertical="center")
