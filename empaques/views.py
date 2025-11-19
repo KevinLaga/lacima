@@ -1896,7 +1896,7 @@ def shipment_list(request):
         )
 
         # ------------------------------------------------------------------
-        # 1) DISEÑO EMPRESA ESPECÍFICA (igual al de la captura)
+        # 1) DISEÑO EMPRESA ESPECÍFICA 
         # ------------------------------------------------------------------
         if empresa.lower() != 'general':
             from decimal import Decimal
@@ -2346,13 +2346,15 @@ def shipment_list(request):
         empresa_filter = empresa  # ya viene de _empresa_param(request) (None => general)
 
         # Arma mapa {empresa: [(s,it), ...]}
-        company_map = collections.defaultdict(list)
+        company_map = defaultdict(list)
         for comp, s, it in _iter_company_items(embarques, empresa_filter):
-            company_map[comp].append((s, it))
+            label = _canon_company_label(comp)
+            company_map[label].append((s, it))
 
         # Si es empresa específica, fuerza a una sola sección
         if empresa_filter:
-            company_map = { _canon_company_label(empresa_filter): company_map.get(_canon_company_label(empresa_filter), []) }
+            only = _canon_company_label(empresa_filter)
+            company_map = { only: company_map.get(only, []) }
 
         wb = Workbook()
         ws = wb.active
