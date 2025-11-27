@@ -57,11 +57,14 @@ class ShipmentForm(forms.ModelForm):
             'tracking_number','date','carrier','tractor_plates','box_plates',
             'driver','departure_time','box','box_conditions','box_free_of_odors',
             'ryan','seal_1','seal_2','seal_3','seal_4','chismografo',
-            'delivery_signature','driver_signature','invoice_number','tarimas_peco', 
+            'delivery_signature','driver_signature','invoice_number','tarimas_peco', "is_national",
 
-            # 👇 AÑADE ESTOS CAMPOS AQUÍ
+
             'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg',
         ]
+        widgets = {
+            "is_national": forms.CheckboxInput(attrs={"id":"id_is_national"})
+        }
         labels = {
             'order_lacima':   'Núm. orden CIMA',
             'order_rc':       'Núm. orden RC',
@@ -69,6 +72,7 @@ class ShipmentForm(forms.ModelForm):
             'order_gbf':      'Núm. orden GBF Farms',
             'order_gh':      'Núm. orden GH Farms',
             'order_dhg':      'Núm. orden AGRICOLA DH & G',
+            "is_national": "Nacional",
         }
 
 

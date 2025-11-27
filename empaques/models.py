@@ -28,6 +28,11 @@ class Presentation(models.Model):
 
 
 class Shipment(models.Model):
+    is_national = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Si está activo, el embarque es 'Nacional'. Si no, es 'Exportación'."
+    )
     tarimas_peco = models.PositiveIntegerField(
         "Tarimas PECO",
         blank=True,

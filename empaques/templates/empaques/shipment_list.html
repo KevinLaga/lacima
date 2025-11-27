@@ -115,7 +115,6 @@
     <button type="submit">Ir</button>
   </form>
 
-  <!-- Tabla de embarques -->
   <table border="1" cellpadding="5" cellspacing="0">
     <thead>
       <tr>
@@ -123,6 +122,7 @@
         <th>Embarque</th>
         <th>Factura</th>
         <th>Fecha</th>
+        <th>Tipo</th>
         <th>Detalle</th>
         <th>La Cima</th>
         <th>RC</th>
@@ -138,7 +138,34 @@
         <td>{{ forloop.counter }}</td>
         <td>{{ s.tracking_number }}</td>
         <td>{{ s.invoice_number }}</td>
-        <td>{{ s.date }}</td>
+        <td>{{ s.date|date:"d/m/Y" }}</td>
+
+        <!-- Tipo (nuevo) -->
+        <td>
+          {% if s.is_national %}
+            Nacional
+          {% else %}
+            Exportación
+          {% endif %}
+        </td>
+
+        <!-- Detalle (cámbialo a tu URL si usas otra vista) -->
+        <td>
+          <a href="{% url 'shipment_detail' s.id %}">Ver</a>
+        </td>
+
+        <!-- Órdenes por empresa (muestran vacío si no hay dato) -->
+        <td>{{ s.order_lacima|default:"" }}</td>
+        <td>{{ s.order_rc|default:"" }}</td>
+        <td>{{ s.order_gh|default:"" }}</td>
+        <td>{{ s.order_gourmet|default:"" }}</td>
+        <td>{{ s.order_gbf|default:"" }}</td>
+        <td>{{ s.order_dhg|default:"" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
         <td>
           <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver día</a>
           &nbsp;|&nbsp;

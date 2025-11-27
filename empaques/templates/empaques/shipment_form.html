@@ -56,6 +56,17 @@
 
   </style>
 
+  <!-- Estilos pequeños para el switch y tips -->
+  <style>
+    .switch-line {
+      display: flex; align-items: center; gap: .5rem; margin: .5rem 0 .25rem;
+    }
+    .switch-line input[type="checkbox"] {
+      transform: scale(1.2);
+    }
+    .hint { font-size: .85rem; color: #6b7280; }
+  </style>
+
   <h1>Registrar Embarque</h1>
   <form method="post">
     {% csrf_token %}
@@ -63,46 +74,57 @@
 
     <fieldset>
       <legend>Datos del Embarque</legend>
+
       <div>
         {{ form.tracking_number.label_tag }} {{ form.tracking_number }}
         {{ form.tracking_number.errors }}
       </div>
+
       <div>
         {{ form.date.label_tag }} {{ form.date }}
         {{ form.date.errors }}
       </div>
+
       <div>
         {{ form.carrier.label_tag }} {{ form.carrier }}
         {{ form.carrier.errors }}
       </div>
+
       <div>
         {{ form.tractor_plates.label_tag }} {{ form.tractor_plates }}
         {{ form.tractor_plates.errors }}
       </div>
+
       <div>
         {{ form.box_plates.label_tag }} {{ form.box_plates }}
         {{ form.box_plates.errors }}
       </div>
+
       <div>
         {{ form.driver.label_tag }} {{ form.driver }}
         {{ form.driver.errors }}
       </div>
+
       <div>
         {{ form.departure_time.label_tag }} {{ form.departure_time }}
         {{ form.departure_time.errors }}
       </div>
+
       <div>
         {{ form.box.label_tag }} {{ form.box }}
         {{ form.box.errors }}
       </div>
+
       <div>
         {{ form.box_conditions.label_tag }} {{ form.box_conditions }}
         {{ form.box_conditions.errors }}
       </div>
+
       <div>
         {{ form.box_free_of_odors.label_tag }} {{ form.box_free_of_odors }}
         {{ form.box_free_of_odors.errors }}
       </div>
+
       <div>
         {{ form.ryan.label_tag }} {{ form.ryan }}
         {{ form.ryan.errors }}
@@ -117,25 +139,36 @@
         {{ form.chismografo.label_tag }} {{ form.chismografo }}
         {{ form.chismografo.errors }}
       </div>
+
       <div>
         {{ form.delivery_signature.label_tag }} {{ form.delivery_signature }}
         {{ form.delivery_signature.errors }}
       </div>
+
       <div>
         {{ form.driver_signature.label_tag }} {{ form.driver_signature }}
         {{ form.driver_signature.errors }}
       </div>
+
       <div>
         {{ form.invoice_number.label_tag }} {{ form.invoice_number }}
         {{ form.invoice_number.errors }}
       </div>
+
+      <!-- 🔽 NUEVO: Switch “Nacional” (por defecto desactivado = Exportación) -->
+      <div class="switch-line">
+        <label for="id_is_national" style="font-weight:600;">Nacional</label>
+        {{ form.is_national }}
+        <span class="hint">Si no está marcado, se considera “Exportación”.</span>
+      </div>
+      <!-- 🔼 -->
+
       <div class="form-group col-md-3">
         {{ form.tarimas_peco.label_tag }}
         {{ form.tarimas_peco }}
         {{ form.tarimas_peco.errors }}
       </div>
 
-      <!-- 🔽🔽🔽 NUEVO: Números de orden por cliente (opcionales) -->
       <hr>
       <h3>Números de orden por cliente (opcional)</h3>
       <div class="orders-grid">
@@ -162,14 +195,15 @@
         <div>
           {{ form.order_dhg.label_tag }} {{ form.order_dhg }}
           {{ form.order_dhg.errors }}
-
+        </div>
       </div>
-      <!-- 🔼🔼🔼 FIN NUEVO -->
+      <!-- FIN órdenes -->
     </fieldset>
 
     <fieldset>
       <legend>Ítems del Embarque</legend>
       {{ formset.management_form }}
+
       <div style="display: flex; gap: 40px;">
         <!-- Lado izquierdo -->
         <table>
@@ -227,6 +261,30 @@
           </tbody>
         </table>
       </div>
+    </fieldset>
+
+    {% if form.errors %}
+      <div style="color: red;">
+        {{ form.errors }}
+      </div>
+    {% endif %}
+    {% if formset.non_form_errors %}
+      <div style="color: red;">
+        {{ formset.non_form_errors }}
+      </div>
+    {% endif %}
+    {% for subform in formset %}
+      {% if subform.errors %}
+        <div style="color: red;">
+          {{ subform.errors }}
+        </div>
+      {% endif %}
+    {% endfor %}
+
+    <button type="button" id="add-item-btn">+ Añadir Ítem</button>
+    <button type="submit" id="btn-guardar">Guardar</button>
+  </form>
+
 
       {% if formset.non_form_errors %}
         <div class="formset-errors">

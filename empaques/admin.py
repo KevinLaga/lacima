@@ -46,12 +46,12 @@ class ShipmentAdmin(admin.ModelAdmin):
     list_display = (
         "id", "date", "tracking_number", "invoice_number",
         "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg",
-        "carrier", "tarimas_peco",
+        "carrier", "tarimas_peco","is_national",
     )
     list_display_links = ("id", "tracking_number")  # estos NO pueden ir en list_editable
     list_editable = ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg")
 
-    list_filter = ("date", "carrier")
+    list_filter = ("date", "carrier", "is_national")
     search_fields = (
         "tracking_number", "invoice_number",
         "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg",
