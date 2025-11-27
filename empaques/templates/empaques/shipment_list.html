@@ -133,56 +133,33 @@
       </tr>
     </thead>
     <tbody>
-    {% for s in shipments %}
-      <tr>
-        <td>{{ forloop.counter }}</td>
-        <td>{{ s.tracking_number }}</td>
-        <td>{{ s.invoice_number }}</td>
-        <td>{{ s.date|date:"d/m/Y" }}</td>
-
-        <!-- Tipo (nuevo) -->
-        <td>
-          {% if s.is_national %}
-            Nacional
-          {% else %}
-            Exportación
-          {% endif %}
-        </td>
-
-        <!-- Detalle (cámbialo a tu URL si usas otra vista) -->
-        <td>
-          <a href="{% url 'shipment_detail' s.id %}">Ver</a>
-        </td>
-
-        <!-- Órdenes por empresa (muestran vacío si no hay dato) -->
-        <td>{{ s.order_lacima|default:"" }}</td>
-        <td>{{ s.order_rc|default:"" }}</td>
-        <td>{{ s.order_gh|default:"" }}</td>
-        <td>{{ s.order_gourmet|default:"" }}</td>
-        <td>{{ s.order_gbf|default:"" }}</td>
-        <td>{{ s.order_dhg|default:"" }}</td>
-      </tr>
-    {% endfor %}
+      {% for s in shipments %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ s.tracking_number }}</td>
+          <td>{{ s.invoice_number }}</td>
+          <td>{{ s.date|date:"d/m/Y" }}</td>
+          <td>{% if s.is_national %}Nacional{% else %}Exportación{% endif %}</td>
+          <td>
+            <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver día</a>
+            &nbsp;|&nbsp;
+            <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}">Ver Reporte</a>
+          </td>
+          <td>{{ s.order_lacima|default_if_none:"" }}</td>
+          <td>{{ s.order_rc|default_if_none:"" }}</td>
+          <td>{{ s.order_gh|default_if_none:"" }}</td>
+          <td>{{ s.order_gourmet|default_if_none:"" }}</td>
+          <td>{{ s.order_gbf|default_if_none:"" }}</td>
+          <td>{{ s.order_dhg|default_if_none:"" }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="12" style="text-align:center;color:#666;">No hay embarques aún.</td>
+        </tr>
+      {% endfor %}
     </tbody>
   </table>
 
-        <td>
-          <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver día</a>
-          &nbsp;|&nbsp;
-          <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}">Ver Reporte</a>
-        </td>
-        <td>{{ s.order_lacima|default_if_none:"" }}</td>
-        <td>{{ s.order_rc|default_if_none:"" }}</td>
-        <td>{{ s.order_gh|default_if_none:"" }}</td>
-        <td>{{ s.order_gourmet|default_if_none:"" }}</td>
-        <td>{{ s.order_gbf|default_if_none:"" }}</td>
-        <td>{{ s.order_dhg|default_if_none:"" }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="11">No hay embarques aún.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
 </body>
 </html>
 {% else %}
