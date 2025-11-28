@@ -75,7 +75,8 @@ class ShipmentAdmin(admin.ModelAdmin):
             "fields": ("delivery_signature", "driver_signature")
         }),
         ("Extras", {
-            "fields": ("tarimas_peco",)
+            "fields": ("tarimas_peco",
+                       'is_national',)
         }),
         ("Números de orden por cliente (solo para mostrar en los Excel por cliente)", {
             "fields": ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg"),

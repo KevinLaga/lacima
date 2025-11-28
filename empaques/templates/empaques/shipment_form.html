@@ -286,34 +286,6 @@
   </form>
 
 
-      {% if formset.non_form_errors %}
-        <div class="formset-errors">
-          {{ formset.non_form_errors }}
-        </div>
-      {% endif %}
-    </fieldset>
-
-    {% if form.errors %}
-      <div style="color: red;">
-        {{ form.errors }}
-      </div>
-    {% endif %}
-    {% if formset.non_form_errors %}
-      <div style="color: red;">
-        {{ formset.non_form_errors }}
-      </div>
-    {% endif %}
-    {% for subform in formset %}
-      {% if subform.errors %}
-        <div style="color: red;">
-          {{ subform.errors }}
-        </div>
-      {% endif %}
-    {% endfor %}
-
-    <button type="button" id="add-item-btn">+ Añadir Ítem</button>
-    <button type="submit" id="btn-guardar">Guardar</button>
-  </form>
 
   <script>
   document.addEventListener("DOMContentLoaded", function() {
