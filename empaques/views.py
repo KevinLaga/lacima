@@ -1896,12 +1896,21 @@ def shipment_list(request):
         )
 
         # ------------------------------------------------------------------
-        # 1) DISEÑO EMPRESA ESPECÍFICA 
+        # 1) DISEÑO EMPRESA ESPECÍFICA (con Decimal y regla AGRÍCOLA por embarque)
         # ------------------------------------------------------------------
         if empresa.lower() != 'general':
-            from decimal import Decimal
+            from decimal import Decimal, ROUND_HALF_UP
             from openpyxl.drawing.image import Image as XLImage
+            from openpyxl.utils import get_column_letter
             import os
+
+            def _q2(x: Decimal) -> Decimal:
+                return x.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+            def _round_half_up_to_int(x: Decimal) -> int:
+                # x viene en Eq.11 del embarque (no del total)
+                # Regla: .49 ↓, .50/.51 ↑ (half-up estándar)
+                return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
             wb = Workbook()
             ws = wb.active
@@ -1934,8 +1943,10 @@ def shipment_list(request):
 
             # --- Título en D1 (merge) + subtítulo D3 ---
             ws.merge_cells(start_row=1, start_column=4, end_row=2, end_column=9)  # D1:I2
-            tcell = ws.cell(row=1, column=4,
-                            value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {emp_label}")
+            tcell = ws.cell(
+                row=1, column=4,
+                value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {emp_label}"
+            )
             tcell.font = Font(name='Calibri', size=18, bold=True, color="3C78D8")
             tcell.alignment = Alignment(horizontal="left", vertical="center")
             scell = ws.cell(row=3, column=4, value="Detalle de embarques y totales por semana")
@@ -1956,17 +1967,12 @@ def shipment_list(request):
             ws.auto_filter.ref = f"A{r}:I{r}"
             r += 1
 
-            # --- Anchos + freeze panes como en la captura ---
+            # --- Anchos + freeze panes ---
             for col_idx in range(1, 9 + 1):
                 ws.column_dimensions[get_column_letter(col_idx)].width = 24
             ws.freeze_panes = "A8"
 
-            # --- Filas (por embarque, SIN agrupar por tamaño: exactamente como la foto) ---
-            total_boxes = 0
-            total_eq    = 0.0
-            total_amt   = 0.0
-
-            # Helper para número de orden mostrado (si no lo tienes ya definido)
+            # --- Helper: número de orden mostrado por cliente ---
             def _client_order_for(embarque, cliente_name):
                 cname = (cliente_name or "").lower()
                 if "cima" in cname:
@@ -1983,11 +1989,26 @@ def shipment_list(request):
                     return getattr(embarque, "order_dhg", None)
                 return None
 
-            # Recorremos sólo ítems de la empresa seleccionada (una fila por item)
+            # --- Filas (una por ítem; importes con Decimal) ---
+            total_boxes = 0
+            total_eq    = Decimal('0')
+            total_amt   = Decimal('0')
+
+            is_agricola = _canon_company_label(emp_label).upper() in SPECIAL_EQ11_ROUND_CLIENTS
+
             for comp, s, it in _iter_company_items(weeks_qs, emp_label):
                 qty = int(it.quantity or 0)
-                cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
-                prc = float(getattr(it.presentation, "price", 0.0))
+                cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
+                eq_emb = Decimal(qty) * cf
+
+                # Importe “por embarque”:
+                if is_agricola:
+                    # AGRÍCOLA: 3.40 * round_half_up(eq11_embarque), y se redondea a 2 decimales
+                    amt_emb = _q2(Decimal('3.40') * Decimal(_round_half_up_to_int(eq_emb)))
+                else:
+                    prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
+                    amt_emb = _q2(Decimal(qty) * prc)
+
                 num_emb = _client_order_for(s, emp_label) or str(s.tracking_number)
 
                 vals = [
@@ -1997,8 +2018,8 @@ def shipment_list(request):
                     str(it.presentation.name).strip(),
                     str(it.size).strip(),
                     qty,
-                    round(qty * cf, 2),
-                    round(qty * prc, 2),
+                    float(_q2(eq_emb)),       # mostrar a 2 dec
+                    float(amt_emb),           # mostrar a 2 dec
                     emp_label,
                 ]
                 for c, v in enumerate(vals, start=1):
@@ -2011,12 +2032,8 @@ def shipment_list(request):
                 r += 1
 
                 total_boxes += qty
-                total_eq    += qty * cf
-                total_amt   += qty * prc
-
-            # --- Ajuste especial AGRICOLA DH & G (importe por Eq11 * 3.40 con round half-up) ---
-            if emp_label.upper() in SPECIAL_EQ11_ROUND_CLIENTS:
-                total_amt = float(Decimal('3.40') * Decimal(_round_half_up_to_int(total_eq)))
+                total_eq    += eq_emb
+                total_amt   += amt_emb
 
             # --- Fila de TOTALES (banda azul claro) ---
             ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
@@ -2025,8 +2042,8 @@ def shipment_list(request):
             lbl.alignment = Alignment(horizontal="right", vertical="center")
 
             c_cajas = ws.cell(row=r, column=6, value=total_boxes)
-            c_eq    = ws.cell(row=r, column=7, value=round(total_eq, 2))
-            c_amt   = ws.cell(row=r, column=8, value=round(total_amt, 2))
+            c_eq    = ws.cell(row=r, column=7, value=float(_q2(total_eq)))
+            c_amt   = ws.cell(row=r, column=8, value=float(_q2(total_amt)))
             for c in (6, 7, 8):
                 cc = ws.cell(row=r, column=c)
                 cc.font = Font(name='Calibri', size=12, bold=True)
@@ -2043,8 +2060,9 @@ def shipment_list(request):
             out.seek(0)
             filename = f"semana_{year}-W{week}_{slugify(emp_label)}.xlsx"
             resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            resp["Content-Disposition"] = f'attachment; filename=\"{filename}\"'
+            resp["Content-Disposition"] = f'attachment; filename="{filename}"'
             return resp
+
 
 
         # ================================================================
