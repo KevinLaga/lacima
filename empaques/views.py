@@ -2135,21 +2135,45 @@ def shipment_list(request):
             week_label = ""; rango = ""
 
         # Importes por empresa + total eq11
-        per_company_amt = {e: 0.0 for e in empresas}
-        per_company_eq  = {e: 0.0 for e in empresas}
-        total_eq11 = 0.0
-        for comp, s, it in _iter_company_items(weeks_qs, None):
-            qty = int(it.quantity or 0)
-            cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
-            prc = float(getattr(it.presentation, "price", 0.0))
-            total_eq11 += qty * cf
-            per_company_eq[comp]  += qty * cf
-            per_company_amt[comp] += qty * prc
+        def _round_half_up_to_int(x: Decimal) -> int:
+            return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
-        # Ajuste especial por empresa (AGRICOLA DH & G)
+        Q01 = Decimal('0.01')
+        P340 = Decimal('3.40')
+
+        per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
+        per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
+        total_eq11 = Decimal('0')
+
+        # Para AGRICOLA acumulamos Eq.11 POR EMBARQUE
+        ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+
+        for comp, s, it in _iter_company_items(weeks_qs, None):
+            qty = Decimal(str(int(it.quantity or 0)))
+            cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
+            prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
+
+            eq = qty * cf
+            total_eq11 += eq
+
+            # Siempre acumulamos Eq.11 e importe 'lista'
+            per_company_eq[comp]  += eq
+            per_company_amt[comp] += (qty * prc)
+
+            # Guardar Eq.11 por embarque para clientes "especiales"
+            ship_eq[comp][s.id]   += eq
+
+        # Ajuste especial: AGRICOLA DH & G => suma( round_half_up(Eq.11_emb) * 3.40 )
         for comp in empresas:
             if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
-                per_company_amt[comp] = float(Decimal('3.40') * Decimal(round_half_up_to_int(per_company_eq[comp])))
+                total_importe = Decimal('0')
+                for _, eq_emb in ship_eq.get(comp, {}).items():
+                    bill_units = _round_half_up_to_int(eq_emb)          # entero por embarque
+                    total_importe += (P340 * Decimal(bill_units))
+                per_company_amt[comp] = total_importe.quantize(Q01)     # asegura 2 decimales
+
+        # (si quieres consistencia visual)
+        total_eq11 = total_eq11.quantize(Q01)
 
         # Escribir fila matriz
         ws.cell(row=r, column=1, value=week_label).border = thin
