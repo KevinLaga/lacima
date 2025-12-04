@@ -1706,6 +1706,19 @@ def shipment_list(request):
     from io import BytesIO
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from decimal import Decimal, ROUND_HALF_UP
+
+    def q2(x) -> Decimal:
+        """Redondeo a 2 decimales con HALF_UP."""
+        if not isinstance(x, Decimal):
+            x = Decimal(str(x))
+        return x.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    def round_half_up_to_int(x) -> int:
+        """Entero con HALF_UP (.49 ↓, .50/.51 ↑)."""
+        if not isinstance(x, Decimal):
+            x = Decimal(str(x))
+        return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
     # --- Lista de embarques para la tabla ---
     shipments = Shipment.objects.order_by('-date', '-id')
@@ -2136,7 +2149,7 @@ def shipment_list(request):
         # Ajuste especial por empresa (AGRICOLA DH & G)
         for comp in empresas:
             if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
-                per_company_amt[comp] = float(Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq[comp])))
+                per_company_amt[comp] = float(Decimal('3.40') * Decimal(round_half_up_to_int(per_company_eq[comp])))
 
         # Escribir fila matriz
         ws.cell(row=r, column=1, value=week_label).border = thin
