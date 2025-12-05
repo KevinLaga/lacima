@@ -2145,13 +2145,17 @@ def shipment_list(request):
             # .49 ↓, .50/.51 ↑ (equiv a ROUND_HALF_UP)
             return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
-        for comp in empresas:
-            if _is_agricola(comp):
-                total_importe = Decimal('0')
-                for _, eq_emb in ship_eq.get(comp, {}).items():
-                    bill_units = _round_half_up_to_int(eq_emb)
-                    total_importe += (P340 * Decimal(bill_units))
-                per_company_amt[comp] = _q2(total_importe)
+        def _is_agricola(label: str) -> bool:
+            """
+            Detecta AGRICOLA DH & G aun si el canon queda 'AGRICOLA' a secas u otras variantes.
+            En tu dataset solo hay una 'Agricola', así que es seguro usar startswith.
+            """
+            n = _canon_company_label(label).upper()
+            # normaliza algunos símbolos por si acaso
+            n = n.replace('&', '').replace('  ', ' ').strip()
+            # Acepta 'AGRICOLA', 'AGRICOLA DH G', 'AGRICOLA DHG', etc.
+            return n.startswith('AGRICOLA')
+
 
         Q01  = Decimal('0.01')
         P340 = Decimal('3.40')
@@ -2187,9 +2191,9 @@ def shipment_list(request):
             if _is_agricola(comp):
                 total_importe = Decimal('0')
                 for _, eq_emb in ship_eq.get(comp, {}).items():
-                    bill_units = _round_half_up_to_int(eq_emb)   # entero por embarque
+                    bill_units = _round_half_up_to_int(eq_emb)
                     total_importe += (P340 * Decimal(bill_units))
-                per_company_amt[comp] = _q2(total_importe)       # reemplaza el importe para AGRICOLA
+                per_company_amt[comp] = _q2(total_importe)
 
         # (coherencia visual del total Eq11)
         total_eq11 = _q2(total_eq11)
