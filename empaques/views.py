@@ -2587,29 +2587,63 @@ def shipment_list(request):
             d2 = date(year, 12, 31)
             rango_label = f"{d1.strftime('%d/%m/%Y')} – {d2.strftime('%d/%m/%Y')}"
 
-        # Importes por empresa + total eq11 del periodo
-        per_company_amt = {e: 0.0 for e in empresas}   # 'empresas' ya viene normalizado desde company_map.keys()
-        per_company_eq  = {e: 0.0 for e in empresas}
-        total_eq11 = 0.0
+        # Importes por empresa + total eq11 del periodo (AGRÍCOLA: por embarque)
+        from collections import defaultdict
+        from decimal import Decimal, ROUND_HALF_UP
 
-        # Recorremos TODO el queryset (embarques) usando SIEMPRE etiqueta normalizada
-        for comp, s, it in _iter_company_items(embarques, None):
-            label = _canon_company_label(comp)  # <-- NORMALIZA LA CLAVE AQUÍ
-            qty = int(it.quantity or 0)
-            cf  = float(getattr(it.presentation, "conversion_factor", 1.0))
-            prc = float(getattr(it.presentation, "price", 0.0))
+        Q01  = Decimal('0.01')
+        P340 = Decimal('3.40')
 
-            total_eq11 += qty * cf
-            # Usa .get(...) para blindarte si aparece una empresa no listada en 'empresas'
-            per_company_eq[label]  = per_company_eq.get(label, 0.0) + qty * cf
-            per_company_amt[label] = per_company_amt.get(label, 0.0) + qty * prc
+        def _q2(x: Decimal) -> Decimal:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return x.quantize(Q01, rounding=ROUND_HALF_UP)
 
-        # Ajuste especial por empresa (AGRICOLA DH & G)
-        for emp in empresas:  # 'empresas' ya son etiquetas normalizadas
-            if _canon_company_label(emp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
-                per_company_amt[emp] = float(
-                    Decimal('3.40') * Decimal(_round_half_up_to_int(per_company_eq.get(emp, 0.0)))
-                )
+        def _round_half_up_to_int(x: Decimal) -> int:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return int(x.to_integral_value(rounding=ROUND_HALF_UP))
+
+        def _is_agricola(label: str) -> bool:
+            canon = _canon_company_label(label).upper()
+            try:
+                if canon in SPECIAL_EQ11_ROUND_CLIENTS:
+                    return True
+            except NameError:
+                pass
+            canon = canon.replace('&', ' ').replace('  ', ' ').strip()
+            return 'AGRICOLA' in canon
+
+        # Estructuras (usar etiquetas normalizadas como claves)
+        per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
+        per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
+        total_eq11 = Decimal('0')
+
+        # Eq11 POR EMBARQUE para clientes especiales
+        ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+
+        # Recorremos TODO el queryset (embarques)
+        for comp_raw, s, it in _iter_company_items(embarques, None):
+            label = _canon_company_label(comp_raw)   # normaliza
+            qty = Decimal(str(int(it.quantity or 0)))
+            cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
+            prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
+
+            eq = qty * cf
+            total_eq11 += eq
+
+            per_company_eq[label]  += eq
+            per_company_amt[label] += (qty * prc)          # base "lista"
+            ship_eq[label][s.id]   += eq                   # guardar eq por embarque
+
+        # AGRÍCOLA DH & G: sustituir importe por sum( 3.40 * round_half_up(Eq11_emb) )
+        for emp in empresas:
+            if _is_agricola(emp):
+                total_importe = Decimal('0')
+                for _, eq_emb in ship_eq.get(emp, {}).items():
+                    bill_units = _round_half_up_to_int(eq_emb)
+                    total_importe += (P340 * Decimal(bill_units))
+                per_company_amt[emp] = _q2(total_importe)
 
         # Escribir fila de la matriz
         ws.cell(row=r, column=1, value=periodo_label).border = thin
@@ -2619,14 +2653,14 @@ def shipment_list(request):
 
         cidx = 3
         for emp in empresas:
-            val = round(per_company_amt.get(emp, 0.0), 2)
+            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))
             cell = ws.cell(row=r, column=cidx, value=val)
             cell.border = thin
             cell.alignment = Alignment(horizontal="right", vertical="center")
             cell.number_format = '$#,##0.00'
             cidx += 1
 
-        cell = ws.cell(row=r, column=cidx, value=round(total_eq11, 2))
+        cell = ws.cell(row=r, column=cidx, value=float(_q2(total_eq11)))
         cell.border = thin
         cell.alignment = Alignment(horizontal="right", vertical="center")
         cell.number_format = '#,##0.00'
