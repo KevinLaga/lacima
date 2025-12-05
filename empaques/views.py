@@ -2117,14 +2117,16 @@ def shipment_list(request):
         ws.cell(row=r, column=1, value="Matriz (Resumen)").font = Font(size=13, bold=True, color="225577")
         r += 1
 
-        # --- Normaliza las llaves de empresas (¡antes de headers!)
-        empresas = sorted({_canon_company_label(e) for e in company_pairs.keys()}, key=str.upper)
+        # --- Empresas normalizadas (claves canónicas) ---
+        empresas_raw = sorted(company_pairs.keys(), key=str.upper)
+        empresas = sorted({_canon_company_label(e) for e in empresas_raw}, key=str.upper)
 
-        # Headers
+        # Headers con etiquetas normalizadas
         headers = ["Semana", "Rango"] + empresas + ["TOTAL_EQ11"]
         for c, h in enumerate(headers, start=1):
             cell = ws.cell(row=r, column=c, value=h)
-            cell.font = th_font; cell.fill = th_fill
+            cell.font = th_font
+            cell.fill = th_fill
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.border = thin
         r += 1
@@ -2140,36 +2142,40 @@ def shipment_list(request):
         from collections import defaultdict
         from decimal import Decimal, ROUND_HALF_UP
 
-        def _q2(x: Decimal) -> Decimal:
-            return x.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-        def _round_half_up_to_int(x: Decimal) -> int:
-            # .49 ↓, .50/.51 ↑
-            return int(x.to_integral_value(rounding=ROUND_HALF_UP))
-
-        def _is_agricola(label: str) -> bool:
-            """
-            Ultra tolerante: cualquier cosa que contenga 'AGRICOLA' cuenta.
-            (cubre 'Agricola', 'Agricola DH & G', 'AGRICOLA  ', etc.)
-            """
-            n = _canon_company_label(label)
-            if not n:
-                return False
-            n = n.upper().replace('&', ' ').replace('  ', ' ').strip()
-            return 'AGRICOLA' in n  # ← condición amplia a propósito
-
         Q01  = Decimal('0.01')
         P340 = Decimal('3.40')
 
+        def _q2(x: Decimal) -> Decimal:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return x.quantize(Q01, rounding=ROUND_HALF_UP)
+
+        def _round_half_up_to_int(x: Decimal) -> int:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return int(x.to_integral_value(rounding=ROUND_HALF_UP))
+
+        def _is_agricola(label: str) -> bool:
+            """Detección ultra tolerante + compatibilidad con tu constante."""
+            canon = _canon_company_label(label).upper()
+            try:
+                if canon in SPECIAL_EQ11_ROUND_CLIENTS:
+                    return True
+            except NameError:
+                pass
+            canon = canon.replace('&', ' ').replace('  ', ' ').strip()
+            return 'AGRICOLA' in canon  # acepta 'AGRICOLA', 'AGRICOLA DH G', etc.
+
+        # Diccionarios con claves normalizadas
         per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         total_eq11 = Decimal('0')
 
-        # Para AGRICOLA acumulamos Eq.11 POR EMBARQUE (clave normalizada)
+        # Eq11 POR EMBARQUE para los especiales (clave empresa normalizada)
         ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
 
         for comp_raw, s, it in _iter_company_items(weeks_qs, None):
-            comp = _canon_company_label(comp_raw)  # ← normalized key
+            comp = _canon_company_label(comp_raw)  # ← normaliza
             qty = Decimal(str(int(it.quantity or 0)))
             cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
             prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
@@ -2181,17 +2187,17 @@ def shipment_list(request):
             per_company_eq[comp]  += eq
             per_company_amt[comp] += (qty * prc)
 
-            # Guarda Eq.11 por embarque para clientes especiales
-            ship_eq[comp][s.id]   += eq
+            # Guardar Eq11 por embarque para AGRÍCOLA
+            ship_eq[comp][s.id] += eq
 
-        # --- Reemplazo del IMPORTE para todas las llaves AGRÍCOLA detectadas ---
+        # Reemplazo del IMPORTE solo para AGRÍCOLA: sum( round_half_up(Eq11_emb) * 3.40 )
         for comp in empresas:
             if _is_agricola(comp):
                 total_importe = Decimal('0')
                 for _, eq_emb in ship_eq.get(comp, {}).items():
-                    bill_units = _round_half_up_to_int(eq_emb)   # entero por embarque
+                    bill_units = _round_half_up_to_int(eq_emb)
                     total_importe += (P340 * Decimal(bill_units))
-                per_company_amt[comp] = _q2(total_importe)
+                per_company_amt[comp] = _q2(total_importe)  # ← sustituye importe
 
         # (coherencia visual del total Eq11)
         total_eq11 = _q2(total_eq11)
@@ -2201,10 +2207,11 @@ def shipment_list(request):
         ws.cell(row=r, column=2, value=rango).border = thin
         cidx = 3
         for emp in empresas:
-            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))  # AGRICOLA ya viene sustituido
+            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))  # AGRÍCOLA ya ajustado
             ws.cell(row=r, column=cidx, value=val).border = thin
             cidx += 1
         ws.cell(row=r, column=cidx, value=float(total_eq11)).border = thin
+
         for emp in empresas:
             # Per-company amt ya trae AGRICOLA ajustado por embarque
             val = float(_q2(per_company_amt.get(emp, Decimal('0'))))
