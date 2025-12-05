@@ -2134,21 +2134,37 @@ def shipment_list(request):
         else:
             week_label = ""; rango = ""
 
-        # Importes por empresa + total eq11
+        # --- Importes por empresa + total eq11 (AGRICOLA: redondeo POR EMBARQUE) ---
+        from collections import defaultdict
+        from decimal import Decimal, ROUND_HALF_UP
+
+        def _q2(x: Decimal) -> Decimal:
+            return x.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
         def _round_half_up_to_int(x: Decimal) -> int:
+            # .49 ↓, .50/.51 ↑ (equiv a ROUND_HALF_UP)
             return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
-        Q01 = Decimal('0.01')
+        def _is_agricola(label: str) -> bool:
+            n = _canon_company_label(label).upper()
+            # tolerante a variantes
+            return ("AGRICOLA" in n) and (("DH" in n) and ("G" in n))
+
+        Q01  = Decimal('0.01')
         P340 = Decimal('3.40')
+
+        # ⚠️ Normaliza las llaves de 'empresas'
+        empresas = sorted({_canon_company_label(e) for e in company_pairs.keys()}, key=str.upper)
 
         per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         total_eq11 = Decimal('0')
 
-        # Para AGRICOLA acumulamos Eq.11 POR EMBARQUE
+        # Para AGRICOLA acumulamos Eq.11 POR EMBARQUE (clave normalizada)
         ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
 
-        for comp, s, it in _iter_company_items(weeks_qs, None):
+        for comp_raw, s, it in _iter_company_items(weeks_qs, None):
+            comp = _canon_company_label(comp_raw)  # ← clave normalizada
             qty = Decimal(str(int(it.quantity or 0)))
             cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
             prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
@@ -2156,33 +2172,35 @@ def shipment_list(request):
             eq = qty * cf
             total_eq11 += eq
 
-            # Siempre acumulamos Eq.11 e importe 'lista'
+            # Sumas "lista" por defecto
             per_company_eq[comp]  += eq
             per_company_amt[comp] += (qty * prc)
 
-            # Guardar Eq.11 por embarque para clientes "especiales"
+            # Guarda Eq.11 por embarque para clientes especiales
             ship_eq[comp][s.id]   += eq
 
-        # Ajuste especial: AGRICOLA DH & G => suma( round_half_up(Eq.11_emb) * 3.40 )
+        # Ajuste especial: AGRICOLA DH & G => sum( round_half_up(Eq.11_emb) * 3.40 )
         for comp in empresas:
-            if _canon_company_label(comp).upper() in SPECIAL_EQ11_ROUND_CLIENTS:
+            if _is_agricola(comp):
                 total_importe = Decimal('0')
                 for _, eq_emb in ship_eq.get(comp, {}).items():
-                    bill_units = _round_half_up_to_int(eq_emb)          # entero por embarque
+                    bill_units = _round_half_up_to_int(eq_emb)   # entero por embarque
                     total_importe += (P340 * Decimal(bill_units))
-                per_company_amt[comp] = total_importe.quantize(Q01)     # asegura 2 decimales
+                per_company_amt[comp] = _q2(total_importe)       # reemplaza el importe para AGRICOLA
 
-        # (si quieres consistencia visual)
-        total_eq11 = total_eq11.quantize(Q01)
+        # (coherencia visual del total Eq11)
+        total_eq11 = _q2(total_eq11)
 
-        # Escribir fila matriz
+        # === Escribir fila de la matriz ===
         ws.cell(row=r, column=1, value=week_label).border = thin
         ws.cell(row=r, column=2, value=rango).border = thin
         cidx = 3
         for emp in empresas:
-            ws.cell(row=r, column=cidx, value=round(per_company_amt[emp], 2)).border = thin
+            # Per-company amt ya trae AGRICOLA ajustado por embarque
+            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))
+            ws.cell(row=r, column=cidx, value=val).border = thin
             cidx += 1
-        ws.cell(row=r, column=cidx, value=round(total_eq11, 2)).border = thin
+        ws.cell(row=r, column=cidx, value=float(total_eq11)).border = thin
 
         # Anchos cómodos
         ws.column_dimensions['A'].width = 12
