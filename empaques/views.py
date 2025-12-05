@@ -2145,10 +2145,13 @@ def shipment_list(request):
             # .49 ↓, .50/.51 ↑ (equiv a ROUND_HALF_UP)
             return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
-        def _is_agricola(label: str) -> bool:
-            n = _canon_company_label(label).upper()
-            # tolerante a variantes
-            return ("AGRICOLA" in n) and (("DH" in n) and ("G" in n))
+        for comp in empresas:
+            if _is_agricola(comp):
+                total_importe = Decimal('0')
+                for _, eq_emb in ship_eq.get(comp, {}).items():
+                    bill_units = _round_half_up_to_int(eq_emb)
+                    total_importe += (P340 * Decimal(bill_units))
+                per_company_amt[comp] = _q2(total_importe)
 
         Q01  = Decimal('0.01')
         P340 = Decimal('3.40')
