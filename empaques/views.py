@@ -2091,14 +2091,100 @@ def shipment_list(request):
         # 2.1 Hoja por empresa
         ws = wb.active
         ws.title = "Resumen por empresa"
-        ws.cell(row=1, column=1, value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – GENERAL") \
-        .font = Font(size=18, bold=True, color="3C78D8")
+        ws.cell(
+            row=1, column=1,
+            value=f"Resumen semanal {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – GENERAL"
+        ).font = Font(size=18, bold=True, color="3C78D8")
         r = 3
+
+        from decimal import Decimal, ROUND_HALF_UP
+        from collections import defaultdict
+
+        Q01  = Decimal('0.01')
+        P340 = Decimal('3.40')
+
+        def _q2(x: Decimal) -> Decimal:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return x.quantize(Q01, rounding=ROUND_HALF_UP)
+
+        def _round_half_up_to_int(x: Decimal) -> int:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return int(x.to_integral_value(rounding=ROUND_HALF_UP))
+
+        def _is_agricola(label: str) -> bool:
+            """Detección tolerante de AGRICOLA DH & G."""
+            canon = _canon_company_label(label).upper()
+            try:
+                if canon in SPECIAL_EQ11_ROUND_CLIENTS:
+                    return True
+            except NameError:
+                pass
+            canon = canon.replace('&', ' ').replace('  ', ' ').strip()
+            return 'AGRICOLA' in canon
+
+        def _company_section_data_for_general(comp_label_norm: str, pairs: list[tuple]) -> tuple:
+            """
+            Devuelve (pres_info, totals, detalle) en el formato esperado por _write_company_section,
+            aplicando la regla AGRÍCOLA por EMBARQUE.
+            """
+            is_agri = _is_agricola(comp_label_norm)
+
+            pres_info = defaultdict(lambda: {'cajas': 0, 'dinero': Decimal('0')})
+            total_cajas = 0
+            total_eq11  = Decimal('0')
+            total_din   = Decimal('0')
+            detalle = []
+
+            for s, it in pairs:
+                qty = int(it.quantity or 0)
+                cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
+                prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
+                pres_name = str(it.presentation.name).strip()
+                size_name = str(it.size).strip()
+
+                eq = Decimal(qty) * cf
+
+                if is_agri:
+                    # AGRÍCOLA: importe por renglon/embarque = 3.40 * round_half_up(Eq11_emb)
+                    importe = _q2(P340 * Decimal(_round_half_up_to_int(eq)))
+                else:
+                    importe = _q2(Decimal(qty) * prc)
+
+                pres_info[(pres_name, size_name)]['cajas']  += qty
+                pres_info[(pres_name, size_name)]['dinero'] += importe
+
+                total_cajas += qty
+                total_eq11  += eq
+                total_din   += importe
+
+                detalle.append((
+                    s.date.strftime('%d/%m/%Y'),
+                    s.tracking_number,
+                    s.invoice_number,
+                    pres_name,
+                    size_name,
+                    qty,
+                    float(importe),
+                ))
+
+            pres_info_out = {
+                (pname, sz): {'cajas': data['cajas'], 'dinero': float(_q2(data['dinero']))}
+                for (pname, sz), data in pres_info.items()
+            }
+            totals_out = {
+                'total_cajas':  int(total_cajas),
+                'total_eq11':   float(_q2(total_eq11)),
+                'total_dinero': float(_q2(total_din)),
+            }
+            return pres_info_out, totals_out, detalle
 
         grand_cajas = grand_eq = grand_amt = 0.0
         for comp in sorted(company_pairs.keys(), key=lambda x: x.upper()):
-            pres_info, totals, detalle = _compute_company_summary(comp, company_pairs[comp])
-            r = _write_company_section(ws, r, thin, th_font, th_fill, comp, pres_info, totals, detalle)
+            comp_norm = _canon_company_label(comp)
+            pres_info, totals, detalle = _company_section_data_for_general(comp_norm, company_pairs[comp])
+            r = _write_company_section(ws, r, thin, th_font, th_fill, comp_norm, pres_info, totals, detalle)
             grand_cajas += totals["total_cajas"]
             grand_eq    += totals["total_eq11"]
             grand_amt   += totals["total_dinero"]
@@ -2139,34 +2225,6 @@ def shipment_list(request):
             week_label = ""; rango = ""
 
         # --- Importes por empresa + total eq11 (AGRICOLA: redondeo POR EMBARQUE) ---
-        from collections import defaultdict
-        from decimal import Decimal, ROUND_HALF_UP
-
-        Q01  = Decimal('0.01')
-        P340 = Decimal('3.40')
-
-        def _q2(x: Decimal) -> Decimal:
-            if not isinstance(x, Decimal):
-                x = Decimal(str(x))
-            return x.quantize(Q01, rounding=ROUND_HALF_UP)
-
-        def _round_half_up_to_int(x: Decimal) -> int:
-            if not isinstance(x, Decimal):
-                x = Decimal(str(x))
-            return int(x.to_integral_value(rounding=ROUND_HALF_UP))
-
-        def _is_agricola(label: str) -> bool:
-            """Detección ultra tolerante + compatibilidad con tu constante."""
-            canon = _canon_company_label(label).upper()
-            try:
-                if canon in SPECIAL_EQ11_ROUND_CLIENTS:
-                    return True
-            except NameError:
-                pass
-            canon = canon.replace('&', ' ').replace('  ', ' ').strip()
-            return 'AGRICOLA' in canon  # acepta 'AGRICOLA', 'AGRICOLA DH G', etc.
-
-        # Diccionarios con claves normalizadas
         per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         total_eq11 = Decimal('0')
@@ -2175,7 +2233,7 @@ def shipment_list(request):
         ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
 
         for comp_raw, s, it in _iter_company_items(weeks_qs, None):
-            comp = _canon_company_label(comp_raw)  # ← normaliza
+            comp = _canon_company_label(comp_raw)  # normaliza
             qty = Decimal(str(int(it.quantity or 0)))
             cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
             prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
@@ -2183,11 +2241,9 @@ def shipment_list(request):
             eq = qty * cf
             total_eq11 += eq
 
-            # Sumas "lista" por defecto
             per_company_eq[comp]  += eq
             per_company_amt[comp] += (qty * prc)
 
-            # Guardar Eq11 por embarque para AGRÍCOLA
             ship_eq[comp][s.id] += eq
 
         # Reemplazo del IMPORTE solo para AGRÍCOLA: sum( round_half_up(Eq11_emb) * 3.40 )
@@ -2197,24 +2253,17 @@ def shipment_list(request):
                 for _, eq_emb in ship_eq.get(comp, {}).items():
                     bill_units = _round_half_up_to_int(eq_emb)
                     total_importe += (P340 * Decimal(bill_units))
-                per_company_amt[comp] = _q2(total_importe)  # ← sustituye importe
+                per_company_amt[comp] = _q2(total_importe)
 
         # (coherencia visual del total Eq11)
         total_eq11 = _q2(total_eq11)
 
-        # === Escribir fila de la matriz ===
+        # === Escribir fila de la matriz (una sola vez) ===
         ws.cell(row=r, column=1, value=week_label).border = thin
-        ws.cell(row=r, column=2, value=rango).border = thin
+        ws.cell(row=r, column=2, value=rango).border  = thin
         cidx = 3
         for emp in empresas:
             val = float(_q2(per_company_amt.get(emp, Decimal('0'))))  # AGRÍCOLA ya ajustado
-            ws.cell(row=r, column=cidx, value=val).border = thin
-            cidx += 1
-        ws.cell(row=r, column=cidx, value=float(total_eq11)).border = thin
-
-        for emp in empresas:
-            # Per-company amt ya trae AGRICOLA ajustado por embarque
-            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))
             ws.cell(row=r, column=cidx, value=val).border = thin
             cidx += 1
         ws.cell(row=r, column=cidx, value=float(total_eq11)).border = thin
@@ -2268,7 +2317,6 @@ def shipment_list(request):
         # Ajuste de anchos (opcional)
         ws.column_dimensions['A'].width = max(ws.column_dimensions.get('A').width or 0, 12)
         ws.column_dimensions['B'].width = max(ws.column_dimensions.get('B').width or 0, 28)
-        from openpyxl.utils import get_column_letter
         for i in range(3, 3 + len(empresas_mq) + 1):
             col = get_column_letter(i)
             ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
@@ -2278,13 +2326,11 @@ def shipment_list(request):
         ws.cell(row=r, column=1, value="Cobro LC + RC (Eq. 11 lbs × $6.00)").font = Font(size=13, bold=True, color="225577")
         r += 1
 
-        # Helpers para encontrar el nombre "bonito" tal como aparece en 'empresas'
         def _find_display_name(label_list, canon_target):
             canon_target = canon_target.upper()
             for e in label_list:
                 if _canon_company_label(e).upper() == canon_target:
                     return e
-            # Si no lo encontró, regresa el canon como fallback
             return canon_target.title()
 
         LC_LABEL = _find_display_name(empresas, "LA CIMA PRODUCE")
@@ -2299,13 +2345,11 @@ def shipment_list(request):
             cell.border = thin
         r += 1
 
-        # Eq. 11 lbs por empresa (columna por empresa)
         eq_lc = float(per_company_eq.get(LC_LABEL, 0.0))
         eq_rc = float(per_company_eq.get(RC_LABEL, 0.0))
         total_eq_lcrc = eq_lc + eq_rc
         importe_lcrc = round(total_eq_lcrc * 6.0, 2)
 
-        # Fila de datos
         cidx = 1
         c = ws.cell(row=r, column=cidx, value=week_label); c.border = thin; c.alignment = Alignment(horizontal="center"); cidx += 1
         c = ws.cell(row=r, column=cidx, value=rango);      c.border = thin; c.alignment = Alignment(horizontal="center"); cidx += 1
@@ -2317,14 +2361,11 @@ def shipment_list(request):
         c = ws.cell(row=r, column=cidx, value=importe_lcrc);             c.border = thin; c.alignment = Alignment(horizontal="right"); c.number_format = '$#,##0.00'
 
         # Anchos cómodos (opcional)
-        from openpyxl.utils import get_column_letter
         ws.column_dimensions['A'].width = max(ws.column_dimensions.get('A').width or 0, 12)
         ws.column_dimensions['B'].width = max(ws.column_dimensions.get('B').width or 0, 28)
         for i in range(3, 7):  # columnas C..F
             col = get_column_letter(i)
             ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
-
-
 
         # Salida
         out = BytesIO(); wb.save(out); out.seek(0)
@@ -2332,6 +2373,7 @@ def shipment_list(request):
         resp = HttpResponse(out, content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
         return resp
+
 
 
 
