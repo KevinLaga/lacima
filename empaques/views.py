@@ -2417,7 +2417,8 @@ def shipment_list(request):
         ws.column_dimensions['B'].width = max(ws.column_dimensions.get('B').width or 0, 28)
         for i in range(3, 3 + len(empresas_mq) + 1):
             col = get_column_letter(i)
-            ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
+            dim = ws.column_dimensions[col]
+            dim.width = max(dim.width or 0, 18)
 
         # ======= COBRO LC + RC por Eq. 11 lbs (x $6.00) =======
         r += 2
@@ -2463,7 +2464,8 @@ def shipment_list(request):
         ws.column_dimensions['B'].width = max(ws.column_dimensions.get('B').width or 0, 28)
         for i in range(3, 7):  # columnas C..F
             col = get_column_letter(i)
-            ws.column_dimensions[col].width = max(ws.column_dimensions.get(col).width or 0, 18)
+            dim = ws.column_dimensions[col]  # <- esto garantiza que exista
+            dim.width = max(dim.width or 0, 18)
 
         # Salida
         out = BytesIO(); wb.save(out); out.seek(0)
