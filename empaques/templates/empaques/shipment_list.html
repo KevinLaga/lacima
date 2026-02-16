@@ -43,7 +43,7 @@
   {% endfor %}
 
   <label for="id_mode">Modo:</label>
-  {% with md=request.GET.mode|default:"esparrago" %}
+  {% with md=request.GET.mode|default:"all" %}
     <select id="id_mode" name="mode" onchange="this.form.submit()">
       <option value="esparrago" {% if md == "esparrago" %}selected{% endif %}>Espárrago</option>
       <option value="arandano"  {% if md == "arandano" %}selected{% endif %}>Arándano</option>
@@ -164,9 +164,9 @@
           <td>{{ s.date|date:"d/m/Y" }}</td>
           <td>{% if s.is_national %}Nacional{% else %}Exportación{% endif %}</td>
           <td>
-            <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}">Ver día</a>
+            <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}&mode=all">Ver día</a>
             &nbsp;|&nbsp;
-            <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}">Ver Reporte</a>
+            <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}&mode=all">Ver Reporte</a>
           </td>
           <td>{{ s.order_lacima|default_if_none:"" }}</td>
           <td>{{ s.order_rc|default_if_none:"" }}</td>

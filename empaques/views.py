@@ -2803,7 +2803,16 @@ from django.http import HttpResponse
 @login_required
 
 def daily_report(request, shipment_id=None):
-    mode = (request.GET.get("mode") or "esparrago").lower()  # esparrago | arandano | all
+    mode = (request.GET.get("mode") or "").lower().strip()
+
+    # Si vienen a ver un embarque específico, por defecto muestra TODO
+    if request.GET.get("shipment_id") or request.GET.get("tracking"):
+        if mode not in ("all", "arandano", "esparrago"):
+            mode = "all"
+    else:
+        # Para vista por fecha puedes dejar tu default (si quieres)
+        if mode not in ("all", "arandano", "esparrago"):
+            mode = "esparrago"   # o "all" si prefieres
     ship_id  = request.GET.get('shipment_id') or shipment_id
     tracking = request.GET.get('tracking')
     if not (request.user.has_perm('empaques.view_shipment') or request.user.has_perm('empaques.export_reports')):
