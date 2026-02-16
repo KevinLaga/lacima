@@ -6,11 +6,17 @@ from decimal import Decimal
 from django.db.models import Sum, Q, DecimalField, Value as V
 from django.contrib.auth.models import User
 from django.conf import settings
+from arandano.models import Variedad
+
+from decimal import Decimal
 
 
 
 
+from arandano.models import Variedad  # para usarla en el detalle
 
+
+    
 
 class Presentation(models.Model):
     
@@ -19,6 +25,11 @@ class Presentation(models.Model):
     name = models.CharField(max_length=100, unique=True)
     conversion_factor = models.DecimalField(max_digits=32, decimal_places=16)
     price = models.DecimalField(max_digits=32, decimal_places=16)
+     # NUEVO: cuántos clamshells por caja maneja esta presentación (si usas cajas)
+    cs_por_caja = models.PositiveIntegerField(default=0)
+
+    # NUEVO: solo las presentaciones de ARÁNDANO deben impactar el almacén de arándano
+    is_arandano = models.BooleanField(default=False, db_index=True)
 
 
     def __str__(self):
@@ -26,7 +37,16 @@ class Presentation(models.Model):
         return self.name
         
 
+class DetalleEmbarque(models.Model):
+    shipment     = models.ForeignKey("empaques.Shipment", on_delete=models.CASCADE, related_name="detalles")
+    variedad     = models.ForeignKey(Variedad, on_delete=models.PROTECT)
+    presentacion = models.ForeignKey(Presentation, on_delete=models.PROTECT)
+    cajas        = models.PositiveIntegerField(default=0)
 
+    kg_total     = models.DecimalField(max_digits=14, decimal_places=5, default=Decimal("0"))
+    cs_6oz       = models.PositiveIntegerField(default=0)
+    cs_9_8oz     = models.PositiveIntegerField(default=0)
+    cs_18oz      = models.PositiveIntegerField(default=0)
 class Shipment(models.Model):
     is_national = models.BooleanField(
         default=False,
@@ -277,3 +297,11 @@ class ProductionDisplay(models.Model):
 
     def __str__(self):
         return f"{self.presentation.name} — {self.size}"
+    
+
+class VariedadPresentation(models.Model):
+    variedad     = models.ForeignKey(Variedad, on_delete=models.CASCADE)
+    presentation = models.ForeignKey(Presentation, on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('variedad', 'presentation')

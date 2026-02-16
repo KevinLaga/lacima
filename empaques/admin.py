@@ -11,6 +11,16 @@ from .models import (
 # -----------------------------
 # Forms
 # -----------------------------
+
+# -----------------------------
+# Inlines
+# -----------------------------
+class ShipmentItemInline(admin.TabularInline):
+    model = ShipmentItem
+    extra = 0
+    fields = ("variedad", "cliente", "presentation", "size", "quantity", "tarima", "temperatura")
+    autocomplete_fields = ("presentation", "variedad")   # ← añade variedad aquí
+
 class ShipmentAdminForm(forms.ModelForm):
     class Meta:
         model = Shipment
@@ -200,6 +210,7 @@ class ProductionDisplayAdmin(admin.ModelAdmin):
     search_fields = ("presentation__name", "size")
     ordering      = ("order", "presentation__name", "size")
     autocomplete_fields = ("presentation",)
+
 
 
 

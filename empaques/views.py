@@ -58,6 +58,16 @@ from openpyxl.worksheet.page import PageMargins
 from .models import Shipment, ShipmentItem
 from .production_config import ALLOWED_COMBOS, ORDERED_ALIASES
 from .models import Presentation, ProductionDisplay
+
+def _is_agricola(label: str) -> bool:
+            canon = _canon_company_label(label).upper()
+            try:
+                if canon in SPECIAL_EQ11_ROUND_CLIENTS:
+                    return True
+            except NameError:
+                pass
+            canon = canon.replace('&', ' ').replace('  ', ' ').strip()
+            return 'AGRICOLA' in canon
 def _pd_combos_active():
     """
     Devuelve [(presentation_name, size), ...] en el orden de ProductionDisplay (activos).
@@ -143,7 +153,13 @@ COMPANY_CANON = {
     'gh': 'GH',
     'gourmet': 'GOURMET',
     'gbf': 'GBF',
-    'AGRICOLA DH & G': 'AGRICOLA DH & G',
+    'AGRICOLA DH & G': 'agricola dh & g',
+    'agricola dh & g': 'AGRICOLA DH & G',
+    'agricola dh and g': 'AGRICOLA DH & G',
+    'agricola': 'AGRICOLA DH & G',
+    'dhg': 'AGRICOLA DH & G',
+    'agricola dh g': 'AGRICOLA DH & G',     # opcional (por si llega sin &)
+    'agricola': 'AGRICOLA DH & G',
 }
 COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G']
 DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
@@ -171,6 +187,7 @@ def _canon_size(sz: str) -> str:
     s = aliases.get(s, s)
     return s.replace(" ", "")  # queda "XLARGE", "STANDARD", etc.
 from decimal import Decimal, ROUND_HALF_UP
+P340 = Decimal('3.40')
 
 SPECIAL_EQ11_ROUND_CLIENTS = {"AGRICOLA DH & G", "BAJA MIST"}
 
@@ -194,6 +211,8 @@ def canon_company(s: str | None) -> str | None:
     if not s:
         return None
     k = (s or '').strip().lower().replace('_', ' ').replace('-', ' ')
+    k = " ".join(k.split())
+    k = k.replace("&", "&")  # (opcional, aquí lo dejas)
     return COMPANY_CANON.get(k)
 
 def company_slug(canon: str | None) -> str:
@@ -220,6 +239,20 @@ def _row_has_numbers(saved_row, per4):
 
 
 # === HELPERS DE DISEÑO PARA SEMANAL ===
+P340 = Decimal("3.40")
+P200 = Decimal("2.00")
+def _is_alcachofa(pres_name: str) -> bool:
+    return str(pres_name or "").strip().upper().startswith("ALCACHOFA")
+def _is_alcachofa_item(it) -> bool:
+    pres = (getattr(it.presentation, "name", "") or "").upper()
+    return "ALCACHOFA" in pres  # con esto agarra ALCACHOFA QV MED. 12, etc.
+
+P_ESPAR = Decimal("3.40")
+P_ALCA  = Decimal("2.00")
+Q01     = Decimal("0.01")
+
+
+
 def _week_single_company_sheet(wb, monday, sunday, empresa_label, rows_iter):
     """Hoja estilo 'anterior' para una sola empresa."""
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -710,22 +743,39 @@ def _client_order_for(shipment, company_label):
 
 def _round_half_up_to_int(x: float | Decimal) -> int:
     return int(Decimal(str(x)).quantize(Decimal('0'), rounding=ROUND_HALF_UP))
+def _pass_mode(it, mode: str) -> bool:
+    is_aran = bool(getattr(getattr(it, "presentation", None), "is_arandano", False))
+    if mode == "arandano":
+        return is_aran
+    if mode == "esparrago":
+        return not is_aran
+    return True  # all
 
-def _iter_company_items(embarques, empresa_filter: str | None):
+def _iter_company_items(embarques, empresa_filter: str | None, mode: str = "esparrago"):
     """
-    Genera (empresa_normalizada, s, it) para cada item que encaje con el filtro de empresa.
-    Si empresa_filter es None (o 'general'), entrega TODOS y agrupa por 'cliente'.
+    Genera (empresa_normalizada, s, it) para cada item que encaje con el filtro de empresa y modo.
+    mode: esparrago | arandano | all
     """
     want_general = (not empresa_filter) or (empresa_filter.lower() == "general")
+    mode = (mode or "esparrago").lower()
+
     for s in embarques:
-        for it in s.items.all():
+        for it in s.items.select_related("presentation").all():
+            # ===== filtro por modo (is_arandano) =====
+            is_ar = bool(getattr(it.presentation, "is_arandano", False))
+            if mode != "all":
+                if mode == "arandano" and not is_ar:
+                    continue
+                if mode == "esparrago" and is_ar:
+                    continue
+
             comp = _canon_company_label(getattr(it, "cliente", None))
+
             if want_general:
                 yield comp, s, it
             else:
                 if _canon_company_label(empresa_filter) == comp:
                     yield comp, s, it
-
 def _compute_company_summary(company_name, tuples_cs):
     """
     Recibe todos los (s, it) de LA empresa y regresa:
@@ -739,6 +789,7 @@ def _compute_company_summary(company_name, tuples_cs):
     total_cajas = 0
     total_eq11  = 0.0
     total_dinero_normal = 0.0  # suma normal (precio * qty)
+    
 
     for s, it in tuples_cs:
         pres = getattr(it.presentation, "name", "")
@@ -1719,12 +1770,43 @@ def shipment_list(request):
         if not isinstance(x, Decimal):
             x = Decimal(str(x))
         return int(x.to_integral_value(rounding=ROUND_HALF_UP))
+    def _round_half_up_to_int_dec(x: Decimal) -> int:
+        return int(x.to_integral_value(rounding=ROUND_HALF_UP))
+    def _q2_dec(x: Decimal) -> Decimal:
+        return x.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    
+    def agricola_importe_por_renglon(it, qty: int) -> Decimal:
+        """
+        AGRÍCOLA:
+        - Espárrago (normal): 3.40 * round_half_up(Eq11_del_renglón)
+        - Alcachofa:          2.00 * round_half_up(Eq11_del_renglón)
+        """
+        P340 = Decimal("3.40")
+        P200 = Decimal("2.00")
+
+        cf = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0) or 1.0))
+        eq_line = Decimal(str(int(qty or 0))) * cf
+
+        rate = P200 if _is_alcachofa(getattr(it.presentation, "name", "")) else P340
+        importe = rate * Decimal(_round_half_up_to_int_dec(eq_line))
+        return _q2_dec(importe)
 
     # --- Lista de embarques para la tabla ---
     shipments = Shipment.objects.order_by('-date', '-id')
 
     # --- Permiso para descargar/exportar ---
     can_download = request.user.has_perm('empaques.can_download_reports')
+
+    mode = (request.GET.get("mode") or "esparrago").lower()  # esparrago | arandano | all
+
+    def item_match_mode(it) -> bool:
+        is_ar = bool(getattr(it.presentation, "is_arandano", False))
+        if mode == "all":
+            return True
+        if mode == "arandano":
+            return is_ar
+        # default: esparrago
+        return not is_ar
 
     # --- Parámetros de periodo ---
     try:
@@ -1744,6 +1826,10 @@ def shipment_list(request):
     def build_summary_xlsx(title_text, subtitle_text, embarques_qs):
         from collections import defaultdict
         items = ShipmentItem.objects.filter(shipment__in=embarques_qs).select_related('presentation')
+        if mode == "arandano":
+            items = items.filter(presentation__is_arandano=True)
+        elif mode == "esparrago":
+            items = items.filter(presentation__is_arandano=False)
 
         # Agregados por presentación/tamaño
         presentaciones_info = collections.defaultdict(lambda: {'cajas': 0, 'dinero': 0.0})
@@ -1829,8 +1915,9 @@ def shipment_list(request):
             cell.border = border
         r += 1
 
-        for sh in embarques_qs.order_by('date', 'tracking_number'):
-            for it in sh.items.all():
+        for it in sh.items.select_related("presentation").all():
+            if not item_match_mode(it):
+                continue
                 importe = it.quantity * float(it.presentation.price)
                 ws.cell(row=r, column=1, value=sh.date.strftime("%d/%m/%Y"))
                 ws.cell(row=r, column=2, value=sh.tracking_number)
@@ -1909,7 +1996,7 @@ def shipment_list(request):
         )
 
         # ------------------------------------------------------------------
-        # 1) DISEÑO EMPRESA ESPECÍFICA (con Decimal y regla AGRÍCOLA por embarque)
+        # 1) DISEÑO EMPRESA ESPECÍFICA (con Decimal y regla AGRÍCOLA)
         # ------------------------------------------------------------------
         if empresa.lower() != 'general':
             from decimal import Decimal, ROUND_HALF_UP
@@ -2003,24 +2090,24 @@ def shipment_list(request):
                 return None
 
             # --- Filas (una por ítem; importes con Decimal) ---
+            # --- Filas (una por ítem; importes con Decimal) ---
             total_boxes = 0
             total_eq    = Decimal('0')
             total_amt   = Decimal('0')
 
-            is_agricola = _canon_company_label(emp_label).upper() in SPECIAL_EQ11_ROUND_CLIENTS
+            is_agricola = _is_agricola(emp_label)
 
-            for comp, s, it in _iter_company_items(weeks_qs, emp_label):
+            for comp, s, it in _iter_company_items(weeks_qs, emp_label, mode=mode):
                 qty = int(it.quantity or 0)
-                cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
-                eq_emb = Decimal(qty) * cf
+                cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0) or 1.0))
+                eq_line = Decimal(qty) * cf
 
-                # Importe “por embarque”:
+                # Importe por RENGLÓN (no por embarque)
                 if is_agricola:
-                    # AGRÍCOLA: 3.40 * round_half_up(eq11_embarque), y se redondea a 2 decimales
-                    amt_emb = _q2(Decimal('3.40') * Decimal(_round_half_up_to_int(eq_emb)))
+                    amt_line = agricola_importe_por_renglon(it, qty)   # <-- aquí aplica 3.40 o 2.00 (alcachofa)
                 else:
-                    prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
-                    amt_emb = _q2(Decimal(qty) * prc)
+                    prc = Decimal(str(getattr(it.presentation, "price", 0.0) or 0.0))
+                    amt_line = _q2(Decimal(qty) * prc)
 
                 num_emb = _client_order_for(s, emp_label) or str(s.tracking_number)
 
@@ -2031,10 +2118,11 @@ def shipment_list(request):
                     str(it.presentation.name).strip(),
                     str(it.size).strip(),
                     qty,
-                    float(_q2(eq_emb)),       # mostrar a 2 dec
-                    float(amt_emb),           # mostrar a 2 dec
+                    float(_q2(eq_line)),         # Eq11 del renglón
+                    float(amt_line),             # Importe del renglón
                     emp_label,
                 ]
+
                 for c, v in enumerate(vals, start=1):
                     cc = ws.cell(row=r, column=c, value=v)
                     cc.border = thin
@@ -2045,8 +2133,8 @@ def shipment_list(request):
                 r += 1
 
                 total_boxes += qty
-                total_eq    += eq_emb
-                total_amt   += amt_emb
+                total_eq    += eq_line
+                total_amt   += amt_line
 
             # --- Fila de TOTALES (banda azul claro) ---
             ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=5)
@@ -2083,7 +2171,7 @@ def shipment_list(request):
         # ================================================================
         # Mapa {empresa: [(shipment,item), ...]}
         company_pairs = defaultdict(list)
-        for comp, s, it in _iter_company_items(weeks_qs, None):
+        for comp, s, it in _iter_company_items(weeks_qs, None, mode=mode):
             company_pairs[comp].append((s, it))
 
         wb = Workbook()
@@ -2113,7 +2201,7 @@ def shipment_list(request):
                 x = Decimal(str(x))
             return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
-        def _is_agricola(label: str) -> bool:
+        def is_agricola(label: str) -> bool:
             """Detección tolerante de AGRICOLA DH & G."""
             canon = _canon_company_label(label).upper()
             try:
@@ -2139,16 +2227,16 @@ def shipment_list(request):
 
             for s, it in pairs:
                 qty = int(it.quantity or 0)
-                cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
-                prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
+                cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0) or 1.0))
+                prc = Decimal(str(getattr(it.presentation, "price", 0.0) or 0.0))
                 pres_name = str(it.presentation.name).strip()
                 size_name = str(it.size).strip()
 
                 eq = Decimal(qty) * cf
 
                 if is_agri:
-                    # AGRÍCOLA: importe por renglon/embarque = 3.40 * round_half_up(Eq11_emb)
-                    importe = _q2(P340 * Decimal(_round_half_up_to_int(eq)))
+                    # ✅ AGRÍCOLA: importe por RENGLÓN (3.40 o 2.00 según presentación)
+                    importe = agricola_importe_por_renglon(it, qty)   # retorna Decimal ya con 2 decimales
                 else:
                     importe = _q2(Decimal(qty) * prc)
 
@@ -2225,48 +2313,58 @@ def shipment_list(request):
             week_label = ""; rango = ""
 
         # --- Importes por empresa + total eq11 (AGRICOLA: redondeo POR EMBARQUE) ---
+        # mismas llaves que tus columnas
         per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
         per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
+
+        # IMPORTANTÍSIMO: usar el MISMO mode aquí
         total_eq11 = Decimal('0')
 
-        # Eq11 POR EMBARQUE para los especiales (clave empresa normalizada)
-        ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+        for comp_raw, s, it in _iter_company_items(weeks_qs, None, mode=mode):
+            comp = _canon_company_label(comp_raw)
 
-        for comp_raw, s, it in _iter_company_items(weeks_qs, None):
-            comp = _canon_company_label(comp_raw)  # normaliza
-            qty = Decimal(str(int(it.quantity or 0)))
-            cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
-            prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
+            # Si por cualquier razón sale una empresa que no está en "empresas", la ignoramos
+            # (así nunca truena y mantiene coherencia con headers)
+            if comp not in per_company_eq:
+                continue
+
+            qty_i = int(it.quantity or 0)
+            qty   = Decimal(str(qty_i))
+
+            cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0) or 1.0))
+            prc = Decimal(str(getattr(it.presentation, "price", 0.0) or 0.0))
 
             eq = qty * cf
             total_eq11 += eq
+            per_company_eq[comp] += eq
 
-            per_company_eq[comp]  += eq
-            per_company_amt[comp] += (qty * prc)
-
-            ship_eq[comp][s.id] += eq
-
-        # Reemplazo del IMPORTE solo para AGRÍCOLA: sum( round_half_up(Eq11_emb) * 3.40 )
-        for comp in empresas:
+            # ✅ IMPORTE
             if _is_agricola(comp):
-                total_importe = Decimal('0')
-                for _, eq_emb in ship_eq.get(comp, {}).items():
-                    bill_units = _round_half_up_to_int(eq_emb)
-                    total_importe += (P340 * Decimal(bill_units))
-                per_company_amt[comp] = _q2(total_importe)
+                # AGRÍCOLA: por renglón (la función decide 3.40 o 2.00)
+                per_company_amt[comp] += agricola_importe_por_renglon(it, qty_i)  # Decimal
+            else:
+                per_company_amt[comp] += _q2(qty * prc)
 
         # (coherencia visual del total Eq11)
         total_eq11 = _q2(total_eq11)
 
         # === Escribir fila de la matriz (una sola vez) ===
         ws.cell(row=r, column=1, value=week_label).border = thin
-        ws.cell(row=r, column=2, value=rango).border  = thin
+        ws.cell(row=r, column=2, value=rango).border = thin
+
         cidx = 3
         for emp in empresas:
-            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))  # AGRÍCOLA ya ajustado
-            ws.cell(row=r, column=cidx, value=val).border = thin
+            val = float(_q2(per_company_amt.get(emp, Decimal('0'))))
+            cell = ws.cell(row=r, column=cidx, value=val)
+            cell.border = thin
+            cell.alignment = Alignment(horizontal="right", vertical="center")
+            cell.number_format = '$#,##0.00'
             cidx += 1
-        ws.cell(row=r, column=cidx, value=float(total_eq11)).border = thin
+
+        cell = ws.cell(row=r, column=cidx, value=float(total_eq11))
+        cell.border = thin
+        cell.alignment = Alignment(horizontal="right", vertical="center")
+        cell.number_format = '#,##0.00'
 
         # Anchos cómodos
         ws.column_dimensions['A'].width = 12
@@ -2479,7 +2577,7 @@ def shipment_list(request):
 
         # Arma mapa {empresa: [(s,it), ...]}
         company_map = defaultdict(list)
-        for comp, s, it in _iter_company_items(embarques, empresa_filter):
+        for comp, s, it in _iter_company_items(embarques, empresa_filter, mode=mode):
             label = _canon_company_label(comp)
             company_map[label].append((s, it))
 
@@ -2604,27 +2702,21 @@ def shipment_list(request):
                 x = Decimal(str(x))
             return int(x.to_integral_value(rounding=ROUND_HALF_UP))
 
-        def _is_agricola(label: str) -> bool:
-            canon = _canon_company_label(label).upper()
-            try:
-                if canon in SPECIAL_EQ11_ROUND_CLIENTS:
-                    return True
-            except NameError:
-                pass
-            canon = canon.replace('&', ' ').replace('  ', ' ').strip()
-            return 'AGRICOLA' in canon
+        
 
         # Estructuras (usar etiquetas normalizadas como claves)
-        per_company_amt: dict[str, Decimal] = {e: Decimal('0') for e in empresas}
-        per_company_eq:  dict[str, Decimal] = {e: Decimal('0') for e in empresas}
-        total_eq11 = Decimal('0')
+        from collections import defaultdict
+        from decimal import Decimal
 
-        # Eq11 POR EMBARQUE para clientes especiales
-        ship_eq: dict[str, dict[int, Decimal]] = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+        per_company_amt = defaultdict(lambda: Decimal('0'))
+        per_company_eq  = defaultdict(lambda: Decimal('0'))
+        ship_eq         = defaultdict(lambda: defaultdict(lambda: Decimal('0')))
+        total_eq11      = Decimal('0')
 
-        # Recorremos TODO el queryset (embarques)
-        for comp_raw, s, it in _iter_company_items(embarques, None):
-            label = _canon_company_label(comp_raw)   # normaliza
+        # OJO: aquí SÍ respeta empresa_filter (si viene una empresa específica)
+        for comp_raw, s, it in _iter_company_items(embarques, empresa_filter):
+            label = _canon_company_label(comp_raw)
+
             qty = Decimal(str(int(it.quantity or 0)))
             cf  = Decimal(str(getattr(it.presentation, "conversion_factor", 1.0)))
             prc = Decimal(str(getattr(it.presentation, "price", 0.0)))
@@ -2633,9 +2725,11 @@ def shipment_list(request):
             total_eq11 += eq
 
             per_company_eq[label]  += eq
-            per_company_amt[label] += (qty * prc)          # base "lista"
-            ship_eq[label][s.id]   += eq                   # guardar eq por embarque
+            per_company_amt[label] += (qty * prc)
+            ship_eq[label][s.id]   += eq
 
+        # Si la lista empresas la usas para headers, reconstruyela desde lo realmente visto:
+        empresas = sorted(per_company_eq.keys(), key=str.upper)
         # AGRÍCOLA DH & G: sustituir importe por sum( 3.40 * round_half_up(Eq11_emb) )
         for emp in empresas:
             if _is_agricola(emp):
@@ -2707,6 +2801,7 @@ from django.http import HttpResponse
 @login_required
 
 def daily_report(request, shipment_id=None):
+    mode = (request.GET.get("mode") or "esparrago").lower()  # esparrago | arandano | all
     ship_id  = request.GET.get('shipment_id') or shipment_id
     tracking = request.GET.get('tracking')
     if not (request.user.has_perm('empaques.view_shipment') or request.user.has_perm('empaques.export_reports')):
@@ -2821,14 +2916,34 @@ def daily_report(request, shipment_id=None):
     
 
     # Totales del día (para el general) - precomputar total_boxes = sum(item.quantity)
-    total_boxes = sum(item.quantity for s in qs for item in s.items.all()) 
-    total_eq_11lbs = sum(
-        item.quantity * float(item.presentation.conversion_factor)
+    mode = (request.GET.get("mode") or "esparrago").lower()
+    if mode not in ("esparrago", "arandano", "all"):
+        mode = "esparrago"
+    def item_match_mode(it):
+            is_ar = bool(getattr(it.presentation, "is_arandano", False))
+            if mode == "all":
+                return True
+            if mode == "arandano":
+                return is_ar
+            # default esparrago
+            return not is_ar
+    
+    total_boxes = sum(
+        int(item.quantity or 0)
         for s in qs for item in s.items.all()
+        if item_match_mode(item)
     )
-    total_amount = sum(
-        item.quantity * float(item.presentation.price)
+
+    total_eq_11lbs = sum(
+        (int(item.quantity or 0)) * float(item.presentation.conversion_factor)
         for s in qs for item in s.items.all()
+        if item_match_mode(item)
+    )
+
+    total_amount = sum(
+        (int(item.quantity or 0)) * float(item.presentation.price)
+        for s in qs for item in s.items.all()
+        if item_match_mode(item)
     )
 
     # ---------------- Helpers ----------------
@@ -2888,6 +3003,7 @@ def daily_report(request, shipment_id=None):
         ]
         filled_count = sum(1 for v in header_values if v not in (None, "", False))
         return (items_count, filled_count, s.id)
+    
 
     def tarima_temp_text(items_list, tarima):
         """Busca la primera temperatura no vacía en esa tarima y devuelve texto pretty."""
@@ -3071,6 +3187,8 @@ def daily_report(request, shipment_id=None):
         # Filas
         for s in qs:
             for item in s.items.all():
+                if not item_match_mode(item):
+                    continue
                 eq = item.quantity * float(item.presentation.conversion_factor)
                 amt = item.quantity * float(item.presentation.price)
                 ws.cell(row=row, column=1, value=_str(s.tracking_number))
@@ -3217,7 +3335,8 @@ def daily_report(request, shipment_id=None):
         thick_all = Border(top=thick, bottom=thick, left=thick, right=thick)
 
         # Ítems SOLO del embarque rep_cli
-        items_cliente = list(rep_cli.items.filter(cliente=cliente)) if rep_cli else []
+        items_cliente = list(rep_cli.items.filter(cliente=cliente).select_related("presentation")) if rep_cli else []
+        items_cliente = [it for it in items_cliente if item_match_mode(it)]
 
         def temp_txt(tarima_n):
             for it in items_cliente:
@@ -3424,8 +3543,10 @@ def daily_report(request, shipment_id=None):
 
     for s in qs:
         for item in s.items.all():
-            item.eq_11lbs_calc = item.quantity * float(item.presentation.conversion_factor)
-            item.amount_calc   = item.quantity * float(item.presentation.price)
+            if not item_match_mode(item):
+                continue
+            item.eq_11lbs_calc = (int(item.quantity or 0)) * float(item.presentation.conversion_factor)
+            item.amount_calc   = (int(item.quantity or 0)) * float(item.presentation.price)
 
     return render(request, 'empaques/daily_report.html', {
         'report_date': report_date,
@@ -3434,4 +3555,5 @@ def daily_report(request, shipment_id=None):
         'total_eq_11lbs': total_eq_11lbs,
         'total_amount': total_amount,
         'clientes': clientes_slug,
+        'mode': mode,
     })

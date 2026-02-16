@@ -1,0 +1,130 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Producción diaria – Arándano</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 18px; }
+    .row { display: grid; grid-template-columns: 160px 1fr; gap: 12px; margin-bottom: 10px; align-items: center; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; vertical-align: middle; }
+    th { background: #225577; color: #fff; text-align: left; }
+    .actions { margin-top: 14px; display:flex; gap: 8px; }
+    .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid #225577; background:#225577; color:#fff; cursor:pointer; text-decoration:none; }
+    .btn.secondary { background: #fff; color:#225577; }
+    .hint { color:#666; font-size: 12px; }
+    .msgs { margin: 10px 0; padding: 8px 10px; border-radius: 8px; background: #f6f9ff; border: 1px solid #dbe7ff; }
+    .errorlist { color:#b91c1c; margin: 6px 0 0 0; }
+    td.num input { text-align: right; }
+  </style>
+  <script>
+    function onCampoChange(sel) {
+      const val = sel.value || '';
+      const base = window.location.pathname; // /arandano/nuevo/
+      const url = val ? (base + '?campo=' + encodeURIComponent(val)) : base;
+      window.location.href = url;
+    }
+    document.addEventListener('DOMContentLoaded', function(){
+      var campoSel = document.getElementById('{{ form.campo.id_for_label }}');
+      if (campoSel) campoSel.addEventListener('change', function(){ onCampoChange(this); });
+    });
+  </script>
+</head>
+<body>
+
+<h1>Producción diaria – Arándano</h1>
+
+{% if messages %}
+  <div class="msgs">
+    <ul>
+      {% for m in messages %}
+        <li>{{ m }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  <div class="card">
+    <div class="row">
+      <label for="{{ form.fecha.id_for_label }}">Fecha</label>
+      {{ form.fecha }} {{ form.fecha.errors }}
+    </div>
+    <div class="row">
+      <label for="{{ form.campo.id_for_label }}">Campo</label>
+      {{ form.campo }} {{ form.campo.errors }}
+    </div>
+    <div class="row">
+      <label for="{{ form.rezaga_kg.id_for_label }}">Rezaga (kg)</label>
+      {{ form.rezaga_kg }} {{ form.rezaga_kg.errors }}
+    </div>
+    <div class="row">
+      <label for="{{ form.notas.id_for_label }}">Notas</label>
+      {{ form.notas }} {{ form.notas.errors }}
+    </div>
+    <div class="hint">Captura los kg cosechados por variedad y, si aplica, las clamshells usadas.</div>
+  </div>
+
+  <div class="card">
+    <h3>Variedades del campo{% if campo_actual %} “{{ campo_actual.nombre }}”{% endif %}</h3>
+
+    {{ formset.management_form }}
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36%;">Variedad</th>
+          <th style="width:16%;">Cosechado (kg)</th>
+          <th style="width:16%;">Clamshells 6 oz</th>
+          <th style="width:16%;">Clamshells 9.8 oz</th>
+          <th style="width:16%;">Clamshells 18 oz</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f, vobj in filas %}
+          <tr>
+            <!-- Variedad (texto) + campo oculto -->
+            <td>
+              <strong>{{ vobj.nombre|default:vobj }}</strong>
+              {{ f.variedad }}
+              {{ f.variedad.errors }}
+            </td>
+
+            <!-- Kg -->
+            <td class="num">
+              {{ f.kg }}
+              {{ f.kg.errors }}
+            </td>
+
+            <!-- Clamshells -->
+            <td class="num">
+              {{ f.cs_6oz }}
+              {{ f.cs_6oz.errors }}
+            </td>
+            <td class="num">
+              {{ f.cs_9_8oz }}
+              {{ f.cs_9_8oz.errors }}
+            </td>
+            <td class="num">
+              {{ f.cs_18oz }}
+              {{ f.cs_18oz.errors }}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5"><em>No hay variedades activas para este campo.</em></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="actions">
+    <button type="submit" class="btn">Guardar</button>
+    <a class="btn secondary" href="{% url 'arandano:arandano_produccion_list' %}">Volver</a>
+  </div>
+</form>
+
+</body>
+</html>

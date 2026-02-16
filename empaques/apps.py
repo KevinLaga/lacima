@@ -10,9 +10,11 @@ class EmpaquesConfig(AppConfig):
         Asegura que exista el grupo 'capturista' con permisos de captura mínima.
         Se ignoran errores cuando la BD aún no está migrada (primera corrida).
         """
+        from . import signals  # noqa
         try:
             from django.contrib.auth.models import Group, Permission
             from django.db.utils import OperationalError, ProgrammingError
+            from . import signals
 
             # Crea/obtiene el grupo
             capturista, _ = Group.objects.get_or_create(name="capturista")

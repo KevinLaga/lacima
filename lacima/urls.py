@@ -39,4 +39,5 @@ urlpatterns = [
     path('empaques/', include('empaques.urls')),  # incluimos las de tu app
     path('accounts/', include('django.contrib.auth.urls')),
     path('__debug_db__', _dbg_db),
+    path("arandano/", include(("arandano.urls", "arandano"), namespace="arandano")),
 ]

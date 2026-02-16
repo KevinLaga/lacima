@@ -31,11 +31,31 @@
   </style>
 
   <h1>Embarques Registrados</h1>
+  
   <p><a href="{% url 'shipment_create' %}">+ Nuevo Embarque</a></p>
+  <!-- Selector de modo (Espárrago / Arándano / Todo) -->
+<form method="get" class="form-inline">
+  {# Conserva parámetros ya puestos (iso_week, empresa, start, end, year, month, descargar, etc) #}
+  {% for k,v in request.GET.items %}
+    {% if k != "mode" %}
+      <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endif %}
+  {% endfor %}
+
+  <label for="id_mode">Modo:</label>
+  {% with md=request.GET.mode|default:"esparrago" %}
+    <select id="id_mode" name="mode" onchange="this.form.submit()">
+      <option value="esparrago" {% if md == "esparrago" %}selected{% endif %}>Espárrago</option>
+      <option value="arandano"  {% if md == "arandano" %}selected{% endif %}>Arándano</option>
+      <option value="all"       {% if md == "all" %}selected{% endif %}>Todo</option>
+    </select>
+  {% endwith %}
+</form>
 
   <!-- Descarga por semana (input type="week" + empresa) -->
   <form method="get" class="form-inline">
     <label for="id_iso_week">Semana:</label>
+    
     <input type="week" id="id_iso_week" name="iso_week"
            value="{{ request.GET.iso_week|default:'' }}" required>
 
@@ -51,7 +71,7 @@
       <option value="AGRICOLA DH & G" {% if e == 'AGRICOLA DH & G' %}selected{% endif %}>AGRICOLA DH & G</option>
       {% endwith %}
     </select>
-
+    <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
     <button type="submit" name="descargar" value="semana">Descargar semana</button>
   </form>
 
@@ -61,6 +81,7 @@
     <input type="date" id="id_start" name="start" value="{{ request.GET.start|default:'' }}" required>
     <span>—</span>
     <input type="date" id="id_end" name="end" value="{{ request.GET.end|default:'' }}" required>
+    <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
     <button type="submit" name="descargar" value="rango">Descargar rango</button>
   </form>
 
@@ -68,6 +89,7 @@
   <h3>Descargar resumen mensual</h3>
   <form method="get" action="{% url 'shipment_list' %}">
     <input type="hidden" name="descargar" value="mes">
+    <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
     <label>Año:</label>
     <input type="number" name="year" min="2020" max="2100" value="{{ request.GET.year|default:today.year }}">
     <label>Mes:</label>
@@ -91,6 +113,7 @@
   <h3>Descargar resumen anual</h3>
   <form method="get" action="{% url 'shipment_list' %}" class="form-inline">
     <input type="hidden" name="descargar" value="ano">
+    <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
     <label for="year-ano">Año:</label>
     <input type="number" id="year-ano" name="year" min="2020" max="2100"
            value="{{ request.GET.year|default:today.year }}">

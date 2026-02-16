@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Arándano - Embarques</title>
+</head>
+<body>
+  <h1>Arándano – Embarques</h1>
+
+  <p>
+    <a href="{% url 'arandano:embarque_create' %}">➕ Nuevo embarque</a>
+  </p>
+
+  <form method="get">
+    Campo:
+    <select name="campo">
+      <option value="">(todos)</option>
+      {% for c in campos %}
+        <option value="{{ c.id }}" {% if request.GET.campo == c.id|stringformat:'s' %}selected{% endif %}>{{ c.nombre }}</option>
+      {% endfor %}
+    </select>
+    Destino:
+    <select name="destino">
+      <option value="">(todos)</option>
+      <option value="GOURMET" {% if request.GET.destino == "GOURMET" %}selected{% endif %}>Gourmet</option>
+      <option value="CRAVO" {% if request.GET.destino == "CRAVO" %}selected{% endif %}>Cravo</option>
+      <option value="ABIERTO" {% if request.GET.destino == "ABIERTO" %}selected{% endif %}>Abierto</option>
+      <option value="NUEVO" {% if request.GET.destino == "NUEVO" %}selected{% endif %}>Nuevo</option>
+    </select>
+    Fecha: <input type="date" name="fecha" value="{{ request.GET.fecha }}">
+    <button type="submit">Filtrar</button>
+  </form>
+
+  <p>
+    Exportar:
+    <a href="?{% if request.GET.campo %}campo={{request.GET.campo}}&{% endif %}{% if request.GET.destino %}destino={{request.GET.destino}}&{% endif %}{% if request.GET.fecha %}fecha={{request.GET.fecha}}&{% endif %}descargar=dia">Excel del día</a>
+    |
+    <a href="?{% if request.GET.campo %}campo={{request.GET.campo}}&{% endif %}{% if request.GET.destino %}destino={{request.GET.destino}}&{% endif %}{% if request.GET.fecha %}fecha={{request.GET.fecha}}&{% endif %}descargar=semana">Excel de la semana</a>
+  </p>
+
+  <table border="1" cellpadding="6" cellspacing="0">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Campo</th>
+        <th>Destino</th>
+        <th>Folio</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for e in embarques %}
+      <tr>
+        <td>{{ e.fecha }}</td>
+        <td>{{ e.campo }}</td>
+        <td>{{ e.get_destino_display }}</td>
+        <td>{{ e.numero }}</td>
+        <td>
+          {% for it in e.items.all %}
+            {{ it.variedad.nombre }} · {{ it.presentacion.etiqueta }} · {{ it.cajas }} cajas ({{ it.contenedores }} cont.){% if not forloop.last %}<br>{% endif %}
+          {% endfor %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5">Sin embarques.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

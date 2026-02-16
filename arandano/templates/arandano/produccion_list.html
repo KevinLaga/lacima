@@ -1,0 +1,183 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Producción diaria – Arándano</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 18px; }
+    h1 { margin-bottom: 12px; }
+    .actions-top { margin-bottom: 12px; }
+    .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #225577; background:#225577; color:#fff; text-decoration:none; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border: 1px solid #e5e7eb; padding: 8px; }
+    th { background:#225577; color:#fff; text-align:left; }
+    td.num { text-align: right; }
+  </style>
+</head>
+<body>
+
+<h1>Producción  – Arándano</h1>
+
+<div class="actions-top">
+  <form method="get" style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
+      <!-- Botones de acción -->
+  <a class="btn" href="{% url 'arandano:arandano_produccion_create' %}" style="padding:6px 10px;border:1px solid #225577;border-radius:6px;background:#225577;color:#fff;text-decoration:none;">
+    + Registrar entradas
+  </a>
+  <a class="btn" href="{% url 'arandano:salidas_create' %}" style="padding:6px 10px;border:1px solid #225577;border-radius:6px;background:#225577;color:#fff;text-decoration:none;">
+    - Registrar salida
+  </a>
+  <a class="btn secondary" href="{% url 'arandano:salidas_list' %}" style="padding:6px 10px;border:1px solid #225577;border-radius:6px;background:#fff;color:#225577;text-decoration:none;">
+    Ver salidas
+  </a>
+  <label>Campo:&nbsp;</label>
+  <select name="campo" onchange="this.form.submit()">
+    <option value="all" {% if not campo_sel %}selected{% endif %}>General (todos)</option>
+    {% for c in campos %}
+      <option value="{{ c.id }}" {% if campo_sel and campo_sel.id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+    {% endfor %}
+  </select>
+
+
+</form>
+<form method="get" action="{% url 'arandano:salidas_excel_inventario' %}" style="display:flex; gap:8px; align-items:end;">
+  <div>
+    <label>Inicio</label><br>
+    <input type="date" name="start" required>
+  </div>
+  <div>
+    <label>Fin</label><br>
+    <input type="date" name="end" required>
+  </div>
+  {% if campo_sel %}
+    <input type="hidden" name="campo" value="{{ campo_sel.id }}">
+  {% elif request.GET.campo and request.GET.campo != 'all' %}
+    <input type="hidden" name="campo" value="{{ request.GET.campo }}">
+  {% else %}
+    <input type="hidden" name="campo" value="all">
+  {% endif %}
+  <button type="submit" class="btn">Descargar Excel (Inventario)</button>
+</form>
+</div>
+
+
+
+
+
+<form method="get"
+      action="{% url 'arandano:arandano_produccion_excel_rango' %}"
+      style="margin:12px 0; display:flex; gap:8px; align-items:end;">
+  <div>
+    <label>Inicio</label><br>
+    <input type="date" name="start" required>
+  </div>
+  <div>
+    <label>Fin</label><br>
+    <input type="date" name="end" required>
+  </div>
+
+  {# Si hay campo seleccionado, manda su id; si no, manda 'all' para general #}
+  {% if campo_sel %}
+    <input type="hidden" name="campo" value="{{ campo_sel.id }}">
+  {% else %}
+    <input type="hidden" name="campo" value="all">
+  {% endif %}
+
+
+
+  <div>
+    <button type="submit" class="btn">Descargar Excel (Entradas solamente)</button>
+  </div>
+</form>
+
+
+<div class="card" style="margin:10px 0;padding:10px;border:1px solid #ddd;border-radius:8px;">
+  <h3 style="margin:0 0 8px 0;">Totales capturados</h3>
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left;border-bottom:1px solid #eee;">Campo</th>
+        <th class="num" style="border-bottom:1px solid #eee;">Producido (kg)</th>
+        <th class="num" style="border-bottom:1px solid #eee;">Salidas (kg)</th>
+        <th class="num" style="border-bottom:1px solid #eee;">Neto (kg)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in tabla_totales %}
+        <tr>
+          <td style="border-bottom:1px solid #f3f4f6;">{{ r.campo }}</td>
+          <td class="num" style="border-bottom:1px solid #f3f4f6;">{{ r.producido|floatformat:2 }}</td>
+          <td class="num" style="border-bottom:1px solid #f3f4f6;">{{ r.salidas|floatformat:2 }}</td>
+          <td class="num" style="border-bottom:1px solid #f3f4f6;">{{ r.neto|floatformat:2 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4"><em>Sin capturas.</em></td></tr>
+      {% endfor %}
+      <tr>
+        <td style="font-weight:bold;">TOTALES</td>
+        <td class="num" style="font-weight:bold;">{{ total_prod_general|floatformat:2 }}</td>
+        <td class="num" style="font-weight:bold;">{{ total_sal_general|floatformat:2 }}</td>
+        <td class="num" style="font-weight:bold;">{{ total_neto_general|floatformat:2 }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<div class="card" style="margin:10px 0;padding:10px;border:1px solid #ddd;border-radius:8px;">
+  <h3 style="margin:0 0 8px 0;">
+    Inventario por variedad (kg)
+    {% if campo_sel %}<small style="color:#666;">— {{ campo_sel.nombre }}</small>
+    {% else %}<small style="color:#666;">— General</small>{% endif %}
+  </h3>
+  <table style="width:100%;border-collapse:collapse;">
+    <thead>
+      <tr>
+        <th style="text-align:left;border-bottom:1px solid #eee;">Variedad</th>
+        <th style="text-align:right;border-bottom:1px solid #eee;">Stock (kg)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in inventario_variedades %}
+        <tr>
+          <td style="border-bottom:1px solid #f3f4f6;">{{ row.variedad }}</td>
+          <td style="border-bottom:1px solid #f3f4f6;text-align:right;">{{ row.stock|floatformat:2 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="2"><em>No hay inventario calculado.</em></td></tr>
+      {% endfor %}
+      <tr>
+        <td style="font-weight:bold;">TOTAL INVENTARIO</td>
+        <td style="font-weight:bold;text-align:right;">{{ total_stock_general|floatformat:2 }}</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Campo</th>
+      <th class="num">Total (kg)</th>
+      <th class="num">Rezaga (kg)</th>
+      <th class="num">Empacado (kg)</th>
+      <th>Excel</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in filas %}
+      <tr>
+        <td>{{ row.obj.fecha }}</td>
+        <td>{{ row.obj.campo }}</td>
+        <td class="num">{{ row.total|floatformat:2 }}</td>
+        <td class="num">{{ row.rezaga|floatformat:2 }}</td>
+        <td class="num">{{ row.empacado|floatformat:2 }}</td>
+        <td>
+          <a href="{% url 'arandano:arandano_produccion_excel_dia' row.obj.pk %}">Descargar</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6"><em>Sin capturas.</em></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+

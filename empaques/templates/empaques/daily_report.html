@@ -26,22 +26,44 @@
       <a href="{% url 'daily_report' %}?date={{ report_date|date:'Y-m-d' }}">Volver al día</a>
     {% endif %}
   </form>
+  <!-- Filtro producto (Espárrago / Arándano / Ambos) -->
+  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom:1rem;">
+    {# preserva el contexto actual (shipment_id / tracking / date) #}
+    {% if request.GET.shipment_id %}
+      <input type="hidden" name="shipment_id" value="{{ request.GET.shipment_id }}">
+    {% elif request.GET.tracking %}
+      <input type="hidden" name="tracking" value="{{ request.GET.tracking }}">
+    {% else %}
+      <input type="hidden" name="date" value="{{ report_date|date:'Y-m-d' }}">
+    {% endif %}
 
-  {% if perms.empaques.export_reports %}
+    <label for="id_mode">Producto:</label>
+    <select id="id_mode" name="mode">
+      <option value="esparrago" {% if request.GET.mode|default:"esparrago" == "esparrago" %}selected{% endif %}>Espárrago</option>
+      <option value="arandano"  {% if request.GET.mode == "arandano" %}selected{% endif %}>Arándano</option>
+      <option value="all"       {% if request.GET.mode == "all" %}selected{% endif %}>Ambos</option>
+    </select>
+
+    <button type="submit">Aplicar</button>
+  </form>
+
+
+ {% if perms.empaques.export_reports %}
   <!-- Botones de descarga (propagan selección actual) -->
   <p>
-    {% with sid=request.GET.shipment_id trk=request.GET.tracking %}
-      <a href="{% url 'daily_report' %}?format=xlsx{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
+    {% with sid=request.GET.shipment_id trk=request.GET.tracking md=request.GET.mode|default:"esparrago" %}
+      <a href="{% url 'daily_report' %}?format=xlsx&mode={{ md }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
         <b>Descargar Excel General</b>
       </a>
+
       {% for c, cslug in clientes %}
-        | <a href="{% url 'daily_report' %}?format=xlsx_{{ cslug }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
+        | <a href="{% url 'daily_report' %}?format=xlsx_{{ cslug }}&mode={{ md }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
             <b>Descargar Excel {{ c }}</b>
           </a>
       {% endfor %}
     {% endwith %}
   </p>
-  {% endif %}
+{% endif %}
 
   <!-- Tabla -->
   <table border="1" cellpadding="5" cellspacing="0">
@@ -61,17 +83,47 @@
     <tbody>
     {% for s in shipments %}
       {% for item in s.items.all %}
-      <tr>
-        <td>{{ s.tracking_number }}</td>
-        <td>{{ s.invoice_number }}</td>
-        <td>{{ item.presentation.name }}</td>
-        <td>{{ item.size }}</td>
-        <td style="text-align:right">{{ item.quantity }}</td>
-        <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
-        <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
-        <td>{{ item.cliente }}</td>
-        <td>{{ item.temperatura }}</td>
-      </tr>
+
+        {% if mode == "all" %}
+          <tr>
+            <td>{{ s.tracking_number }}</td>
+            <td>{{ s.invoice_number }}</td>
+            <td>{{ item.presentation.name }}</td>
+            <td>{{ item.size }}</td>
+            <td style="text-align:right">{{ item.quantity }}</td>
+            <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
+            <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
+            <td>{{ item.cliente }}</td>
+            <td>{{ item.temperatura }}</td>
+          </tr>
+
+        {% elif mode == "arandano" and item.presentation.is_arandano %}
+          <tr>
+            <td>{{ s.tracking_number }}</td>
+            <td>{{ s.invoice_number }}</td>
+            <td>{{ item.presentation.name }}</td>
+            <td>{{ item.size }}</td>
+            <td style="text-align:right">{{ item.quantity }}</td>
+            <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
+            <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
+            <td>{{ item.cliente }}</td>
+            <td>{{ item.temperatura }}</td>
+          </tr>
+
+        {% elif mode == "esparrago" and not item.presentation.is_arandano %}
+          <tr>
+            <td>{{ s.tracking_number }}</td>
+            <td>{{ s.invoice_number }}</td>
+            <td>{{ item.presentation.name }}</td>
+            <td>{{ item.size }}</td>
+            <td style="text-align:right">{{ item.quantity }}</td>
+            <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
+            <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
+            <td>{{ item.cliente }}</td>
+            <td>{{ item.temperatura }}</td>
+          </tr>
+        {% endif %}
+
       {% endfor %}
     {% empty %}
       <tr><td colspan="9">No hay embarques para esta fecha.</td></tr>

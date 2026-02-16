@@ -1,5 +1,6 @@
 # empaques/views_inventory.py
 from decimal import Decimal
+from urllib import request
 
 from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import render, redirect, get_object_or_404
@@ -12,16 +13,21 @@ from django.db.models.functions import Coalesce
 from .models import InventoryItem, InventoryMovement
 from .forms_inventory import InventoryItemForm, InventoryMovementForm
 
-
-@login_required
-@permission_required('empaques.view_inventoryitem', raise_exception=True)
 def almacen_list(request):
     """
     Lista de artículos con stock calculado (ent - sal + adj) vía annotate.
     """
     q = (request.GET.get("q") or "").strip()
+    tipo = (request.GET.get("tipo") or "general").strip().lower()  # 👈 AQUÍ
 
     items_qs = InventoryItem.objects.all()
+
+    # 👇 FILTRO por tipo ANTES de annotate
+    if tipo == "arandano":
+        items_qs = items_qs.filter(sku__startswith="AR-")
+    elif tipo == "general":
+        pass
+
     if q:
         items_qs = items_qs.filter(
             Q(sku__icontains=q) | Q(name__icontains=q) | Q(location__icontains=q)
@@ -31,31 +37,19 @@ def almacen_list(request):
         items_qs
         .annotate(
             ent=Coalesce(
-                Sum(
-                    'movements__quantity',
-                    filter=Q(movements__type='IN'),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                ),
-                V(0),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
+                Sum('movements__quantity', filter=Q(movements__type='IN'),
+                    output_field=DecimalField(max_digits=12, decimal_places=2)),
+                V(0), output_field=DecimalField(max_digits=12, decimal_places=2),
             ),
             sal=Coalesce(
-                Sum(
-                    'movements__quantity',
-                    filter=Q(movements__type='OUT'),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                ),
-                V(0),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
+                Sum('movements__quantity', filter=Q(movements__type='OUT'),
+                    output_field=DecimalField(max_digits=12, decimal_places=2)),
+                V(0), output_field=DecimalField(max_digits=12, decimal_places=2),
             ),
             adj=Coalesce(
-                Sum(
-                    'movements__quantity',
-                    filter=Q(movements__type='ADJ'),
-                    output_field=DecimalField(max_digits=12, decimal_places=2),
-                ),
-                V(0),
-                output_field=DecimalField(max_digits=12, decimal_places=2),
+                Sum('movements__quantity', filter=Q(movements__type='ADJ'),
+                    output_field=DecimalField(max_digits=12, decimal_places=2)),
+                V(0), output_field=DecimalField(max_digits=12, decimal_places=2),
             ),
         )
         .annotate(
@@ -80,8 +74,8 @@ def almacen_list(request):
         "items": items,
         "form": form,
         "q": q,
+        "tipo": tipo,
     })
-
 
 from django.contrib import messages
 

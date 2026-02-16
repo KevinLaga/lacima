@@ -1,0 +1,502 @@
+{
+  "date": "2026-02-15",
+  "ship_cols": [
+    7
+  ],
+  "rows": {
+    "13.5 LBS (12X18OZ)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "13.5 LBS (12X18OZ)|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "13.5 LBS (12X18OZ)|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "13.5 LBS (12X18OZ)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "13.5 LBS (12X18OZ)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "13.5 LBS (12X18OZ)|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "4.5 LBS (12X6OZ)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "4.5 LBS (12X6OZ)|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "4.5 LBS (12X6OZ)|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "4.5 LBS (12X6OZ)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "4.5 LBS (12X6OZ)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "4.5 LBS (12X6OZ)|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "7.35 LBS (12X9.8OZ)|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "7.35 LBS (12X9.8OZ)|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "7.35 LBS (12X9.8OZ)|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "7.35 LBS (12X9.8OZ)|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "7.35 LBS (12X9.8OZ)|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "7.35 LBS (12X9.8OZ)|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA  QV MED. 12|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA  QV MED. 12|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA  QV MED. 12|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA  QV MED. 12|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 1
+    },
+    "ALCACHOFA  QV MED. 12|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA  QV MED. 12|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 12|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 12|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 12|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 12|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 2
+    },
+    "ALCACHOFA MED. 12|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 12|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 18|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 18|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 18|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 18|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 3
+    },
+    "ALCACHOFA MED. 18|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 18|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SI JEJE|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SI JEJE|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SI JEJE|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SI JEJE|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SI JEJE|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "SI JEJE|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "NO JOJO|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "NO JOJO|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "NO JOJO|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "NO JOJO|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "NO JOJO|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "NO JOJO|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "PUEDE SER JOJO|JUMBO": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "PUEDE SER JOJO|XLARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "PUEDE SER JOJO|LARGE": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "PUEDE SER JOJO|STANDARD": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "PUEDE SER JOJO|SMALL": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "PUEDE SER JOJO|TIPS": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    }
+  },
+  "exist_piso_hoy": 0,
+  "cajas_campo_recibidas": 0,
+  "acum_cosechadas_ayer": 0,
+  "acum_empacadas_ayer": 0.0,
+  "use_manual_acum": false,
+  "acum_cosechadas": 0,
+  "acum_empacadas": 6.0,
+  "order_number": ""
+}

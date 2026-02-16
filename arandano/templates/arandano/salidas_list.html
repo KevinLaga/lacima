@@ -1,0 +1,224 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Salidas – Arándano</title>
+  <style>
+    :root {
+      --brand:#225577;
+      --brand-ink:#ffffff;
+      --ink:#111827;
+      --muted:#6b7280;
+      --bd:#e5e7eb;
+      --bg:#ffffff;
+      --card:#f8fafc;
+      --zebra:#f9fafb;
+    }
+    * { box-sizing: border-box; }
+    html, body { background: var(--bg); color: var(--ink); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { margin: 24px; }
+
+    h1 { margin: 0 0 16px 0; font-weight: 700; letter-spacing: .2px; }
+
+    /* Actions bar */
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    .left-actions, .right-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: end;
+    }
+
+    .btn {
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--brand);
+      background: var(--brand); color: var(--brand-ink);
+      text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+      cursor: pointer; line-height: 1;
+    }
+    .btn.secondary { background: #fff; color: var(--brand); }
+    .btn.ghost { background: #fff; color: var(--brand); border-style: dashed; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--bd);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 14px 0;
+    }
+
+    /* Filters & exports */
+    .field {
+      display: grid; gap: 6px;
+    }
+    label { font-size: 12px; font-weight: 600; color: var(--muted); }
+    input[type=date], select {
+      height: 36px; padding: 6px 10px; border:1px solid var(--bd); border-radius:8px; background:#fff;
+    }
+
+    /* Table */
+    .table-wrap { overflow:auto; border: 1px solid var(--bd); border-radius: 10px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    thead th {
+      position: sticky; top: 0;
+      background: var(--brand); color: #fff; text-align: left; font-weight: 700;
+      border-bottom: 1px solid var(--bd);
+      padding: 10px 12px;
+    }
+    tbody td { border-top: 1px solid var(--bd); padding: 10px 12px; vertical-align: top; }
+    tbody tr:nth-child(odd) { background: var(--zebra); }
+    .num { text-align: right; white-space: nowrap; }
+    .muted { color: var(--muted); }
+
+    /* Subgrid de items (variedad/kg) */
+    .items-grid {
+      display: grid; grid-template-columns: 1fr minmax(120px, 160px);
+      border: 1px solid var(--bd); border-radius: 8px; overflow: hidden;
+    }
+    .items-grid .head {
+      background: #f3f4f6; font-weight: 600; color: #374151;
+      padding: 8px 10px; border-bottom: 1px solid var(--bd);
+    }
+    .items-grid .cell { padding: 8px 10px; border-top: 1px solid var(--bd); }
+    .items-grid .cell.num { text-align: right; }
+
+    /* Total global pill */
+    .kpi {
+      display:flex; justify-content: space-between; align-items:center;
+      font-weight: 700; background:#fff; border:1px solid var(--bd);
+      border-radius: 10px; padding: 12px 14px;
+    }
+
+    /* Messages */
+    .msgs { margin: 10px 0; padding: 10px 12px; border-radius: 8px; background: #f6f9ff; border: 1px solid #dbe7ff; }
+
+    @media (max-width: 900px){
+      .toolbar { grid-template-columns: 1fr; }
+      .left-actions, .right-actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>Salidas – Arándano</h1>
+
+{% if messages %}
+  <div class="msgs">
+    <ul style="margin:0; padding-left: 18px;">
+      {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<div class="toolbar">
+  <div class="left-actions">
+    <a class="btn" href="{% url 'arandano:salidas_create' %}">+ Registrar salida</a>
+    <a class="btn secondary" href="{% url 'arandano:arandano_produccion_list' %}">← Volver a Producción</a>
+  </div>
+
+  <div class="right-actions">
+    <!-- Export Salidas -->
+    <form method="get" action="{% url 'arandano:salidas_excel_rango' %}" style="display:flex; gap:10px; align-items:end;">
+      <div class="field">
+        <label>Inicio</label>
+        <input type="date" name="start" required>
+      </div>
+      <div class="field">
+        <label>Fin</label>
+        <input type="date" name="end" required>
+      </div>
+      {% if campo_sel %}
+        <input type="hidden" name="campo" value="{{ campo_sel.id }}">
+      {% else %}
+        <input type="hidden" name="campo" value="all">
+      {% endif %}
+      <button type="submit" class="btn">Excel (salidas)</button>
+    </form>
+
+    <!-- Export Inventario (entradas+salidas) si lo tienes habilitado -->
+    <form method="get" action="{% url 'arandano:salidas_excel_inventario' %}" style="display:flex; gap:10px; align-items:end;">
+      <div class="field">
+        <label>Inicio</label>
+        <input type="date" name="start" required>
+      </div>
+      <div class="field">
+        <label>Fin</label>
+        <input type="date" name="end" required>
+      </div>
+      {% if campo_sel %}
+        <input type="hidden" name="campo" value="{{ campo_sel.id }}">
+      {% else %}
+        <input type="hidden" name="campo" value="all">
+      {% endif %}
+      <button type="submit" class="btn ghost">Excel (inventario)</button>
+    </form>
+
+    <!-- Filtro por campo -->
+    <form method="get" style="display:flex; gap:10px; align-items:end;">
+      <div class="field">
+        <label>Campo</label>
+        <select name="campo" onchange="this.form.submit()">
+          <option value="all" {% if not campo_sel %}selected{% endif %}>General (todos)</option>
+          {% for c in campos %}
+            <option value="{{ c.id }}" {% if campo_sel and campo_sel.id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="kpi">
+  <span>Total global de salidas (kg)</span>
+  <span class="num">{{ total_global|floatformat:5 }}</span>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:140px;">Fecha</th>
+        <th style="width:220px;">Campo</th>
+        <th>Detalle por variedad</th>
+        <th style="width:160px;" class="num">Total día (kg)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for fila in filas %}
+        <tr>
+          <td>{{ fila.obj.fecha }}</td>
+          <td>{{ fila.obj.campo }}</td>
+          <td>
+            {% if fila.items %}
+              <div class="items-grid">
+                <div class="head">Variedad</div>
+                <div class="head" style="text-align:right;">Kg</div>
+
+                {% for it in fila.items %}
+                  <div class="cell">{{ it.variedad }}</div>
+                  <div class="cell num">{{ it.kg|floatformat:5 }}</div>
+                {% endfor %}
+              </div>
+
+              {% if fila.obj.notas %}
+                <div class="muted" style="margin-top:6px;"><strong>Notas:</strong> {{ fila.obj.notas }}</div>
+              {% endif %}
+            {% else %}
+              <em class="muted">Sin renglones.</em>
+            {% endif %}
+          </td>
+          <td class="num">{{ fila.total_dia|floatformat:5 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4"><em>No hay salidas registradas.</em></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>

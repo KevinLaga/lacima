@@ -1,0 +1,238 @@
+{% load static %}
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Registrar salida – Arándano</title>
+  <style>
+    :root {
+      --pri:#225577;
+      --ink:#111827;
+      --mut:#6b7280;
+      --bd:#e5e7eb;
+      --ok:#065f46;
+      --err:#b91c1c;
+      --bg:#ffffff;
+      --card:#f8fafc;
+      --zebra:#f9fafb;
+    }
+    * { box-sizing: border-box; }
+    html, body { background: var(--bg); color: var(--ink); font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    body { margin: 24px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+
+    h1 { margin: 0 0 14px 0; font-weight: 700; letter-spacing: .2px; }
+
+    /* Mensajes */
+    .flash { margin:10px 0; padding:10px 12px; border-radius:10px; }
+    .flash.ok  { background:#ecfdf5; border:1px solid #a7f3d0; color:var(--ok); }
+    .flash.err { background:#fef2f2; border:1px solid #fecaca; color:var(--err); }
+
+    /* Card */
+    .card {
+      border:1px solid var(--bd);
+      border-radius:12px;
+      background: var(--card);
+      padding:14px;
+      margin-top:14px;
+    }
+
+    /* Cabecera */
+    .grid { display:grid; grid-template-columns: 180px 1fr; gap: 12px; align-items:center; }
+    label { font-weight:600; color:var(--ink); }
+    input[type="date"], select, input[type="number"], textarea {
+      width:100%; padding:8px 10px; border:1px solid var(--bd); border-radius:8px; font-size:14px; background:#fff;
+    }
+    textarea { min-height: 72px; }
+    .field-error { color:var(--err); font-size:12px; margin-top:4px; }
+    .help { color:var(--mut); font-size:12px; margin-top:6px; }
+
+    /* Tabla formset */
+    .table-wrap { overflow:auto; border:1px solid var(--bd); border-radius:10px; background:#fff; }
+    table { width:100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+    colgroup col.var   { width: 40%; }
+    colgroup col.kg    { width: 20%; }
+    colgroup col.cs6   { width: 13%; }
+    colgroup col.cs98  { width: 13%; }
+    colgroup col.cs18  { width: 14%; }
+
+    thead th {
+      position: sticky; top: 0;
+      background: var(--pri); color:#fff; text-align:left; font-weight:700;
+      border-bottom:1px solid var(--bd);
+      padding:10px 12px;
+      white-space: nowrap;
+    }
+    tbody td { border-top:1px solid var(--bd); padding:10px 12px; vertical-align: middle; background:#fff; }
+    tbody tr:nth-child(odd) td { background: var(--zebra); }
+
+    /* Inputs dentro de celdas */
+    .cell { display:flex; align-items:center; gap:8px; }
+    /* Sin filtros: alineo vía selectores genéricos */
+    td:nth-child(2) input[type="number"],
+    td:nth-child(3) input[type="number"],
+    td:nth-child(4) input[type="number"],
+    td:nth-child(5) input[type="number"] { text-align:right; }
+
+    select { max-width: 100%; }
+
+    /* Errores por fila */
+    .row-error { color:var(--err); font-size:12px; margin-top:6px; }
+
+    /* Acciones */
+    .actions { margin-top: 16px; display:flex; gap: 10px; flex-wrap: wrap; }
+    .btn { padding: 10px 14px; border-radius: 10px; border:1px solid var(--pri); background: var(--pri); color:#fff; text-decoration:none; cursor:pointer; display:inline-flex; align-items:center; gap:8px; }
+    .btn.secondary { background:#fff; color:var(--pri); }
+    .muted { color: var(--mut); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Registrar salida – Arándano</h1>
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="flash {% if m.tags == 'error' %}err{% else %}ok{% endif %}">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    <!-- Cabecera -->
+    <div class="card">
+      <div class="grid" style="row-gap: 14px;">
+        <label for="{{ form.fecha.id_for_label }}">Fecha</label>
+        <div>
+          {{ form.fecha }}
+          {% if form.fecha.errors %}<div class="field-error">{{ form.fecha.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <label for="{{ form.campo.id_for_label }}">Campo</label>
+        <div>
+          {{ form.campo }}
+          {% if form.campo.errors %}<div class="field-error">{{ form.campo.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <label for="{{ form.notas.id_for_label }}">Notas</label>
+        <div>
+          {{ form.notas }}
+          {% if form.notas.errors %}<div class="field-error">{{ form.notas.errors|striptags }}</div>{% endif %}
+          <div class="help">Opcional: destino o motivo de la salida.</div>
+        </div>
+      </div>
+    </div>
+    <label for="{{ form.destino.id_for_label }}">Destino</label>
+<div>
+  {{ form.destino }}
+  {% if form.destino.errors %}
+    <div class="field-error">{{ form.destino.errors|striptags }}</div>
+  {% endif %}
+</div>
+
+<div id="row-destino-detalle" style="display:none;">
+  <label for="{{ form.destino_detalle.id_for_label }}">¿A dónde?</label>
+  <div>
+    {{ form.destino_detalle }}
+    {% if form.destino_detalle.errors %}
+      <div class="field-error">{{ form.destino_detalle.errors|striptags }}</div>
+    {% endif %}
+    <div class="help">Solo si elegiste “Otro destino”.</div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const sel = document.getElementById("{{ form.destino.id_for_label }}");
+  const row = document.getElementById("row-destino-detalle");
+
+  function toggle() {
+    if (!sel || !row) return;
+    row.style.display = (sel.value === "OTRO") ? "grid" : "none";
+  }
+
+  if (sel) sel.addEventListener("change", toggle);
+  toggle();
+});
+</script>
+
+    <!-- Renglones -->
+    <div class="card">
+      <h3 style="margin:0 0 8px 0;">Renglones de salida</h3>
+      <div class="help">Las cantidades no pueden exceder el stock disponible (Producido − Salidas) hasta la fecha seleccionada.</div>
+
+      {{ formset.management_form }}
+
+      <div class="table-wrap" style="margin-top:10px;">
+        <table>
+          <colgroup>
+            <col class="var">
+            <col class="kg">
+            <col class="cs6">
+            <col class="cs98">
+            <col class="cs18">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Variedad</th>
+              <th class="num">Kg</th>
+              <th class="num">6&nbsp;oz</th>
+              <th class="num">9.8&nbsp;oz</th>
+              <th class="num">18&nbsp;oz</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in formset.forms %}
+              <tr>
+                <td>
+                  <div class="cell">
+                    {{ f.variedad }}
+                  </div>
+                  {% if f.variedad.errors %}<div class="row-error">{{ f.variedad.errors|striptags }}</div>{% endif %}
+                </td>
+
+                <td>
+                  <div class="cell">
+                    {{ f.kg }}
+                  </div>
+                  {% if f.kg.errors %}<div class="row-error">{{ f.kg.errors|striptags }}</div>{% endif %}
+                </td>
+
+                <td>
+                  <div class="cell">
+                    {{ f.cs_6oz }}
+                  </div>
+                  {% if f.cs_6oz.errors %}<div class="row-error">{{ f.cs_6oz.errors|striptags }}</div>{% endif %}
+                </td>
+
+                <td>
+                  <div class="cell">
+                    {{ f.cs_9_8oz }}
+                  </div>
+                  {% if f.cs_9_8oz.errors %}<div class="row-error">{{ f.cs_9_8oz.errors|striptags }}</div>{% endif %}
+                </td>
+
+                <td>
+                  <div class="cell">
+                    {{ f.cs_18oz }}
+                  </div>
+                  {% if f.cs_18oz.errors %}<div class="row-error">{{ f.cs_18oz.errors|striptags }}</div>{% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="5"><em class="muted">No hay variedades activas para este campo.</em></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn">Guardar salida</button>
+      <a class="btn secondary" href="{% url 'arandano:salidas_list' %}{% if campo_actual %}?campo={{ campo_actual.id }}{% endif %}">Cancelar</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>
