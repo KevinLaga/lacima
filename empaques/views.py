@@ -3034,8 +3034,10 @@ def shipment_list(request):
             ws.cell(row=row, column=3, value=str(getattr(s, "invoice_number", "") or "")).border = thin
             ws.cell(row=row, column=3).alignment = center
 
-            ws.cell(row=row, column=4, value=s.date.strftime("%d-%b")).border = thin
-            ws.cell(row=row, column=4).alignment = center
+            c_fecha = ws.cell(row=row, column=4, value=s.date)   # guarda como fecha real
+            c_fecha.border = thin
+            c_fecha.alignment = center
+            c_fecha.number_format = "dd-mm-yy"
 
             start_col = 5
             col_ptr = start_col
