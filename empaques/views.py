@@ -1549,7 +1549,7 @@ def production_xlsx(request, prod_date):
         ws.row_dimensions[r].height = 22
         r += 1
 
-    # --- Totales normales ---
+    # --- Totales normales --- 
     ws.cell(row=r, column=1, value="TOTAL").font = Font(bold=True)
     ws.cell(row=r, column=1).alignment = Alignment(horizontal="right", vertical="center")
     for i, n in enumerate(tot_norm, start=2):
@@ -1653,6 +1653,7 @@ def production_list_view(request):
 
 def es_capturista(user):
     return user.is_authenticated and user.groups.filter(name="capturista").exists()
+
 
 @login_required
 def post_login_redirect(request):
@@ -2778,7 +2779,412 @@ def shipment_list(request):
         )
         resp['Content-Disposition'] = f'attachment; filename="{filename}"'
         return resp
+    
+    if descargar == "acumulados":
+        if not request.user.has_perm("empaques.can_download_reports"):
+            return HttpResponse("No tienes permiso para descargar reportes.", status=403)
 
+        from collections import defaultdict, OrderedDict
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from openpyxl.utils import get_column_letter
+        from io import BytesIO
+        from django.utils.text import slugify
+
+        empresa = (request.GET.get("empresa") or "").strip()
+        mode    = (request.GET.get("mode") or "esparrago").lower().strip()
+
+        if not empresa:
+            return HttpResponse("Falta empresa.", status=400)
+
+        # ---- helper modo ----
+        def item_match_mode(it):
+            pres = getattr(it, "presentation", None)
+            is_ar = bool(getattr(pres, "is_arandano", False)) if pres else False
+            if mode == "all":
+                return True
+            if mode == "arandano":
+                return is_ar
+            return not is_ar  # esparrago
+
+        # ---- Query: TODOS los embarques donde exista al menos un item de ese cliente ----
+        embarques = (
+            Shipment.objects
+            .filter(items__cliente=empresa)
+            .distinct()
+            .order_by("date", "id")
+            .prefetch_related("items", "items__presentation")
+        )
+
+        # Armar dataset por embarque -> {(pres_name, size): qty_sum}
+        ship_rows = []
+        pres_sizes_set = set()
+
+        for s in embarques:
+            items_emp = [it for it in s.items.all() if (it.cliente == empresa and item_match_mode(it))]
+            if not items_emp:
+                continue
+
+            by_key = defaultdict(int)
+            total_boxes = 0
+            eq11_total = 0.0
+
+            for it in items_emp:
+                pres_name = (it.presentation.name or "").strip()
+                size_name = (it.size or "").strip()
+                qty = int(it.quantity or 0)
+
+                by_key[(pres_name, size_name)] += qty
+                pres_sizes_set.add((pres_name, size_name))
+
+                total_boxes += qty
+                cf = float(getattr(it.presentation, "conversion_factor", 1.0) or 1.0)
+                eq11_total += (qty * cf)
+
+            ship_rows.append({
+                "ship": s,
+                "by_key": dict(by_key),
+                "total_boxes": total_boxes,
+                "eq11_total": eq11_total,
+            })
+
+        if not ship_rows:
+            return HttpResponse("Sin datos para esa empresa/modo.", status=404)
+
+        # Orden de tamaños (ajústalo si quieres)
+        SIZE_ORDER = ["Jumbo", "XLarge", "Large", "Standard", "Stándar", "Small", "Tips"]
+        def size_sort_key(sz):
+            try:
+                return (0, SIZE_ORDER.index(sz))
+            except Exception:
+                return (1, sz.lower())
+
+        # Orden de presentaciones y tamaños detectados
+        pres_to_sizes = defaultdict(set)
+        for pres_name, size_name in pres_sizes_set:
+            pres_to_sizes[pres_name].add(size_name)
+
+        pres_names = sorted(pres_to_sizes.keys(), key=lambda x: x.lower())
+        pres_to_sizes_sorted = OrderedDict()
+        for pn in pres_names:
+            pres_to_sizes_sorted[pn] = sorted(list(pres_to_sizes[pn]), key=size_sort_key)
+
+        start_col = 5
+        col_ptr = start_col
+        # ======================
+        # Columnas de TOTALES (al final)
+        # ======================
+        tot_cols = [
+            ("TOTAL CAJAS", 12),
+            ("EQ 11 LBS", 12),
+            ("PRECIO VTA", 14),        # suma de "Total Vta." (de cada tamaño)
+            ("VENTA", 14),             # manual
+            ("COMISION 10%", 14),      # =VENTA*0.1
+            ("TOTAL NETO", 14),        # =VENTA-COMISION
+            ("MATERIAL EMPAQUE", 16),  # manual
+            ("JAPON/AUSTRALIA", 16),   # manual
+            ("FLETE", 12),             # manual
+            ("CUARTO FRIO", 14),       # manual
+            ("RETORNO", 14),           # =TOTAL_NETO - MATERIAL - J/A - FLETE - CUARTO
+            ("P&P", 12),               # =EQ11*6
+            ("RETORNO POR CAJA", 18),  # =VENTA/EQ11
+        ]
+
+
+        # ======================
+        # Excel
+        # ======================
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Acumulados"
+        ws.sheet_view.showZeros = True
+
+        th_font = Font(bold=True, color="FFFFFF")
+        th_fill = PatternFill("solid", fgColor="225577")
+        th_fill2 = PatternFill("solid", fgColor="6D5FA7")
+        thin = Border(
+            left=Side(style="thin", color="AAAAAA"),
+            right=Side(style="thin", color="AAAAAA"),
+            top=Side(style="thin", color="AAAAAA"),
+            bottom=Side(style="thin", color="AAAAAA"),
+        )
+        center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        right  = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+        # Anchos base
+        ws.column_dimensions["A"].width = 8
+        ws.column_dimensions["B"].width = 14
+        ws.column_dimensions["C"].width = 12
+        ws.column_dimensions["D"].width = 12
+
+        r_title = 1
+        r_pres  = 2
+        r_sz    = 3
+        r_sub   = 4
+        data_row_start = 5
+
+
+
+        # Encabezados fijos (fila 3)
+        fixed_headers = ["#", "Embarque", "Factura", "Fecha"]
+        for col, h in enumerate(fixed_headers, start=1):
+            cell = ws.cell(row=r_sub, column=col, value=h)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = center
+            cell.border = thin
+
+        # Dinámicas desde E
+        
+
+        for pres_name, sizes in pres_to_sizes_sorted.items():
+            pres_block_start = col_ptr
+
+            for sz in sizes:
+                sz_start = col_ptr
+                sz_end = col_ptr + 2
+
+                # ===== Tamaño (fila r_sz) =====
+                ws.merge_cells(start_row=r_sz, start_column=sz_start, end_row=r_sz, end_column=sz_end)
+                for cc in range(sz_start, sz_end + 1):
+                    cell = ws.cell(row=r_sz, column=cc, value=None)
+                    cell.border = thin
+                    cell.fill = th_fill2
+                    cell.font = th_font
+                    cell.alignment = center
+                ws.cell(row=r_sz, column=sz_start, value=str(sz).upper())
+
+                # ===== Subheaders (fila r_sub) =====
+                for i, sh in enumerate(["Cant.", "Vta.", "Total Vta."]):
+                    cell = ws.cell(row=r_sub, column=sz_start + i, value=sh)
+                    cell.font = th_font
+                    cell.fill = th_fill
+                    cell.alignment = center
+                    cell.border = thin
+
+                # anchos
+                ws.column_dimensions[get_column_letter(sz_start)].width = 10
+                ws.column_dimensions[get_column_letter(sz_start + 1)].width = 10
+                ws.column_dimensions[get_column_letter(sz_start + 2)].width = 12
+
+                col_ptr += 3
+
+            pres_block_end = col_ptr - 1
+
+
+
+            # ===== Presentación (fila r_pres) =====
+            ws.merge_cells(start_row=r_pres, start_column=pres_block_start, end_row=r_pres, end_column=pres_block_end)
+            for cc in range(pres_block_start, pres_block_end + 1):
+                cell = ws.cell(row=r_pres, column=cc, value=None)
+                cell.border = thin
+                cell.fill = th_fill
+                cell.font = th_font
+                cell.alignment = center
+            ws.cell(row=r_pres, column=pres_block_start, value=pres_name.upper())
+
+
+        ws.freeze_panes = "E5"
+
+        # ==== TOTALES (headers verticales) ====
+        tot_start_col = col_ptr
+
+        for i, (label, w) in enumerate(tot_cols):
+            ccol = tot_start_col + i
+
+            ws.merge_cells(start_row=r_pres, start_column=ccol, end_row=r_sub, end_column=ccol)
+            cell = ws.cell(row=r_pres, column=ccol, value=label)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = center
+            cell.border = thin
+
+            # bordes en filas mergeadas
+            for rr in range(r_pres, r_sub + 1):
+                cc = ws.cell(row=rr, column=ccol)
+                cc.border = thin
+                cc.fill = th_fill
+                cc.font = th_font
+                cc.alignment = center
+
+            ws.column_dimensions[get_column_letter(ccol)].width = w
+
+        # ==== Título (UNA SOLA VEZ) ====
+        last_col = tot_start_col + len(tot_cols) - 1
+        ws.merge_cells(start_row=r_title, start_column=1, end_row=r_title, end_column=last_col)
+        c = ws.cell(row=r_title, column=1, value=f"{empresa} – Acumulados ({mode})")
+        c.font = Font(size=16, bold=True, color="3C78D8")
+        c.alignment = Alignment(horizontal="left", vertical="center")
+
+
+        # ======================
+        # Datos
+        # ======================
+        row = data_row_start
+        for idx, pack in enumerate(ship_rows, start=1):
+            s = pack["ship"]
+            by_key = pack["by_key"]
+
+            ws.cell(row=row, column=1, value=idx).border = thin
+            ws.cell(row=row, column=1).alignment = center
+
+            ws.cell(row=row, column=2, value=str(getattr(s, "tracking_number", "") or "")).border = thin
+            ws.cell(row=row, column=2).alignment = center
+
+            ws.cell(row=row, column=3, value=str(getattr(s, "invoice_number", "") or "")).border = thin
+            ws.cell(row=row, column=3).alignment = center
+
+            ws.cell(row=row, column=4, value=s.date.strftime("%d-%b")).border = thin
+            ws.cell(row=row, column=4).alignment = center
+
+            start_col = 5
+            col_ptr = start_col
+            row_total_vta_cells = []
+
+            for pres_name, sizes in pres_to_sizes_sorted.items():
+                for sz in sizes:
+                    sz_start = col_ptr  # Cant
+                    # sz_start+1 => Vta
+                    # sz_start+2 => Total Vta
+
+                    qty = int(by_key.get((pres_name, sz), 0) or 0)
+
+                    # Cant.
+                    c_cant = ws.cell(row=row, column=sz_start, value=qty)
+                    c_cant.border = thin
+                    c_cant.alignment = right
+                    c_cant.number_format = "#,##0"
+
+                    # Vta. (manual)
+                    c_vta = ws.cell(row=row, column=sz_start + 1, value=None)
+                    c_vta.border = thin
+                    c_vta.alignment = right
+                    c_vta.number_format = "#,##0.00"
+
+                    # Total Vta. = IF(Vta="", "", Cant*Vta)
+                    cant_ref = c_cant.coordinate
+                    vta_ref  = c_vta.coordinate
+                    c_tot = ws.cell(
+                        row=row,
+                        column=sz_start + 2,
+                        value=f'=IF(OR({vta_ref}="",{cant_ref}=0),"",{cant_ref}*{vta_ref})'
+                    )
+                    c_tot.border = thin
+                    c_tot.alignment = right
+                    c_tot.number_format = "#,##0.00"
+
+                    row_total_vta_cells.append(c_tot.coordinate)
+
+                    col_ptr += 3  # avanzar al siguiente tamaño
+
+                # (NO muevas col_ptr aquí otra vez; ya avanzó por tamaños)
+                # pres_block_end = col_ptr - 1  # esto era solo para headers si los haces aquí
+
+            # ======================
+            # Totales por fila (al final)
+            # ======================
+            c_total_cajas = tot_start_col
+            c_eq11        = tot_start_col + 1
+            c_precio_vta  = tot_start_col + 2
+            c_venta       = tot_start_col + 3
+            c_comision    = tot_start_col + 4
+            c_total_neto  = tot_start_col + 5
+            c_mat         = tot_start_col + 6
+            c_japon       = tot_start_col + 7
+            c_flete       = tot_start_col + 8
+            c_cuarto      = tot_start_col + 9
+            c_retorno     = tot_start_col + 10
+            c_pp          = tot_start_col + 11
+            c_ret_x_caja  = tot_start_col + 12
+
+            # TOTAL CAJAS (valor fijo)
+            cell = ws.cell(row=row, column=c_total_cajas, value=int(pack.get("total_boxes", 0)))
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0"
+
+            # EQ11 (valor fijo)
+            cell = ws.cell(row=row, column=c_eq11, value=float(pack.get("eq11_total", 0.0)))
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            # PRECIO VTA = suma de todos los "Total Vta." de los tamaños
+            if row_total_vta_cells:
+                formula_precio_vta = "=SUM(" + ",".join(row_total_vta_cells) + ")"
+            else:
+                formula_precio_vta = "=0"
+            cell = ws.cell(row=row, column=c_precio_vta, value=formula_precio_vta)
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            # VENTA (manual)
+            cell_venta = ws.cell(row=row, column=c_venta, value=0)
+            cell_venta.border = thin
+            cell_venta.alignment = right
+            cell_venta.number_format = "0.00"
+
+            venta_ref = cell_venta.coordinate
+
+            # COMISION 10% = VENTA*0.10 (si vacío -> vacío)
+            cell = ws.cell(row=row, column=c_comision, value=f"={venta_ref}*0.10")
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            com_ref = cell.coordinate
+
+            # TOTAL NETO = VENTA - COMISION
+            cell = ws.cell(row=row, column=c_total_neto, value=f"={venta_ref}-{com_ref}")
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            neto_ref = cell.coordinate
+
+            # MATERIAL EMPAQUE (manual)
+            cell_mat = ws.cell(row=row, column=c_mat, value=None)
+            cell_mat.border = thin; cell_mat.alignment = right; cell_mat.number_format = "#,##0.00"
+
+            # JAPON/AUSTRALIA (manual)
+            cell_jp = ws.cell(row=row, column=c_japon, value=None)
+            cell_jp.border = thin; cell_jp.alignment = right; cell_jp.number_format = "#,##0.00"
+
+            # FLETE (manual)
+            cell_fl = ws.cell(row=row, column=c_flete, value=None)
+            cell_fl.border = thin; cell_fl.alignment = right; cell_fl.number_format = "#,##0.00"
+
+            # CUARTO FRIO (manual)
+            cell_cf = ws.cell(row=row, column=c_cuarto, value=None)
+            cell_cf.border = thin; cell_cf.alignment = right; cell_cf.number_format = "#,##0.00"
+
+            mat_ref = cell_mat.coordinate
+            jp_ref  = cell_jp.coordinate
+            fl_ref  = cell_fl.coordinate
+            cf_ref  = cell_cf.coordinate
+
+            # RETORNO = TOTAL NETO - material - japon - flete - cuarto (si VENTA vacío -> vacío)
+            cell = ws.cell(
+                row=row,
+                column=c_retorno,
+                value=f'=IF({venta_ref}="","",{neto_ref}-IF({mat_ref}="",0,{mat_ref})-IF({jp_ref}="",0,{jp_ref})-IF({fl_ref}="",0,{fl_ref})-IF({cf_ref}="",0,{cf_ref}))'
+            )
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            # P&P = EQ11 * 6
+            eq_ref = ws.cell(row=row, column=c_eq11).coordinate
+            cell = ws.cell(row=row, column=c_pp, value=f"={eq_ref}*6")
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            # RETORNO POR CAJA = VENTA / EQ11 (si VENTA vacío o EQ11=0 -> vacío)
+            cell = ws.cell(
+                row=row,
+                column=c_ret_x_caja,
+                value=f'=IF({eq_ref}=0,"",{venta_ref}/{eq_ref})'
+            )
+            cell.border = thin; cell.alignment = right; cell.number_format = "#,##0.00"
+
+            row += 1
+
+        out = BytesIO()
+        wb.save(out)
+        out.seek(0)
+
+        fname = f"acumulados_{slugify(empresa)}_{mode}.xlsx"
+        resp = HttpResponse(out.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp
 
 
 
