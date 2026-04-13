@@ -1,0 +1,70 @@
+{
+  "date": "2026-02-05",
+  "ship_cols": [
+    1
+  ],
+  "rows": {
+    "ALCACHOFA  QV MED. 12|Standard": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 12|Standard": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "ALCACHOFA MED. 18|Standard": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "Si jeje|Standard": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    },
+    "no jojo|Standard": {
+      "exist_prev": 0,
+      "exist_almacen": 30,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 30
+    },
+    "puede ser jojo|Jumbo": {
+      "exist_prev": 0,
+      "exist_almacen": 0,
+      "debe": 0,
+      "pago": 0,
+      "presto": 0,
+      "le_pagaron": 0,
+      "prod_dia": 0
+    }
+  },
+  "exist_piso_hoy": 0,
+  "cajas_campo_recibidas": 0,
+  "acum_cosechadas_ayer": 0,
+  "acum_empacadas_ayer": 0.0,
+  "use_manual_acum": false,
+  "acum_cosechadas": 0,
+  "acum_empacadas": 45.0,
+  "order_number": ""
+}

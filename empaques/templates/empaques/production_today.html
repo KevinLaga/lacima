@@ -45,6 +45,10 @@
           <a class="btn btn-success btn-sm" href="{% url 'production_xlsx' prod_date=prod_date|date:'Y-m-d' %}?empresa={{ empresa|slugify }}">
             <i class="bi bi-file-earmark-excel me-1"></i> Descargar Excel
           </a>
+          <a class="btn btn-success btn-sm"
+   href="{% url 'production_weekly_xlsx' %}?iso_week={{ prod_date|date:'o' }}-W{{ prod_date|date:'W' }}">
+  <i class="bi bi-file-earmark-excel me-1"></i> Descargar Semanal
+</a>
         </div>
       </div>
 

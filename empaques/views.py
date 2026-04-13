@@ -1641,7 +1641,295 @@ def production_xlsx(request, prod_date):
     resp["Content-Disposition"] = f'attachment; filename="produccion_{empresa.lower()}_{d.isoformat()}.xlsx"'
     return resp
 
+from datetime import date as _date, timedelta
+from django.http import HttpResponse, Http404
+from django.contrib.auth.decorators import login_required
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
 
+@login_required
+def production_weekly_xlsx(request):
+    """
+    Excel semanal (Lun-Dom) basado en los JSON guardados por empresa/día.
+
+    TABLA 1: Cartones y Total Lbs (Eq11) por día + total semana
+    TABLA 2: Cajas campo y Factor (Eq11/Cajas Campo) por día + total semana
+    TABLA 3: Acumulado de temporada (Factor global + Acum. empacadas Eq11) por empresa
+    """
+    iso_week = (request.GET.get("iso_week") or "").strip()  # "2026-W15"
+    if not iso_week:
+        return HttpResponse("Falta iso_week (ej: 2026-W15).", status=400)
+
+    # Parse ISO week -> Monday..Sunday
+    try:
+        y_str, w_str = iso_week.split("-W")
+        year = int(y_str)
+        week = int(w_str)
+        monday = _date.fromisocalendar(year, week, 1)
+        sunday = monday + timedelta(days=6)
+    except Exception:
+        return HttpResponse("iso_week inválido. Usa formato YYYY-Www (ej: 2026-W15).", status=400)
+
+    days = [monday + timedelta(days=i) for i in range(7)]
+    day_headers = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+    # ---- Factores por presentación ----
+    from .models import Presentation
+    pres_cf = {
+        (n or "").strip().upper(): float(cf or 1.0)
+        for n, cf in Presentation.objects.values_list("name", "conversion_factor")
+    }
+
+    # Helper: calcular "cartones" y "eq11_produccion" desde saved["rows"]
+    def _calc_cartones_eq11(saved):
+        rows = (saved or {}).get("rows") or {}
+        cartones = 0
+        eq11 = 0.0
+        for k_saved, r in rows.items():
+            prod_dia = int(r.get("prod_dia", 0) or 0)
+            cartones += prod_dia
+
+            # k_saved = "PRESENTACION|TAMAÑO"
+            pres_name = (k_saved.split("|", 1)[0] if "|" in k_saved else k_saved).strip().upper()
+            cf = pres_cf.get(pres_name, 1.0)
+            eq11 += prod_dia * cf
+        return cartones, eq11
+
+    # Helper: calcular cajas campo trabajadas (no dependemos de que esté guardado)
+    def _calc_cajas_campo_trabajadas(d, empresa, saved_today):
+        saved_yday = _load_prod(d - timedelta(days=1), empresa) or {}
+        exist_piso_ayer = int(saved_yday.get("exist_piso_hoy", 0) or 0)
+
+        exist_piso_hoy = int((saved_today or {}).get("exist_piso_hoy", 0) or 0)
+        cajas_campo_rec = int((saved_today or {}).get("cajas_campo_recibidas", 0) or 0)
+
+        total_a_trabajar = exist_piso_ayer + cajas_campo_rec
+        trabajadas = total_a_trabajar - exist_piso_hoy
+        return int(trabajadas or 0)
+
+    # ---- Armar dataset semanal por empresa ----
+    empresas_con_datos = []
+    data = {}  # empresa -> dict con arrays por día
+
+    for emp in COMPANY_CHOICES:
+        empresa = canon_company(emp) or emp  # por si te mandan slug raro
+        # Revisar si hay algo en la semana
+        has_any = False
+        cartones_by_day = []
+        eq11_by_day = []
+        cajas_campo_by_day = []
+        factor_by_day = []
+
+        last_saved_in_week = None
+        last_day_in_week = None
+
+        for d in days:
+            saved = _load_prod(d, empresa) or {}
+            if saved:
+                has_any = True
+                last_saved_in_week = saved
+                last_day_in_week = d
+
+            cart, eq11 = _calc_cartones_eq11(saved)
+            cartones_by_day.append(cart)
+            eq11_by_day.append(round(eq11, 2))
+
+            cajas_trab = _calc_cajas_campo_trabajadas(d, empresa, saved)
+            cajas_campo_by_day.append(cajas_trab)
+
+            f = (eq11 / cajas_trab) if cajas_trab else 0.0
+            factor_by_day.append(round(f, 4))
+
+        if not has_any:
+            continue
+
+        empresas_con_datos.append(empresa)
+
+        # Acumulado temporada: toma el último guardado dentro de la semana (si existe)
+        acum_emp = 0.0
+        acum_cos = 0
+        factor_global = 0.0
+        if last_saved_in_week:
+            acum_cos = int(last_saved_in_week.get("acum_cosechadas", 0) or 0)
+            acum_emp = float(last_saved_in_week.get("acum_empacadas", 0.0) or 0.0)
+            factor_global = (acum_emp / acum_cos) if acum_cos else 0.0
+
+        data[empresa] = {
+            "cartones": cartones_by_day,
+            "eq11": eq11_by_day,
+            "cajas_campo": cajas_campo_by_day,
+            "factor": factor_by_day,
+            "acum_emp": round(acum_emp, 2),
+            "factor_global": round(factor_global, 4),
+        }
+
+    if not empresas_con_datos:
+        return HttpResponse("No hay datos guardados en esa semana para ninguna empresa.", status=404)
+
+    # ---- Construir Excel ----
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Semana {year}-W{week}"
+
+    th_font = Font(bold=True, color="FFFFFF")
+    th_fill = PatternFill("solid", fgColor="225577")
+    th_fill2 = PatternFill("solid", fgColor="6D5FA7")
+    thin = Border(
+        left=Side(style="thin", color="AAAAAA"),
+        right=Side(style="thin", color="AAAAAA"),
+        top=Side(style="thin", color="AAAAAA"),
+        bottom=Side(style="thin", color="AAAAAA"),
+    )
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    right = Alignment(horizontal="right", vertical="center", wrap_text=True)
+
+    # Columnas: A Empresa, B Métrica, C..I Lunes..Domingo, J Total
+    headers = ["Empresa", "Métrica"] + day_headers + ["TOTAL"]
+    row = 1
+
+    # Título
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=len(headers))
+    c = ws.cell(row=row, column=1, value=f"Producción semanal – {monday.strftime('%d/%m/%Y')} a {sunday.strftime('%d/%m/%Y')}")
+    c.font = Font(size=16, bold=True, color="3C78D8")
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    row += 2
+
+    def _write_table_title(title):
+        nonlocal row
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=len(headers))
+        cc = ws.cell(row=row, column=1, value=title)
+        cc.font = Font(size=13, bold=True, color="225577")
+        cc.alignment = Alignment(horizontal="left", vertical="center")
+        row += 1
+
+    def _write_headers():
+        nonlocal row
+        for col, h in enumerate(headers, start=1):
+            cell = ws.cell(row=row, column=col, value=h)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.border = thin
+            cell.alignment = center
+        row += 1
+
+    def _write_company_two_rows(empresa, label1, arr1, fmt1, label2, arr2, fmt2):
+        """
+        Escribe 2 filas por empresa con la celda de empresa fusionada verticalmente.
+        """
+        nonlocal row
+
+        start_row = row
+        ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row+1, end_column=1)
+        cemp = ws.cell(row=start_row, column=1, value=empresa)
+        cemp.border = thin
+        cemp.alignment = center
+        cemp.font = Font(bold=True)
+
+        # Fila 1
+        ws.cell(row=start_row, column=2, value=label1).border = thin
+        ws.cell(row=start_row, column=2).alignment = center
+        vals1 = list(arr1)
+        tot1 = sum(vals1)
+        for i, v in enumerate(vals1, start=0):
+            cell = ws.cell(row=start_row, column=3+i, value=v)
+            cell.border = thin
+            cell.alignment = right
+            if fmt1: cell.number_format = fmt1
+        cell = ws.cell(row=start_row, column=3+7, value=tot1)
+        cell.border = thin
+        cell.alignment = right
+        if fmt1: cell.number_format = fmt1
+
+        # Fila 2
+        ws.cell(row=start_row+1, column=2, value=label2).border = thin
+        ws.cell(row=start_row+1, column=2).alignment = center
+        vals2 = list(arr2)
+        tot2 = sum(vals2)
+        for i, v in enumerate(vals2, start=0):
+            cell = ws.cell(row=start_row+1, column=3+i, value=v)
+            cell.border = thin
+            cell.alignment = right
+            if fmt2: cell.number_format = fmt2
+        cell = ws.cell(row=start_row+1, column=3+7, value=tot2)
+        cell.border = thin
+        cell.alignment = right
+        if fmt2: cell.number_format = fmt2
+
+        row += 2
+
+    # ===== TABLA 1 =====
+    _write_table_title("Cajas y Total Lbs (Eq. 11 lb) por día")
+    _write_headers()
+
+    for empresa in empresas_con_datos:
+        dct = data[empresa]
+        _write_company_two_rows(
+            empresa,
+            "CARTONES", dct["cartones"], "#,##0",
+            "TOTAL LBS", dct["eq11"], "#,##0.00",
+        )
+
+    row += 2
+
+    # ===== TABLA 2 =====
+    _write_table_title("Cajas campo y Factor (Eq. 11 lb / Cajas campo)")
+    _write_headers()
+
+    for empresa in empresas_con_datos:
+        dct = data[empresa]
+        _write_company_two_rows(
+            empresa,
+            "CAJAS CAMPO", dct["cajas_campo"], "#,##0",
+            "FACTOR", dct["factor"], "0.0000",
+        )
+
+    row += 2
+
+    # ===== TABLA 3 =====
+    ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+    cc = ws.cell(row=row, column=1, value="Acumulado de temporada")
+    cc.font = Font(size=13, bold=True, color="225577")
+    cc.alignment = Alignment(horizontal="left", vertical="center")
+    row += 1
+
+    headers3 = ["Empresa", "Factor global", "Acum. empacadas (Eq. 11 lb)"]
+    for col, h in enumerate(headers3, start=1):
+        cell = ws.cell(row=row, column=col, value=h)
+        cell.font = th_font
+        cell.fill = th_fill2
+        cell.border = thin
+        cell.alignment = center
+    row += 1
+
+    for empresa in empresas_con_datos:
+        dct = data[empresa]
+        ws.cell(row=row, column=1, value=empresa).border = thin
+        ws.cell(row=row, column=1).alignment = center
+
+        c1 = ws.cell(row=row, column=2, value=float(dct["factor_global"]))
+        c1.border = thin; c1.alignment = right; c1.number_format = "0.0000"
+
+        c2 = ws.cell(row=row, column=3, value=float(dct["acum_emp"]))
+        c2.border = thin; c2.alignment = right; c2.number_format = "#,##0.00"
+
+
+        row += 1
+
+    # anchos
+    ws.column_dimensions["A"].width = 22
+    ws.column_dimensions["B"].width = 18
+    for i in range(3, 11):  # C..J
+        ws.column_dimensions[get_column_letter(i)].width = 14
+
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+
+    filename = f"produccion_semanal_{year}-W{week}.xlsx"
+    resp = HttpResponse(out.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
 
 
 
@@ -2168,7 +2456,7 @@ def shipment_list(request):
 
 
         # ================================================================
-        # 2) DISEÑO GENERAL (misma hoja + matriz al final)
+        # 2) DISEÑO GENERAL (misma hoja + matriz al final) 
         # ================================================================
         # Mapa {empresa: [(shipment,item), ...]}
         company_pairs = defaultdict(list)
@@ -2223,7 +2511,7 @@ def shipment_list(request):
             pres_info = defaultdict(lambda: {'cajas': 0, 'dinero': Decimal('0')})
             total_cajas = 0
             total_eq11  = Decimal('0')
-            total_din   = Decimal('0')
+            total_din   = Decimal('0') 
             detalle = []
 
             for s, it in pairs:
