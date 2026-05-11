@@ -73,6 +73,7 @@
     </select>
     <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
     <button type="submit" name="descargar" value="semana">Descargar semana</button>
+    <button type="submit" name="descargar" value="semanal_facturacion">Descargar semanal facturación</button>
   </form>
 
   <!-- Descarga por rango de fechas -->
@@ -153,16 +154,7 @@
     </select>
   </div>
 
-  <div>
-    <label>Modo:</label><br>
-    {% with md=request.GET.mode|default:"esparrago" %}
-    <select name="mode">
-      <option value="esparrago" {% if md == "esparrago" %}selected{% endif %}>Espárrago</option>
-      <option value="arandano"  {% if md == "arandano" %}selected{% endif %}>Arándano</option>
-      <option value="all"       {% if md == "all" %}selected{% endif %}>Todos</option>
-    </select>
-    {% endwith %}
-  </div>
+ 
 
   <div>
     <button type="submit">Descargar acumulados</button>

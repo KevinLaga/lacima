@@ -891,6 +891,153 @@ def _write_company_section(ws, start_row, border, th_font, th_fill, company_name
 
     r += 2
     return r
+def _write_company_section_facturacion(ws, start_row, border, th_font, th_fill, company_name,
+                                       fact_info, totals):
+    """
+    Sección semanal de facturación:
+    Agrupa por presentación + tamaño y muestra precio unitario.
+    """
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    r = start_row
+    title_font = Font(name="Calibri", size=14, bold=True)
+
+    # Título empresa
+    ws.cell(row=r, column=1, value=f"EMPRESA: {company_name}").font = title_font
+    r += 1
+
+    # Tabla de presentaciones agrupadas
+    headers = [
+        "Presentación",
+        "Tamaño",
+        "Total cajas",
+        "Eq. 11 lbs",
+        "Total dinero",
+        "Precio unitario",
+    ]
+
+    for c, txt in enumerate(headers, start=1):
+        cell = ws.cell(row=r, column=c, value=txt)
+        cell.font = th_font
+        cell.fill = th_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border
+    r += 1
+
+    if fact_info:
+        for (n_pres, sz), info in sorted(fact_info.items(), key=lambda x: (x[0][0].lower(), str(x[0][1]).lower())):
+            ws.cell(row=r, column=1, value=n_pres).border = border
+            ws.cell(row=r, column=2, value=sz).border = border
+            ws.cell(row=r, column=3, value=info["cajas"]).border = border
+            ws.cell(row=r, column=4, value=round(info["eq11"], 2)).border = border
+            ws.cell(row=r, column=5, value=round(info["dinero"], 2)).border = border
+            ws.cell(row=r, column=6, value=round(info["precio_unitario"], 2)).border = border
+
+            for c in range(1, 7):
+                ws.cell(row=r, column=c).alignment = Alignment(horizontal="center", vertical="center")
+
+            ws.cell(row=r, column=4).number_format = '#,##0.00'
+            ws.cell(row=r, column=5).number_format = '$#,##0.00'
+            ws.cell(row=r, column=6).number_format = '$#,##0.00'
+
+            r += 1
+    else:
+        ws.cell(row=r, column=1, value="(Sin datos)").border = border
+        r += 1
+
+    # Totales de la empresa
+    r += 1
+    total_fill = PatternFill("solid", fgColor="BBDDFF")
+
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+    ws.cell(row=r, column=1, value="TOTALES").font = Font(bold=True, color="225577")
+    ws.cell(row=r, column=1).alignment = Alignment(horizontal="right", vertical="center")
+
+    ws.cell(row=r, column=3, value=totals["total_cajas"])
+    ws.cell(row=r, column=4, value=round(totals["total_eq11"], 2))
+    ws.cell(row=r, column=5, value=round(totals["total_dinero"], 2))
+
+    for c in range(1, 7):
+        cell = ws.cell(row=r, column=c)
+        cell.border = border
+        cell.fill = total_fill
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ws.cell(row=r, column=4).number_format = '#,##0.00'
+    ws.cell(row=r, column=5).number_format = '$#,##0.00'
+
+    r += 3
+    return r
+def _compute_company_summary_facturacion(pairs):
+    """
+    Recibe [(shipment, item), ...]
+    Agrupa por presentación + tamaño.
+    """
+    from collections import defaultdict
+    from decimal import Decimal, ROUND_HALF_UP
+
+    Q2 = Decimal("0.01")
+
+    def _q2(x):
+        if not isinstance(x, Decimal):
+            x = Decimal(str(x))
+        return x.quantize(Q2, rounding=ROUND_HALF_UP)
+
+    fact_info = defaultdict(lambda: {
+        "cajas": 0,
+        "eq11": Decimal("0"),
+        "dinero": Decimal("0"),
+        "precio_unitario": Decimal("0"),
+    })
+
+    total_cajas = 0
+    total_eq11 = Decimal("0")
+    total_dinero = Decimal("0")
+
+    for s, it in pairs:
+        qty = int(it.quantity or 0)
+        if qty <= 0:
+            continue
+
+        pres = it.presentation
+        pres_name = str(getattr(pres, "name", "") or "").strip()
+        size_name = str(getattr(it, "size", "") or "").strip()
+
+        conversion_factor = Decimal(str(getattr(pres, "conversion_factor", 1) or 1))
+        precio_unitario = Decimal(str(getattr(pres, "price", 0) or 0))
+
+        eq11 = Decimal(qty) * conversion_factor
+        dinero = Decimal(qty) * precio_unitario
+
+        key = (pres_name, size_name)
+
+        fact_info[key]["cajas"] += qty
+        fact_info[key]["eq11"] += eq11
+        fact_info[key]["dinero"] += dinero
+        fact_info[key]["precio_unitario"] = precio_unitario
+
+        total_cajas += qty
+        total_eq11 += eq11
+        total_dinero += dinero
+
+    fact_info_out = {
+        key: {
+            "cajas": data["cajas"],
+            "eq11": float(_q2(data["eq11"])),
+            "dinero": float(_q2(data["dinero"])),
+            "precio_unitario": float(_q2(data["precio_unitario"])),
+        }
+        for key, data in fact_info.items()
+    }
+
+    totals = {
+        "total_cajas": int(total_cajas),
+        "total_eq11": float(_q2(total_eq11)),
+        "total_dinero": float(_q2(total_dinero)),
+    }
+
+    return fact_info_out, totals
 def _weekly_general_build(weeks_qs):
     """Workbook con:
        - 'Resumen por empresa' (secciones por empresa)
@@ -1880,17 +2027,17 @@ def production_weekly_xlsx(request):
         dct = data[empresa]
         _write_company_two_rows(
             empresa,
-            "CAJAS CAMPO", dct["cajas_campo"], "#,##0",
-            "FACTOR", dct["factor"], "0.0000",
+            "CAJAS CAMPO", dct["cajas_campo"], "#,##0", 
+            "FACTOR", dct["factor"], "0.0000",  
         )
 
-    row += 2
+    row += 2 
 
     # ===== TABLA 3 =====
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
-    cc = ws.cell(row=row, column=1, value="Acumulado de temporada")
+    cc = ws.cell(row=row, column=1, value="Acumulado de temporada") #
     cc.font = Font(size=13, bold=True, color="225577")
-    cc.alignment = Alignment(horizontal="left", vertical="center")
+    cc.alignment = Alignment(horizontal="left", vertical="center") #
     row += 1
 
     headers3 = ["Empresa", "Factor global", "Acum. empacadas (Eq. 11 lb)"]
@@ -2047,6 +2194,13 @@ def shipment_list(request):
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from decimal import Decimal, ROUND_HALF_UP
+    if "mode" not in request.GET and not request.GET.get("descargar"):
+        from django.shortcuts import redirect
+        from django.http import QueryDict
+
+        q = request.GET.copy()
+        q["mode"] = "all"
+        return redirect(f"{request.path}?{q.urlencode()}")
 
     def q2(x) -> Decimal:
         """Redondeo a 2 decimales con HALF_UP."""
@@ -2086,13 +2240,16 @@ def shipment_list(request):
     # --- Permiso para descargar/exportar ---
     can_download = request.user.has_perm('empaques.can_download_reports')
 
-    mode = (request.GET.get("mode") or "esparrago").lower()  # esparrago | arandano | all
+    mode = (request.GET.get("mode") or "all").lower().strip()
+
+    if mode not in ("all", "esparrago", "arandano"):
+        mode = "all"
 
     def item_match_mode(it) -> bool:
         is_ar = bool(getattr(it.presentation, "is_arandano", False))
         if mode == "all":
             return True
-        if mode == "arandano":
+        if mode == "arandano": #
             return is_ar
         # default: esparrago
         return not is_ar
@@ -2100,7 +2257,7 @@ def shipment_list(request):
     # --- Parámetros de periodo ---
     try:
         year = int(request.GET.get('year') or date.today().year)
-    except ValueError:
+    except ValueError: #
         year = date.today().year
     try:
         month = int(request.GET.get('month') or date.today().month)
@@ -2108,7 +2265,7 @@ def shipment_list(request):
         month = date.today().month
 
     # --------------------------
-    # Helper: genera XLSX común
+    # Helper: genera XLSX común 
     # --------------------------
     
 
@@ -2158,7 +2315,7 @@ def shipment_list(request):
         ws.cell(row=r, column=1, value="Presentaciones utilizadas").font = h_font
         r += 1
         headers_pres = ["Presentación", "Tamaño", "Total cajas", "Total dinero"]
-        for c, txt in enumerate(headers_pres, start=1):
+        for c, txt in enumerate(headers_pres, start=1): #if
             cell = ws.cell(row=r, column=c, value=txt)
             cell.font = th_font
             cell.fill = th_fill
@@ -2234,12 +2391,294 @@ def shipment_list(request):
 
     # Solo aceptamos descargas si tiene permiso
     descargar = request.GET.get('descargar') if can_download else None
+    if descargar == "semanal_facturacion":
+        if not request.user.has_perm("empaques.can_download_reports"):
+            return HttpResponse("No tienes permiso para descargar reportes.", status=403)
+
+        from collections import defaultdict
+        from datetime import date, timedelta
+        from decimal import Decimal, ROUND_HALF_UP
+        from io import BytesIO
+        import os
+
+        from django.http import HttpResponse
+        from django.utils.text import slugify
+        from django.conf import settings as django_settings
+
+        from openpyxl import Workbook
+        from openpyxl.drawing.image import Image as XLImage
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+        iso_week = request.GET.get("iso_week")
+        empresa = (request.GET.get("empresa") or "general").strip()
+        mode = (request.GET.get("mode") or "all").lower().strip()
+
+        if mode not in ("all", "esparrago", "arandano"):
+            mode = "all"
+
+        if not iso_week:
+            return HttpResponse("Falta la semana (iso_week).", status=400)
+
+        if empresa.lower() == "general":
+            return HttpResponse("Este reporte de facturación debe descargarse por empresa. Selecciona una empresa.", status=400)
+
+        try:
+            year_str, week_str = iso_week.split("-W")
+            year = int(year_str)
+            week = int(week_str)
+            monday = date.fromisocalendar(year, week, 1)
+            sunday = monday + timedelta(days=6)
+        except Exception:
+            return HttpResponse("Semana inválida.", status=400)
+
+        def _q2(x: Decimal) -> Decimal:
+            if not isinstance(x, Decimal):
+                x = Decimal(str(x))
+            return x.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        def _match_mode_item(it):
+            pres = getattr(it, "presentation", None)
+            is_ar = bool(getattr(pres, "is_arandano", False)) if pres else False
+
+            if mode == "all":
+                return True
+            if mode == "arandano":
+                return is_ar
+            return not is_ar
+
+        weeks_qs = (
+            Shipment.objects
+            .filter(date__range=(monday, sunday))
+            .order_by("date", "id")
+            .prefetch_related("items", "items__presentation")
+        )
+
+        emp_label = _canon_company_label(empresa)
+
+        # ======================================================
+        # AGRUPADO FACTURACIÓN:
+        # SOLO por presentación, sin importar embarque, factura,
+        # fecha ni tamaño.
+        # ======================================================
+        agrupado = defaultdict(lambda: {
+            "cantidad": 0,
+            "eq11": Decimal("0"),
+            "importe": Decimal("0"),
+            "precio_unitario": Decimal("0"),
+            "cliente": emp_label,
+        })
+
+        try:
+            iter_items = _iter_company_items(weeks_qs, emp_label, mode=mode)
+        except TypeError:
+            iter_items = _iter_company_items(weeks_qs, emp_label)
+
+        for comp, s, it in iter_items:
+            if not _match_mode_item(it):
+                continue
+
+            qty = int(it.quantity or 0)
+            if qty <= 0:
+                continue
+
+            pres = it.presentation
+            pres_name = str(getattr(pres, "name", "") or "").strip()
+
+            cf = Decimal(str(getattr(pres, "conversion_factor", 1) or 1))
+            precio_unitario = Decimal(str(getattr(pres, "price", 0) or 0))
+
+            # Agrupa SOLO por presentación
+            key = pres_name
+
+            agrupado[key]["cantidad"] += qty
+            agrupado[key]["eq11"] += Decimal(qty) * cf
+            agrupado[key]["importe"] += Decimal(qty) * precio_unitario
+            agrupado[key]["precio_unitario"] = precio_unitario
+            agrupado[key]["cliente"] = emp_label
+
+        if not agrupado:
+            return HttpResponse("No hay datos para esa semana / empresa / modo.", status=404)
+
+        # ======================================================
+        # DISEÑO IGUAL AL SEMANAL POR EMPRESA
+        # ======================================================
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Semana"
+
+        th_font = Font(name="Calibri", size=12, bold=True, color="FFFFFF")
+        th_fill = PatternFill("solid", fgColor="225577")
+        thin = Border(
+            left=Side(style="thin", color="AAAAAA"),
+            right=Side(style="thin", color="AAAAAA"),
+            top=Side(style="thin", color="AAAAAA"),
+            bottom=Side(style="thin", color="AAAAAA"),
+        )
+
+        # --- Logo en A1 ---
+        LOGO_SLUG_MAP = {
+            "La Cima Produce": "la-cima-produce",
+            "RC Organics": "gh-farms",
+            "GH Farms": "gh-farms",
+            "Gourmet Baja Farms": "gourmet-baja-farms",
+            "GBF Farms": "gbf-farms",
+            "Agricola DH & G": "AGRICOLA",
+            "AGRICOLA DH & G": "AGRICOLA",
+        }
+
+        logo_slug = LOGO_SLUG_MAP.get(emp_label)
+        if logo_slug:
+            logo_path = os.path.join(django_settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
+            if os.path.exists(logo_path):
+                try:
+                    img = XLImage(logo_path)
+                    target_h = 120
+                    scale = target_h / float(img.height)
+                    img.width = int(img.width * scale)
+                    img.height = int(img.height * scale)
+                    ws.add_image(img, "A1")
+                except Exception:
+                    pass
+
+        # --- Título en D1:I2 + subtítulo D3 ---
+        ws.merge_cells(start_row=1, start_column=4, end_row=2, end_column=9)
+        tcell = ws.cell(
+            row=1,
+            column=4,
+            value=f"Resumen semanal facturación {monday.strftime('%d/%m/%Y')} – {sunday.strftime('%d/%m/%Y')} – {emp_label}"
+        )
+        tcell.font = Font(name="Calibri", size=18, bold=True, color="3C78D8")
+        tcell.alignment = Alignment(horizontal="left", vertical="center")
+
+        scell = ws.cell(row=3, column=4, value="Presentaciones agrupadas por semana para facturación")
+        scell.font = Font(name="Calibri", size=11, italic=True, color="6D6D6D")
+        scell.alignment = Alignment(horizontal="left")
+
+        # --- Encabezados fila 7 ---
+        headers = [
+            "PRESENTACIÓN",
+            "CANTIDAD",
+            "EQUIV. 11 LBS",
+            "IMPORTE ($)",
+            "PRECIO UNITARIO",
+            "CLIENTE",
+        ]
+
+        r = 7
+        for c, h in enumerate(headers, start=1):
+            cell = ws.cell(row=r, column=c, value=h)
+            cell.font = th_font
+            cell.fill = th_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = thin
+
+        ws.row_dimensions[r].height = 22
+        ws.auto_filter.ref = f"A{r}:F{r}"
+        ws.freeze_panes = "A8"
+        r += 1
+
+        # --- Anchos ---
+        widths = {
+            "A": 34,  # Presentación
+            "B": 14,  # Cantidad
+            "C": 16,  # Eq 11
+            "D": 16,  # Importe
+            "E": 18,  # Precio unitario
+            "F": 22,  # Cliente
+        }
+
+        for col, width in widths.items():
+            ws.column_dimensions[col].width = width
+
+        total_cajas = 0
+        total_eq11 = Decimal("0")
+        total_importe = Decimal("0")
+
+        # --- Filas agrupadas ---
+        for pres_name, data in sorted(
+            agrupado.items(),
+            key=lambda x: x[0].lower()
+        ):
+            cantidad = int(data["cantidad"] or 0)
+            eq11 = _q2(data["eq11"])
+            importe = _q2(data["importe"])
+            precio_unitario = _q2(data["precio_unitario"])
+            cliente = data["cliente"]
+
+            vals = [
+                pres_name,
+                cantidad,
+                float(eq11),
+                float(importe),
+                float(precio_unitario),
+                cliente,
+            ]
+
+            for c, v in enumerate(vals, start=1):
+                cell = ws.cell(row=r, column=c, value=v)
+                cell.border = thin
+
+                if c in (2, 3, 4, 5):
+                    cell.alignment = Alignment(horizontal="right", vertical="center")
+                else:
+                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+            ws.cell(row=r, column=3).number_format = "#,##0.00"
+            ws.cell(row=r, column=4).number_format = "$#,##0.00"
+            ws.cell(row=r, column=5).number_format = "$#,##0.00"
+
+            total_cajas += cantidad
+            total_eq11 += eq11
+            total_importe += importe
+            r += 1
+
+        # --- Fila de TOTALES (misma banda azul) ---
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=1)
+        lbl = ws.cell(row=r, column=1, value="TOTALES:")
+        lbl.font = Font(name="Calibri", size=12, bold=True, color="225577")
+        lbl.alignment = Alignment(horizontal="right", vertical="center")
+
+        c_cajas = ws.cell(row=r, column=2, value=total_cajas)
+        c_eq = ws.cell(row=r, column=3, value=float(_q2(total_eq11)))
+        c_amt = ws.cell(row=r, column=4, value=float(_q2(total_importe)))
+
+        for c in range(1, 7):
+            cc = ws.cell(row=r, column=c)
+            cc.font = Font(name="Calibri", size=12, bold=True)
+            cc.fill = PatternFill("solid", fgColor="BBDDFF")
+            cc.alignment = Alignment(horizontal="center", vertical="center")
+            cc.border = thin
+
+        c_cajas.number_format = "#,##0"
+        c_eq.number_format = "#,##0.00"
+        c_amt.number_format = "$#,##0.00"
+
+        # --- Config impresión similar ---
+        ws.print_area = f"A1:F{r}"
+        ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+
+        # --- Salida ---
+        out = BytesIO()
+        wb.save(out)
+        out.seek(0)
+
+        filename = f"semanal_facturacion_{year}-W{week}_{slugify(emp_label)}_{mode}.xlsx"
+        resp = HttpResponse(
+            out.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
 
     from datetime import date, timedelta
     from django.http import HttpResponse
     from django.utils.text import slugify
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+
+
 
     # ...
     if request.GET.get('descargar') == 'semana':
@@ -2285,8 +2724,9 @@ def shipment_list(request):
         )
 
         # ------------------------------------------------------------------
-        # 1) DISEÑO EMPRESA ESPECÍFICA (con Decimal y regla AGRÍCOLA)
+        # 1) DISEÑO EMPRESA ESPECÍFICA (con Decimal y regla AGRÍCOLA) m
         # ------------------------------------------------------------------
+        #
         if empresa.lower() != 'general':
             from decimal import Decimal, ROUND_HALF_UP
             from openpyxl.drawing.image import Image as XLImage
@@ -3485,6 +3925,7 @@ def shipment_list(request):
         'shipments': shipments,
         'today': date.today(),
         'can_download': can_download,
+        'mode': mode,
     })
 
 

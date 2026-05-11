@@ -27,8 +27,53 @@ from django.conf import settings
 from django.utils import timezone
 from empaques.models import Presentation
 from empaques.utils_inv import post_in_from_field
+from datetime import date as _date
+from django.utils.timezone import localdate
+from .utils_inv import stock_por_campo
 
+def aplicar_stock_a_formset(formset, campo, fecha):
+    """
+    Agrega f.stock_info a cada fila del formset de salida.
+    Usa stock_por_campo() de utils_inv.py.
+    """
+    stock = {}
 
+    if campo:
+        stock = stock_por_campo(campo=campo, hasta_fecha=fecha)
+
+    for f in formset.forms:
+        variedad_id = None
+
+        # En GET, la variedad viene desde initial
+        if f.initial.get("variedad"):
+            variedad_id = f.initial.get("variedad")
+
+        # En POST válido/parcial, puede venir desde cleaned_data
+        if getattr(f, "cleaned_data", None):
+            v = f.cleaned_data.get("variedad")
+            if v:
+                variedad_id = v.id
+
+        try:
+            variedad_id = int(variedad_id) if variedad_id else None
+        except Exception:
+            variedad_id = None
+
+        info = stock.get(variedad_id, {
+            "kg": Decimal("0"),
+            "cs6": 0,
+            "cs98": 0,
+            "cs18": 0,
+        })
+
+        f.stock_info = {
+            "kg": info.get("kg", Decimal("0")),
+            "cs6": info.get("cs6", 0),
+            "cs98": info.get("cs98", 0),
+            "cs18": info.get("cs18", 0),
+        }
+
+    return formset
 
 @login_required
 def salidas_list(request):
@@ -234,6 +279,8 @@ def salidas_create(request):
 
             if hay_error:
                 messages.error(request, "Revisa las cantidades: exceden el stock disponible.")
+                fecha_stock = form.cleaned_data.get("fecha") or localdate()
+                aplicar_stock_a_formset(formset, campo_post or campo_actual, fecha_stock)
                 return render(request, "arandano/salida_form.html", {
                     "form": form,
                     "formset": formset,
@@ -338,7 +385,7 @@ def salidas_create(request):
 
                     _in_sku("AR-CS6",  tot_cs6)
                     _in_sku("AR-CS98", tot_cs98)
-                    _in_sku("AR-CS18", tot_cs18)
+                    _in_sku("AR-CS18", tot_cs18) 
 
 
             messages.success(request, "Salida registrada correctamente.")
@@ -349,6 +396,11 @@ def salidas_create(request):
             return redirect(url)
 
         # POST inválido → re-render
+        fecha_stock = localdate()
+        if form.is_valid():
+            fecha_stock = form.cleaned_data.get("fecha") or localdate()
+
+        aplicar_stock_a_formset(formset, campo_post or campo_actual, fecha_stock)
         return render(request, "arandano/salida_form.html", {
             "form": form,
             "formset": formset,
@@ -357,7 +409,12 @@ def salidas_create(request):
         })
 
     # GET: construir initial por variedades del campo actual
-    form = SalidaDiaForm(initial={"campo": campo_actual.id if campo_actual else None})
+    fecha_get = request.GET.get("fecha") or localdate().isoformat()
+
+    form = SalidaDiaForm(initial={
+        "campo": campo_actual.id if campo_actual else None,
+        "fecha": fecha_get,
+    })
 
     vids = []
     if campo_actual:
@@ -380,6 +437,14 @@ def salidas_create(request):
         if "variedad" in f.fields:
             f.fields["variedad"].queryset = Variedad.objects.filter(pk__in=vids).order_by("nombre")
             f.fields["variedad"].empty_label = None
+    fecha_get = request.GET.get("fecha") or localdate().isoformat()
+
+    try:
+        fecha_stock = _date.fromisoformat(fecha_get)
+    except Exception:
+        fecha_stock = localdate()
+
+    aplicar_stock_a_formset(formset, campo_actual, fecha_stock)
 
     return render(request, "arandano/salida_form.html", {
         "form": form,
@@ -426,7 +491,7 @@ def produccion_create(request):
         if not campo_actual:
             campo_actual = Campo.objects.filter(activo=True).order_by("nombre").first()
 
-    # --- 2) Orden y lista de variedades del campo (fija y estable) ---
+    # --- 2) Orden y lista de variedades del campo (fija y estable) --- la orden debera ser realizada ya 
     variedades_qs = Variedad.objects.filter(
         id__in=CampoVariedad.objects.filter(
             campo=campo_actual, activo=True, variedad__activo=True
@@ -455,7 +520,7 @@ def produccion_create(request):
                 f.fields["variedad"].widget = HiddenInput()
                 # Opción única: la variedad de la misma posición
                 if idx < len(variedad_ids):
-                    only_id = variedad_ids[idx]
+                    only_id = variedad_ids[idx] 
                     f.fields["variedad"].queryset = Variedad.objects.filter(id=only_id)
                     f.fields["variedad"].empty_label = None
                     # Asegura initial por si el navegador no envía el hidden (o JS raro)

@@ -5,6 +5,29 @@
   <meta charset="utf-8">
   <title>Registrar salida – Arándano</title>
   <style>
+      .stock-box {
+    margin-top: 6px;
+    padding: 7px 8px;
+    border: 1px solid #dbeafe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .stock-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(60px, 1fr));
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .stock-pill {
+    background: #fff;
+    border: 1px solid #bfdbfe;
+    border-radius: 6px;
+    padding: 3px 5px;
+    text-align: center;
+  }
     :root {
       --pri:#225577;
       --ink:#111827;
@@ -185,11 +208,24 @@ document.addEventListener("DOMContentLoaded", function () {
           <tbody>
             {% for f in formset.forms %}
               <tr>
-                <td>
+                <<td>
                   <div class="cell">
                     {{ f.variedad }}
                   </div>
-                  {% if f.variedad.errors %}<div class="row-error">{{ f.variedad.errors|striptags }}</div>{% endif %}
+
+                  <div class="stock-box">
+                    <b>Stock disponible</b>
+                    <div class="stock-grid">
+                      <div class="stock-pill">Kg<br><b>{{ f.stock_info.kg|floatformat:2 }}</b></div>
+                      <div class="stock-pill">6 oz<br><b>{{ f.stock_info.cs6 }}</b></div>
+                      <div class="stock-pill">9.8 oz<br><b>{{ f.stock_info.cs98 }}</b></div>
+                      <div class="stock-pill">18 oz<br><b>{{ f.stock_info.cs18 }}</b></div>
+                    </div>
+                  </div>
+
+                  {% if f.variedad.errors %}
+                    <div class="row-error">{{ f.variedad.errors|striptags }}</div>
+                  {% endif %}
                 </td>
 
                 <td>
@@ -234,5 +270,33 @@ document.addEventListener("DOMContentLoaded", function () {
     </div>
   </form>
 </div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const campo = document.getElementById("{{ form.campo.id_for_label }}");
+  const fecha = document.getElementById("{{ form.fecha.id_for_label }}");
+
+  function reloadWithFilters() {
+    const params = new URLSearchParams(window.location.search);
+
+    if (campo && campo.value) {
+      params.set("campo", campo.value);
+    }
+
+    if (fecha && fecha.value) {
+      params.set("fecha", fecha.value);
+    }
+
+    window.location.href = window.location.pathname + "?" + params.toString();
+  }
+
+  if (campo) {
+    campo.addEventListener("change", reloadWithFilters);
+  }
+
+  if (fecha) {
+    fecha.addEventListener("change", reloadWithFilters);
+  }
+});
+</script>
 </body>
 </html>

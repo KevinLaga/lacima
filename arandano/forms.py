@@ -29,6 +29,16 @@ class SalidaDiaForm(forms.ModelForm):
     class Meta:
         model = SalidaDia
         fields = ["fecha", "campo", "destino", "destino_detalle", "notas"]
+        widgets = {
+            "fecha": forms.DateInput(
+                format="%Y-%m-%d",
+                attrs={"type": "date"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["fecha"].input_formats = ["%Y-%m-%d"]
 
     def clean(self):
         cleaned = super().clean()
