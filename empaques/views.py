@@ -1512,7 +1512,7 @@ def production_today(request):
         "rows": rows,
         "ship_cols_labels": ship_cols,
         "empresa": empresa,
-        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G"],
+        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH & G GONZALO"],
 
         # Bloque inferior
         "exist_piso_ayer": exist_piso_ayer,
