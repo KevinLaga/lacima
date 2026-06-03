@@ -36,19 +36,21 @@
         <h1 class="mb-0 page-title">Producción del día – {{ prod_date|date:"d/m/Y" }}</h1>
         <span class="pill">Empresa: <strong class="ms-1">{{ empresa }}</strong></span>
         <div class="ms-auto d-flex flex-wrap gap-2">
-          <a class="btn btn-outline-secondary btn-sm" href="{% url 'production_days' %}?empresa={{ empresa|slugify }}">
+          <a class="btn btn-outline-secondary btn-sm" href="{% url 'production_days' %}?empresa={{ empresa|urlencode }}"
             <i class="bi bi-clock-history me-1"></i> Días guardados
           </a>
           <a class="btn btn-primary btn-sm" href="{% url 'shipment_create' %}">
             <i class="bi bi-box-seam me-1"></i> Nuevo embarque
           </a>
-          <a class="btn btn-success btn-sm" href="{% url 'production_xlsx' prod_date=prod_date|date:'Y-m-d' %}?empresa={{ empresa|slugify }}">
+          <a class="btn btn-success btn-sm"
+            href="{% url 'production_xlsx' prod_date=prod_date|date:'Y-m-d' %}?empresa={{ empresa|urlencode }}">
             <i class="bi bi-file-earmark-excel me-1"></i> Descargar Excel
           </a>
+
           <a class="btn btn-success btn-sm"
-   href="{% url 'production_weekly_xlsx' %}?iso_week={{ prod_date|date:'o' }}-W{{ prod_date|date:'W' }}">
-  <i class="bi bi-file-earmark-excel me-1"></i> Descargar Semanal
-</a>
+            href="{% url 'production_weekly_xlsx' %}?iso_week={{ prod_date|date:'o' }}-W{{ prod_date|date:'W' }}&empresa={{ empresa|urlencode }}">
+            <i class="bi bi-file-earmark-excel me-1"></i> Descargar Semanal
+          </a>
         </div>
       </div>
 
