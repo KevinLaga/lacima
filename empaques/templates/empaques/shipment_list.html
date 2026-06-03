@@ -69,6 +69,7 @@
       <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
       <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
       <option value="AGRICOLA DH & G" {% if e == 'AGRICOLA DH & G' %}selected{% endif %}>AGRICOLA DH & G</option>
+      <option value="AGRICOLA DH&G GONZALO" {% if e == 'AGRICOLA DH&G GONZALO' %}selected{% endif %}>AGRICOLA DH&G GONZALO</option>
       {% endwith %}
     </select>
     <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
@@ -105,6 +106,7 @@
       <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
       <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
       <option value="AGRICOLA DH & G" {% if e == 'AGRICOLA DH & G' %}selected{% endif %}>AGRICOLA DH & G</option>
+      <option value="AGRICOLA DH&G GONZALO" {% if e == 'AGRICOLA DH&G GONZALO' %}selected{% endif %}>AGRICOLA DH&G GONZALO</option>
       {% endwith %}
     </select>
     <button type="submit">Descargar Mes</button>
@@ -128,6 +130,7 @@
       <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
       <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
       <option value="AGRICOLA DH & G" {% if e == 'AGRICOLA DH & G' %}selected{% endif %}>AGRICOLA DH & G</option>
+      <option value="AGRICOLA DH&G GONZALO" {% if e == 'AGRICOLA DH&G GONZALO' %}selected{% endif %}>AGRICOLA DH&G GONZALO</option>
       {% endwith %}
     </select>
     <button type="submit">Descargar Año</button>
@@ -150,6 +153,7 @@
         <option value="Gourmet Baja Farms" {% if e == 'Gourmet Baja Farms' %}selected{% endif %}>Gourmet Baja Farms</option>
         <option value="GBF Farms" {% if e == 'GBF Farms' %}selected{% endif %}>GBF Farms</option>
         <option value="AGRICOLA DH & G" {% if e == 'AGRICOLA DH & G' %}selected{% endif %}>AGRICOLA DH & G</option>
+        <option value="AGRICOLA DH&G GONZALO" {% if e == 'AGRICOLA DH&G GONZALO' %}selected{% endif %}>AGRICOLA DH&G GONZALO</option>
       {% endwith %}
     </select>
   </div>
@@ -182,6 +186,7 @@
         <th>Gourmet</th>
         <th>GBF</th>
         <th>AGRICOLA DH & G</th>
+        <th>AGRICOLA DH & G</th>
       </tr>
     </thead>
     <tbody>
@@ -203,10 +208,11 @@
           <td>{{ s.order_gourmet|default_if_none:"" }}</td>
           <td>{{ s.order_gbf|default_if_none:"" }}</td>
           <td>{{ s.order_dhg|default_if_none:"" }}</td>
+          <td>{{ s.order_dhg_gonzalo|default_if_none:"" }}</td>
         </tr>
       {% empty %}
         <tr>
-          <td colspan="12" style="text-align:center;color:#666;">No hay embarques aún.</td>
+          <td colspan="13" style="text-align:center;color:#666;">No hay embarques aún.</td>
         </tr>
       {% endfor %}
     </tbody>

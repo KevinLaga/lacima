@@ -22,7 +22,6 @@ def almacen_list(request):
 
     items_qs = InventoryItem.objects.all()
 
-    # 👇 FILTRO por tipo ANTES de annotate
     if tipo == "arandano":
         items_qs = items_qs.filter(sku__startswith="AR-")
     elif tipo == "general":

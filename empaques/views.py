@@ -88,6 +88,8 @@ clientes = [
     "GH Farms",
     "Gourmet Baja Farms",
     "GBF Farms",
+    "AGRICOLA DH&G GONZALO"
+    
 ]
 LEGAL_CLIENT_NAME = {
 "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
@@ -95,6 +97,7 @@ LEGAL_CLIENT_NAME = {
 "GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  
 "Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
 "GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
+"AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO",
 }
 LOGO_SLUG = {
     'RC': 'rc-organics',
@@ -160,8 +163,13 @@ COMPANY_CANON = {
     'dhg': 'AGRICOLA DH & G',
     'agricola dh g': 'AGRICOLA DH & G',     # opcional (por si llega sin &)
     'agricola': 'AGRICOLA DH & G',
+    'AGRICOLA DH&G GONZALO': 'AGRICOLA DH&G GONZALO',
+    'agricola dh&g gonzalo': 'AGRICOLA DH&G GONZALO',
+    'agricola dh & g gonzalo': 'AGRICOLA DH&G GONZALO',
+    'agricola gonzalo': 'AGRICOLA DH&G GONZALO',
+    'gonzalo': 'AGRICOLA DH&G GONZALO',
 }
-COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G']
+COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO']
 DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
 
 import unicodedata
@@ -283,6 +291,8 @@ def _week_single_company_sheet(wb, monday, sunday, empresa_label, rows_iter):
         "Gourmet Baja Farms": "gourmet-baja-farms",
         "GBF Farms": "gbf-farms",
         "AGRICOLA DH & G": "agricola",
+        "AGRICOLA DH&G GONZALO": "AGRICOLA",
+        
     }
     logo_slug = LOGO_SLUG_MAP.get(empresa_label)
     if logo_slug:
@@ -721,24 +731,37 @@ def _canon_company_label(name: str | None) -> str:
         return "GBF Farms"
     if "gh" in n:
         return "GH Farms"
-    if "agricola" in n or "dh & g" in n or "dhg" in n or "baja mist" in n:
-        return "AGRICOLA DH & G"   # ← tu cliente especial
+    if "gonzalo" in n:
+        return "AGRICOLA DH&G GONZALO"
+    if "agricola" in n or "dhg" in n or "dh&g" in n or "dh & g" in n:
+        return "AGRICOLA DH & G"
     return name.strip()
 
 def _client_order_for(shipment, company_label):
     lbl = (company_label or "").lower()
+
     if "cima" in lbl:
         return getattr(shipment, "order_lacima", None)
+
     if lbl.startswith("rc"):
         return getattr(shipment, "order_rc", None)
+
     if "gh" in lbl and "rc" not in lbl:
         return getattr(shipment, "order_gh", None)
+
     if "gourmet" in lbl:
         return getattr(shipment, "order_gourmet", None)
+
     if "gbf" in lbl:
         return getattr(shipment, "order_gbf", None)
-    if "agricola" in lbl or "dhg" in lbl:
+
+    # IMPORTANTE: Gonzalo primero, porque también contiene "agricola"
+    if "gonzalo" in lbl:
+        return getattr(shipment, "order_dhg_gonzalo", None)
+
+    if "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
         return getattr(shipment, "order_dhg", None)
+
     return None
 
 def _round_half_up_to_int(x: float | Decimal) -> int:
@@ -756,8 +779,26 @@ def _iter_company_items(embarques, empresa_filter: str | None, mode: str = "espa
     Genera (empresa_normalizada, s, it) para cada item que encaje con el filtro de empresa y modo.
     mode: esparrago | arandano | all
     """
-    want_general = (not empresa_filter) or (empresa_filter.lower() == "general")
+
+    def _canon_cliente_local(valor):
+        txt = str(valor or "").strip()
+        low = txt.lower().replace("  ", " ")
+
+        # IMPORTANTE: Gonzalo primero, porque también contiene "agricola"
+        if "gonzalo" in low:
+            return "AGRICOLA DH&G GONZALO"
+
+        if "agricola" in low or "dhg" in low or "dh&g" in low or "dh & g" in low:
+            return "AGRICOLA DH & G"
+
+        return _canon_company_label(txt)
+
+    want_general = (not empresa_filter) or (str(empresa_filter).lower() == "general")
     mode = (mode or "esparrago").lower()
+
+    empresa_filter_norm = None
+    if not want_general:
+        empresa_filter_norm = _canon_cliente_local(empresa_filter)
 
     for s in embarques:
         for it in s.items.select_related("presentation").all():
@@ -769,12 +810,12 @@ def _iter_company_items(embarques, empresa_filter: str | None, mode: str = "espa
                 if mode == "esparrago" and is_ar:
                     continue
 
-            comp = _canon_company_label(getattr(it, "cliente", None))
+            comp = _canon_cliente_local(getattr(it, "cliente", None))
 
             if want_general:
                 yield comp, s, it
             else:
-                if _canon_company_label(empresa_filter) == comp:
+                if empresa_filter_norm == comp:
                     yield comp, s, it
 def _compute_company_summary(company_name, tuples_cs):
     """
@@ -1545,6 +1586,7 @@ def production_xlsx(request, prod_date):
         "GOURMET": "Gourmet Baja Farms S. DE R.L. DE C.V.",
         "GBF":     "GBF Farms S. DE R.L. DE C.V.",
         "AGRICOLA DH & G": "AGRICOLA DH & G",
+        "AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO"
     }
     LOGO_SLUG = {
         "LACIMA":  "la-cima-produce",
@@ -1553,6 +1595,7 @@ def production_xlsx(request, prod_date):
         "GOURMET": "gourmet-baja-farms",
         "GBF":     "gbf-farms",
         "AGRICOLA DH & G": "agricola",
+        "AGRICOLA DH&G GONZALO": "agricola"
     }
     legal_name = LEGAL_COMPANY.get(empresa, empresa)
     logo_slug  = LOGO_SLUG.get(empresa)
@@ -2523,7 +2566,7 @@ def shipment_list(request):
             "Gourmet Baja Farms": "gourmet-baja-farms",
             "GBF Farms": "gbf-farms",
             "Agricola DH & G": "AGRICOLA",
-            "AGRICOLA DH & G": "AGRICOLA",
+            "AGRICOLA DH & G GONZALO": "AGRICOLA",
         }
 
         logo_slug = LOGO_SLUG_MAP.get(emp_label)
@@ -2654,13 +2697,13 @@ def shipment_list(request):
         c_amt.number_format = "$#,##0.00"
 
         # --- Config impresión similar ---
-        ws.print_area = f"A1:F{r}"
+        ws.print_area = f"A1:F{r}" #
         ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
         ws.page_setup.fitToWidth = 1
         ws.page_setup.fitToHeight = 0
 
         # --- Salida ---
-        out = BytesIO()
+        out = BytesIO() #KEK jeje lol que pasa teteeee, 
         wb.save(out)
         out.seek(0)
 
@@ -2705,7 +2748,7 @@ def shipment_list(request):
         except Exception:
             return HttpResponse("Semana inválida.", status=400)
 
-        # Query base de la semana
+        # Query base de la semana de la semana eh, no os flipeis,
         weeks_qs = (
             Shipment.objects
             .filter(date__range=(monday, sunday))
@@ -2727,8 +2770,8 @@ def shipment_list(request):
         # 1) DISEÑO EMPRESA ESPECÍFICA (con Decimal y regla AGRÍCOLA) m
         # ------------------------------------------------------------------
         #
-        if empresa.lower() != 'general':
-            from decimal import Decimal, ROUND_HALF_UP
+        if empresa.lower() != 'general': #
+            from decimal import Decimal, ROUND_HALF_UP 
             from openpyxl.drawing.image import Image as XLImage
             from openpyxl.utils import get_column_letter
             import os
@@ -2755,6 +2798,7 @@ def shipment_list(request):
                 "Gourmet Baja Farms": "gourmet-baja-farms",
                 "GBF Farms": "gbf-farms",
                 "Agricola DH & G": "AGRICOLA",
+                "Agricola DH & G GONZALO": "AGRICOLA",
             }
             logo_slug = LOGO_SLUG_MAP.get(emp_label)
             if logo_slug:
@@ -2786,7 +2830,7 @@ def shipment_list(request):
             headers = ["N° EMBARQUE", "N° FACTURA", "FECHA", "PRESENTACIÓN",
                     "TAMAÑO", "CANTIDAD", "EQUIV. 11 LBS", "IMPORTE ($)", "CLIENTE"]
             r = 7
-            for c, h in enumerate(headers, start=1):
+            for c, h in enumerate(headers, start=1): #que
                 cell = ws.cell(row=r, column=c, value=h)
                 cell.font = th_font
                 cell.fill = th_fill
@@ -2795,35 +2839,46 @@ def shipment_list(request):
             ws.row_dimensions[r].height = 22
             ws.auto_filter.ref = f"A{r}:I{r}"
             r += 1
+            #but house mormont remembers, the north remembers,we know no king but the king in the north whose name is stark idc if he's a bastard, ned's stark blood run thourgh his veins, he is my king from this day, until his last day
 
-            # --- Anchos + freeze panes ---
+            # --- Anchos + freeze panes --- 
             for col_idx in range(1, 9 + 1):
                 ws.column_dimensions[get_column_letter(col_idx)].width = 24
             ws.freeze_panes = "A8"
 
             # --- Helper: número de orden mostrado por cliente ---
+            # --- Helper: número de orden mostrado por cliente ---
             def _client_order_for(embarque, cliente_name):
                 cname = (cliente_name or "").lower()
+
                 if "cima" in cname:
                     return getattr(embarque, "order_lacima", None)
+
                 if "rc" in cname:
                     return getattr(embarque, "order_rc", None)
+
                 if "gh" in cname:
                     return getattr(embarque, "order_gh", None)
+
                 if "gourmet" in cname:
                     return getattr(embarque, "order_gourmet", None)
+
                 if "gbf" in cname:
                     return getattr(embarque, "order_gbf", None)
-                if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
+
+                # IMPORTANTE: Gonzalo primero
+                if "gonzalo" in cname:
+                    return getattr(embarque, "order_dhg_gonzalo", None)
+
+                if "agricola" in cname or "dhg" in cname or "dh&g" in cname or "dh & g" in cname:
                     return getattr(embarque, "order_dhg", None)
+
                 return None
 
-            # --- Filas (una por ítem; importes con Decimal) ---
             # --- Filas (una por ítem; importes con Decimal) ---
             total_boxes = 0
             total_eq    = Decimal('0')
             total_amt   = Decimal('0')
-
             is_agricola = _is_agricola(emp_label)
 
             for comp, s, it in _iter_company_items(weeks_qs, emp_label, mode=mode):
