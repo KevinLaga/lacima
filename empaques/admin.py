@@ -155,7 +155,38 @@ class InventoryMovementAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at",)
 
 from django.contrib import admin
-from .models import ProductionDisplay
+from .models import ProductionDisplay, Pedimento, PedimentoItem, Remision, RemisionItem
+
+
+class PedimentoItemInline(admin.TabularInline):
+    model = PedimentoItem
+    extra = 1
+    fields = ("articulo", "cantidad", "consumido")
+    readonly_fields = ("consumido",)
+
+
+@admin.register(Pedimento)
+class PedimentoAdmin(admin.ModelAdmin):
+    list_display = ("folio", "empresa", "fecha", "created_by", "created_at")
+    list_filter = ("empresa", "fecha")
+    search_fields = ("folio", "empresa")
+    readonly_fields = ("folio", "created_at")
+    inlines = [PedimentoItemInline]
+
+
+class RemisionItemInline(admin.TabularInline):
+    model = RemisionItem
+    extra = 1
+    fields = ("articulo", "cantidad")
+
+
+@admin.register(Remision)
+class RemisionAdmin(admin.ModelAdmin):
+    list_display = ("folio", "empresa", "fecha", "created_by", "created_at")
+    list_filter = ("empresa", "fecha")
+    search_fields = ("folio", "empresa")
+    readonly_fields = ("folio", "created_at")
+    inlines = [RemisionItemInline]
 
 
 

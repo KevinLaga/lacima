@@ -105,6 +105,8 @@ LOGO_SLUG = {
     'GH': 'gh-farms',
     'GOURMET': 'gourmet-baja-farms',
     'GBF': 'gbf-farms',
+    'AGRICOLA DH & G': 'AGRICOLA',
+    'AGRICOLA DH&G GONZALO': 'AGRICOLA',
 }
 
 clientes_slug = [(c, slugify(c)) for c in clientes]
@@ -290,7 +292,7 @@ def _week_single_company_sheet(wb, monday, sunday, empresa_label, rows_iter):
         "GH Farms": "gh-farms",
         "Gourmet Baja Farms": "gourmet-baja-farms",
         "GBF Farms": "gbf-farms",
-        "AGRICOLA DH & G": "agricola",
+        "AGRICOLA DH & G": "AGRICOLA",
         "AGRICOLA DH&G GONZALO": "AGRICOLA",
         
     }
@@ -459,18 +461,18 @@ def _day_increments(fday, empresa):
 
     cajas_trabajadas = (exist_piso_ayer + recibidas) - exist_piso_hoy
     if cajas_trabajadas < 0:
-        cajas_trabajadas = 0
+        cajas_trabajadas = 0 
 
     # Eq. 11 lb del día = sum(prod_dia * factor_presentación) por cada fila
-    rows = (data.get("rows") or {})
+    rows = (data.get("rows") or {}) #
     pres_cf = { (n or "").strip().upper(): float(cf or 1.0)
                 for (n, cf) in Presentation.objects.values_list("name", "conversion_factor") }
-    eq11_dia = 0.0
+    eq11_dia = 0.0 #que pedo tet
     for key, r in rows.items():
-        pres = key.split("|", 1)[0] if "|" in key else key
+        pres = key.split("|", 1)[0] if "|" in key else key 
         cf = pres_cf.get((pres or "").strip().upper(), 1.0)
         prod_dia = int(r.get("prod_dia", 0))
-        eq11_dia += prod_dia * cf
+        eq11_dia += prod_dia * cf 
 
     return int(cajas_trabajadas or 0), float(eq11_dia or 0.0)
 
@@ -4055,9 +4057,9 @@ def daily_report(request, shipment_id=None):
         return None
     def fecha_es(d):
         """Devuelve la fecha en español: LUNES 31 DE AGOSTO DEL 2025 (en mayúsculas)."""
-        if not d:
+        if not d: # 
             return ""
-    # Opción A: Babel (recomendado)
+    # Opción A: Babel (recomendado) 
         try:
             from babel.dates import format_date
             txt = format_date(d, format="EEEE d 'DE' MMMM 'DEL' y", locale='es_MX')

@@ -1,0 +1,112 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ ped.folio }}</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { padding:20px; font-family:sans-serif; background:#f5f6fa; max-width:900px; }
+    h1 { margin:0 0 6px; font-size:24px; color:#1a1a2e; }
+    .meta { color:#6b7280; font-size:14px; margin-bottom:20px; }
+    .meta strong { color:#374151; }
+    .toolbar { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+    .btn {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:8px 16px; border-radius:8px; font-size:14px; font-weight:600;
+      text-decoration:none; border:none; cursor:pointer; transition:opacity .15s;
+    }
+    .btn:hover { opacity:.85; }
+    .btn-back  { background:#374151; color:#fff; }
+    .btn-blue  { background:#1d4ed8; color:#fff; }
+    .btn-green { background:#15803d; color:#fff; }
+
+    .card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+      padding:20px 24px; margin-bottom:18px; box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+    .card h2 { margin:0 0 16px; font-size:16px; color:#1d4ed8; border-bottom:2px solid #dbeafe; padding-bottom:8px; }
+
+    table { border-collapse:collapse; width:100%; }
+    thead tr { background:#1d4ed8; }
+    th { padding:10px 12px; color:#fff; font-size:13px; font-weight:600; text-align:left; }
+    td { padding:10px 12px; border-bottom:1px solid #f1f5f9; font-size:14px; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#f8fafc; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .ok   { color:#15803d; font-weight:700; }
+    .bajo { color:#dc2626; font-weight:700; }
+    .gray { color:#9ca3af; }
+
+    .bar-wrap { background:#e5e7eb; border-radius:6px; height:10px; min-width:80px; overflow:hidden; display:inline-block; width:80px; }
+    .bar-fill { height:10px; border-radius:6px; background:#15803d; transition:width .3s; }
+    .bar-fill.agotado { background:#dc2626; }
+
+    .notas-box {
+      background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;
+      padding:12px 16px; font-size:14px; color:#1e40af; margin-top:4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="{% url 'pedimento_list' %}?empresa={{ ped.empresa|urlencode }}" class="btn btn-back">← Pedimentos</a>
+  <a href="{% url 'almacen_list' %}?empresa={{ ped.empresa|urlencode }}" class="btn btn-blue">📦 Almacén</a>
+  <a href="{% url 'remision_new' %}?empresa={{ ped.empresa|urlencode }}" class="btn btn-green">+ Nueva Remisión</a>
+</div>
+
+<h1>{{ ped.folio }}</h1>
+<p class="meta">
+  <strong>Empresa:</strong> {{ ped.empresa }} &nbsp;·&nbsp;
+  <strong>Fecha:</strong> {{ ped.fecha }} &nbsp;·&nbsp;
+  <strong>Registrado:</strong> {{ ped.created_at|date:"d/m/Y H:i" }}
+  {% if ped.created_by %}&nbsp;por <strong>{{ ped.created_by.get_full_name|default:ped.created_by.username }}</strong>{% endif %}
+</p>
+
+<div class="card">
+  <h2>Artículos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Artículo</th>
+        <th>Unidad</th>
+        <th class="num" style="text-align:right">Cantidad</th>
+        <th class="num" style="text-align:right">Consumido</th>
+        <th class="num" style="text-align:right">Disponible</th>
+        <th style="min-width:120px">Uso</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in ped.items.all %}
+        <tr>
+          <td><strong>{{ it.articulo.name }}</strong></td>
+          <td class="gray">{{ it.articulo.unit }}</td>
+          <td class="num">{{ it.cantidad }}</td>
+          <td class="num gray">{{ it.consumido }}</td>
+          <td class="num {% if it.disponible > 0 %}ok{% else %}bajo{% endif %}">{{ it.disponible }}</td>
+          <td>
+            {% if it.cantidad > 0 %}
+              {% widthratio it.consumido it.cantidad 100 as pct %}
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div class="bar-wrap">
+                  <div class="bar-fill {% if it.disponible <= 0 %}agotado{% endif %}" style="width:{{ pct }}%"></div>
+                </div>
+                <span style="font-size:12px; color:#6b7280;">{{ pct }}%</span>
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" style="color:#9ca3af; text-align:center; padding:20px;">Sin artículos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if ped.notas %}
+  <div class="notas-box"><strong>Notas:</strong> {{ ped.notas }}</div>
+{% endif %}
+
+</body>
+</html>

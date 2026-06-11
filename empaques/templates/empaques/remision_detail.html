@@ -1,0 +1,156 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ rem.folio }}</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    body { padding:20px; font-family:sans-serif; background:#f5f6fa; max-width:900px; }
+    h1 { margin:0 0 6px; font-size:24px; color:#1a1a2e; }
+    .meta { color:#6b7280; font-size:14px; margin-bottom:20px; }
+    .meta strong { color:#374151; }
+    .toolbar { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+    .btn {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:8px 16px; border-radius:8px; font-size:14px; font-weight:600;
+      text-decoration:none; border:none; cursor:pointer; transition:opacity .15s;
+    }
+    .btn:hover { opacity:.85; }
+    .btn-back  { background:#374151; color:#fff; }
+    .btn-blue  { background:#1d4ed8; color:#fff; }
+    .btn-amber { background:#b45309; color:#fff; }
+
+    .card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+      padding:20px 24px; margin-bottom:18px; box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+    .card h2 { margin:0 0 16px; font-size:16px; border-bottom:2px solid; padding-bottom:8px; }
+    .card h2.amber { color:#b45309; border-color:#fef3c7; }
+    .card h2.blue  { color:#1d4ed8; border-color:#dbeafe; }
+
+    table { border-collapse:collapse; width:100%; }
+    thead tr.amber { background:#b45309; }
+    thead tr.blue  { background:#1d4ed8; }
+    th { padding:10px 12px; color:#fff; font-size:13px; font-weight:600; text-align:left; }
+    td { padding:10px 12px; border-bottom:1px solid #f1f5f9; font-size:14px; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafafa; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .gray { color:#9ca3af; }
+
+    /* Trazabilidad */
+    .fifo-block {
+      background:#fff; border:1px solid #e2e8f0; border-radius:10px;
+      margin-bottom:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.04);
+    }
+    .fifo-header {
+      background:#f8fafc; border-bottom:1px solid #e2e8f0;
+      padding:12px 16px; display:flex; justify-content:space-between; align-items:center;
+    }
+    .fifo-header strong { font-size:15px; color:#1a1a2e; }
+    .fifo-header span { font-size:13px; color:#6b7280; }
+    .fifo-body { padding:0; }
+    .fifo-body table thead tr { background:#e2e8f0; }
+    .fifo-body table th { color:#374151; font-size:12px; padding:8px 12px; }
+    .fifo-body table td { font-size:13px; padding:8px 12px; }
+    .ped-link { color:#1d4ed8; text-decoration:none; font-weight:600; }
+    .ped-link:hover { text-decoration:underline; }
+
+    .notas-box {
+      background:#fffbeb; border:1px solid #fcd34d; border-radius:8px;
+      padding:12px 16px; font-size:14px; color:#78350f; margin-top:4px;
+    }
+    .empty-trace { color:#9ca3af; font-size:13px; padding:14px 16px; }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a href="{% url 'remision_list' %}?empresa={{ rem.empresa|urlencode }}" class="btn btn-back">← Remisiones</a>
+  <a href="{% url 'almacen_list' %}?empresa={{ rem.empresa|urlencode }}" class="btn btn-blue">📦 Almacén</a>
+  <a href="{% url 'pedimento_list' %}?empresa={{ rem.empresa|urlencode }}" class="btn btn-amber">📥 Pedimentos</a>
+</div>
+
+<h1>{{ rem.folio }}</h1>
+<p class="meta">
+  <strong>Empresa:</strong> {{ rem.empresa }} &nbsp;·&nbsp;
+  <strong>Fecha:</strong> {{ rem.fecha }} &nbsp;·&nbsp;
+  <strong>Registrado:</strong> {{ rem.created_at|date:"d/m/Y H:i" }}
+  {% if rem.created_by %}&nbsp;por <strong>{{ rem.created_by.get_full_name|default:rem.created_by.username }}</strong>{% endif %}
+</p>
+
+<div class="card">
+  <h2 class="amber">Artículos de la remisión</h2>
+  <table>
+    <thead>
+      <tr class="amber">
+        <th>Artículo</th>
+        <th>Unidad</th>
+        <th class="num" style="text-align:right">Cantidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in rem.items.all %}
+        <tr>
+          <td><strong>{{ it.articulo.name }}</strong></td>
+          <td class="gray">{{ it.articulo.unit }}</td>
+          <td class="num">{{ it.cantidad }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3" style="color:#9ca3af; text-align:center; padding:20px;">Sin artículos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2 class="blue">Trazabilidad FIFO — pedimentos consumidos</h2>
+  {% for entry in traza %}
+    <div class="fifo-block">
+      <div class="fifo-header">
+        <strong>{{ entry.item.articulo.name }}</strong>
+        <span>Solicitado: <strong>{{ entry.item.cantidad }} {{ entry.item.articulo.unit }}</strong></span>
+      </div>
+      <div class="fifo-body">
+        {% if entry.lotes %}
+          <table>
+            <thead>
+              <tr>
+                <th>Pedimento</th>
+                <th>Fecha</th>
+                <th class="num" style="text-align:right">Cant. pedimento</th>
+                <th class="num" style="text-align:right">Consumido total</th>
+                <th class="num" style="text-align:right">Disponible restante</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for lote in entry.lotes %}
+                <tr>
+                  <td><a href="{% url 'pedimento_detail' lote.pedimento.pk %}" class="ped-link">{{ lote.pedimento.folio }}</a></td>
+                  <td>{{ lote.pedimento.fecha }}</td>
+                  <td class="num">{{ lote.cantidad }}</td>
+                  <td class="num">{{ lote.consumido }}</td>
+                  <td class="num {% if lote.disponible > 0 %}ok{% endif %}" style="{% if lote.disponible > 0 %}color:#15803d;font-weight:700{% else %}color:#9ca3af{% endif %}">
+                    {{ lote.disponible }}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="empty-trace">Sin lotes encontrados para este artículo.</p>
+        {% endif %}
+      </div>
+    </div>
+  {% empty %}
+    <p style="color:#9ca3af; padding:10px 0;">Sin trazabilidad disponible.</p>
+  {% endfor %}
+</div>
+
+{% if rem.notas %}
+  <div class="notas-box"><strong>Notas:</strong> {{ rem.notas }}</div>
+{% endif %}
+
+</body>
+</html>

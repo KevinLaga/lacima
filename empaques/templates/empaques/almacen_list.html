@@ -3,82 +3,148 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Almacén</title>
+  <title>Almacén{% if empresa %} – {{ empresa }}{% endif %}</title>
   <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
   <style>
-    body { padding: 16px; }
-    .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap: wrap; }
-    .toolbar a.btn { background:#225577; color:#fff; padding:6px 10px; border-radius:6px; text-decoration:none; }
-    .toolbar a.btn.secondary { background:#4b5563; }
-    .search { margin-left:auto; display:flex; gap:6px; }
-    table { border-collapse: collapse; width: 100%; }
-    th,td { padding:8px 10px; border:1px solid #d0d7de; }
-    th { background:#225577; color:#fff; text-align:center; }
-    .qty { font-weight:700; }
-    .actions a { margin-right:6px; }
-    @media (max-width: 760px){
-      .widehide { display:none; }
-      table { font-size: 14px; }
-      .search { width:100%; margin-left:0; }
-      .search input { flex:1; }
+    body { padding:20px; font-family:sans-serif; background:#f5f6fa; }
+    h1 { margin:0 0 4px; font-size:24px; color:#1a1a2e; }
+    .sub { color:#666; margin-bottom:20px; font-size:14px; }
+
+    /* Toolbar */
+    .toolbar { display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+    .btn {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:8px 16px; border-radius:8px; font-size:14px; font-weight:600;
+      text-decoration:none; border:none; cursor:pointer; transition:opacity .15s;
+      color:#fff !important;
     }
+    .btn:hover { opacity:.85; }
+    .btn-back   { background:#374151; }
+    .btn-green  { background:#15803d; }
+    .btn-blue   { background:#1d4ed8; }
+    .btn-amber  { background:#b45309; }
+    .btn-gray   { background:#6b7280; }
+
+    /* Selector empresa */
+    .selector-card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+      padding:20px 24px; margin-bottom:20px;
+      box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+    .selector-card h2 { margin:0 0 14px; font-size:16px; color:#374151; }
+    .empresa-grid { display:flex; flex-wrap:wrap; gap:10px; }
+    .empresa-btn {
+      padding:10px 18px; border-radius:8px; border:2px solid #d1d5db;
+      background:#fff; color:#374151; font-size:14px; font-weight:600;
+      cursor:pointer; transition:all .15s; text-align:center;
+    }
+    .empresa-btn:hover { border-color:#1d4ed8; color:#1d4ed8; background:#eff6ff; }
+    .empresa-btn.activa { border-color:#1d4ed8; background:#1d4ed8; color:#fff; }
+    .empresa-btn.limpiar { border-color:#d1d5db; color:#9ca3af; font-weight:400; font-size:13px; }
+    .empresa-btn.limpiar:hover { border-color:#9ca3af; color:#6b7280; background:#f9fafb; }
+
+    /* Tabla stock */
+    .stock-card {
+      background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+      padding:20px 24px; box-shadow:0 1px 4px rgba(0,0,0,.06);
+    }
+    .stock-card h2 { margin:0 0 14px; font-size:17px; color:#1a1a2e; }
+    table { border-collapse:collapse; width:100%; }
+    thead tr { background:#1d4ed8; }
+    th { padding:10px 12px; color:#fff; font-size:13px; text-align:left; font-weight:600; }
+    td { padding:9px 12px; border-bottom:1px solid #f1f5f9; font-size:14px; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#f8fafc; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; font-weight:700; }
+    .num.ok   { color:#15803d; }
+    .num.bajo { color:#dc2626; }
+    .num.gray { color:#6b7280; font-weight:400; }
+    @media(max-width:640px){ .wh{display:none} }
   </style>
 </head>
 <body>
-  <div class="toolbar">
-    <a href="{% url 'shipment_list' %}" class="btn secondary">← Embarques</a>
-    {% if perms.empaques.add_inventoryitem %}
-      <a href="{% url 'almacen_item_new' %}" class="btn">+ Nuevo artículo</a>
+
+<div class="toolbar">
+  <a href="{% url 'shipment_list' %}" class="btn btn-back">← Embarques</a>
+  {% if empresa %}
+    <a href="{% url 'pedimento_list' %}?empresa={{ empresa|urlencode }}" class="btn btn-blue">📥 Pedimentos</a>
+    <a href="{% url 'remision_list' %}?empresa={{ empresa|urlencode }}" class="btn btn-amber">📤 Remisiones</a>
+    <a href="{% url 'pedimento_new' %}?empresa={{ empresa|urlencode }}" class="btn btn-green">+ Pedimento</a>
+    <a href="{% url 'remision_new' %}?empresa={{ empresa|urlencode }}" class="btn btn-green">+ Remisión</a>
+  {% endif %}
+  {% if perms.empaques.add_inventoryitem %}
+    <a href="{% url 'almacen_item_new' %}" class="btn btn-gray">+ Artículo</a>
+  {% endif %}
+</div>
+
+<h1>Almacén</h1>
+<p class="sub">Selecciona una empresa para ver su stock, pedimentos y remisiones.</p>
+
+{% if messages %}
+  {% for msg in messages %}
+    <div style="background:{% if msg.tags == 'error' %}#fee2e2;color:#7f1d1d{% else %}#dcfce7;color:#14532d{% endif %};
+                border-radius:8px; padding:12px 16px; margin-bottom:16px; font-weight:500;">
+      {{ msg }}
+    </div>
+  {% endfor %}
+{% endif %}
+
+<div class="selector-card">
+  <h2>Empresa</h2>
+  <div class="empresa-grid">
+    {% for emp in empresas %}
+      <form method="get" style="margin:0">
+        <input type="hidden" name="empresa" value="{{ emp }}">
+        <button type="submit" class="empresa-btn {% if empresa == emp %}activa{% endif %}">
+          {{ emp }}
+        </button>
+      </form>
+    {% endfor %}
+    {% if empresa %}
+      <form method="get" style="margin:0">
+        <button type="submit" class="empresa-btn limpiar">✕ Quitar filtro</button>
+      </form>
     {% endif %}
-    {% if perms.empaques.add_inventorymovement %}
-      <a href="{% url 'almacen_movement_new_tipo' 'IN' %}" class="btn">+ Entrada</a>
-      <a href="{% url 'almacen_movement_new_tipo' 'OUT' %}" class="btn">− Salida</a>
-      <a href="{% url 'almacen_movement_new_tipo' 'ADJ' %}" class="btn">± Ajuste</a>
-    {% endif %}
-    <form method="get" class="search">
-      <input type="text" name="q" value="{{ q }}" placeholder="Buscar Id/Nombre/Ubicación">
-      <button type="submit">Buscar</button>
-    </form>
   </div>
+</div>
 
-  <h1>Almacén</h1>
-
+{% if empresa %}
+<div class="stock-card">
+  <h2>Stock disponible — {{ empresa }}</h2>
   <table>
     <thead>
       <tr>
         <th>Id</th>
         <th>Artículo</th>
-        <th class="widehide">Ubicación</th>
-        <th>Stock</th>
-        <th>Unidad</th>
-        <th>Acciones</th>
+        <th class="wh">Unidad</th>
+        <th style="text-align:right">Disponible</th>
+        <th style="text-align:right" class="wh">Entradas</th>
+        <th style="text-align:right" class="wh">Consumido</th>
       </tr>
-    </thead>    
+    </thead>
     <tbody>
-      {% for it in items %}
-        {% with s=it.stock_qty|default:0 %}
+      {% for row in stock_rows %}
         <tr>
-          <td>{{ it.sku }}</td>
-          <td>{{ it.name }}</td>
-          <td class="widehide">{{ it.location }}</td>
-          <td><span class="qty">{{ s }}</span></td>
-          <td>{{ it.unit }}</td>
-          <td class="actions">
-            {% if perms.empaques.view_inventorymovement %}
-              <a href="{% url 'almacen_kardex' it.id %}">Historial</a>
-            {% endif %}
-            {% if perms.empaques.add_inventorymovement %}
-              · <a href="{% url 'almacen_movement_new_tipo' 'IN' %}?item={{ it.id }}">Entrada</a>
-              · <a href="{% url 'almacen_movement_new_tipo' 'OUT' %}?item={{ it.id }}">Salida</a>
-              · <a href="{% url 'almacen_movement_new_tipo' 'ADJ' %}?item={{ it.id }}">Ajuste</a>
-            {% endif %}
+          <td>{{ row.articulo__sku }}</td>
+          <td>{{ row.articulo__name }}</td>
+          <td class="wh">{{ row.articulo__unit }}</td>
+          <td class="num {% if row.stock > 0 %}ok{% elif row.stock <= 0 %}bajo{% endif %}">
+            {{ row.stock }}
+          </td>
+          <td class="num gray wh">{{ row.total }}</td>
+          <td class="num gray wh">{{ row.consumido }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="6" style="color:#9ca3af; text-align:center; padding:24px;">
+            Sin stock para esta empresa. Crea un <strong>Pedimento</strong> para agregar entradas.
           </td>
         </tr>
-        {% endwith %}
-      {% empty %}
-        <tr><td colspan="6">Sin artículos.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+</div>
+{% endif %}
+
 </body>
 </html>

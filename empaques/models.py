@@ -307,3 +307,93 @@ class VariedadPresentation(models.Model):
 
     class Meta:
         unique_together = ('variedad', 'presentation')
+
+
+# ===== ALMACÉN: PEDIMENTOS Y REMISIONES =====
+from django.db.models import ExpressionWrapper
+
+EMPRESAS_ALMACEN = [
+    "La Cima Produce",
+    "RC Organics",
+    "GH Farms",
+    "Gourmet Baja Farms",
+    "GBF Farms",
+    "AGRICOLA DH & G",
+    "AGRICOLA DH&G GONZALO",
+]
+EMPRESA_CHOICES = [(e, e) for e in EMPRESAS_ALMACEN]
+
+
+class Pedimento(models.Model):
+    empresa = models.CharField(max_length=120, choices=EMPRESA_CHOICES, db_index=True)
+    folio = models.CharField(max_length=50, unique=True, blank=True)
+    fecha = models.DateField(db_index=True)
+    notas = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='pedimentos'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('fecha', 'id')
+        verbose_name = "Pedimento"
+        verbose_name_plural = "Pedimentos"
+
+    def __str__(self):
+        return f"{self.folio} – {self.empresa} ({self.fecha})"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.folio:
+            self.folio = f"PED-{self.pk:05d}"
+            super().save(update_fields=['folio'])
+
+
+class PedimentoItem(models.Model):
+    pedimento = models.ForeignKey(Pedimento, related_name='items', on_delete=models.CASCADE)
+    articulo = models.ForeignKey(InventoryItem, related_name='pedimento_items', on_delete=models.PROTECT)
+    cantidad = models.DecimalField(max_digits=12, decimal_places=2)
+    consumido = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+
+    @property
+    def disponible(self):
+        return self.cantidad - self.consumido
+
+    def __str__(self):
+        return f"{self.articulo} × {self.cantidad}"
+
+
+class Remision(models.Model):
+    empresa = models.CharField(max_length=120, choices=EMPRESA_CHOICES, db_index=True)
+    folio = models.CharField(max_length=50, unique=True, blank=True)
+    fecha = models.DateField(db_index=True)
+    notas = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='remisiones'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-fecha', '-id')
+        verbose_name = "Remisión"
+        verbose_name_plural = "Remisiones"
+
+    def __str__(self):
+        return f"{self.folio} – {self.empresa} ({self.fecha})"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.folio:
+            self.folio = f"REM-{self.pk:05d}"
+            super().save(update_fields=['folio'])
+
+
+class RemisionItem(models.Model):
+    remision = models.ForeignKey(Remision, related_name='items', on_delete=models.CASCADE)
+    articulo = models.ForeignKey(InventoryItem, related_name='remision_items', on_delete=models.PROTECT)
+    cantidad = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.articulo} × {self.cantidad}"
