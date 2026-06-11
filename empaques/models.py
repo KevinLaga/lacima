@@ -318,8 +318,6 @@ EMPRESAS_ALMACEN = [
     "GH Farms",
     "Gourmet Baja Farms",
     "GBF Farms",
-    "AGRICOLA DH & G",
-    "AGRICOLA DH&G GONZALO",
 ]
 EMPRESA_CHOICES = [(e, e) for e in EMPRESAS_ALMACEN]
 
