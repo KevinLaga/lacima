@@ -3,44 +3,194 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Nuevo artículo</title>
+  <title>Nuevo artículo — Almacén</title>
   <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
   <style>
-    body { padding: 16px; }
-    .card { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px; }
-    .actions { display:flex; gap:10px; margin-top: 12px; }
-    .btn { background:#225577; color:#fff; padding:8px 12px; border-radius:6px; border:0; cursor:pointer; text-decoration:none; }
-    .btn.secondary { background:#4b5563; }
-    .errors { background:#fde2e2; color:#7f1d1d; border:1px solid #fecaca; border-radius:6px; padding:10px; margin-bottom:12px; }
-    form p { margin: 10px 0; }
-    label { font-weight: 600; display:inline-block; margin-bottom:4px; }
-    input, select { width: 100%; max-width: 420px; padding: 6px 8px; } 
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      background: #1e3a5f;
+      padding: 0 32px;
+      height: 56px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .page-header .brand {
+      color: #fff; font-size: 17px; font-weight: 700; letter-spacing: .3px;
+      text-decoration: none;
+    }
+    .page-header .sep { color: #4a7fa5; font-size: 18px; }
+    .page-header .crumb { color: #93c5fd; font-size: 14px; }
+
+    /* ── Layout ── */
+    .page-body {
+      flex: 1;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 48px 24px;
+    }
+
+    .form-shell {
+      width: 100%; max-width: 560px;
+    }
+
+    /* ── Título ── */
+    .form-title {
+      margin: 0 0 6px;
+      font-size: 26px; font-weight: 700; color: #1e3a5f;
+    }
+    .form-subtitle {
+      margin: 0 0 28px;
+      font-size: 14px; color: #6b7280;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+      overflow: hidden;
+    }
+    .card-section {
+      padding: 28px 32px;
+    }
+    .card-section + .card-section {
+      border-top: 1px solid #f1f5f9;
+    }
+    .section-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: #9ca3af;
+      margin: 0 0 18px;
+    }
+
+    /* ── Fields ── */
+    .field { margin-bottom: 20px; }
+    .field:last-child { margin-bottom: 0; }
+
+    .field label {
+      display: block;
+      font-size: 13px; font-weight: 600; color: #374151;
+      margin-bottom: 7px;
+    }
+    .field .hint {
+      font-size: 12px; color: #9ca3af; font-weight: 400; margin-left: 6px;
+    }
+
+    .field input[type="text"],
+    .field input[type="number"],
+    .field select {
+      display: block; width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 15px; color: #111827;
+      background: #fafafa;
+      transition: border-color .15s, box-shadow .15s, background .15s;
+      outline: none;
+    }
+    .field input:focus,
+    .field select:focus {
+      border-color: #1e3a5f;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(30,58,95,.1);
+    }
+
+    /* dos columnas */
+    .field-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+
+    /* ── Errores ── */
+    .field .field-error {
+      font-size: 12px; color: #dc2626; margin-top: 5px;
+    }
+    .alert-error {
+      background: #fef2f2; border: 1px solid #fecaca;
+      border-radius: 8px; padding: 12px 16px;
+      font-size: 13px; color: #7f1d1d; margin-bottom: 20px;
+    }
+    .alert-success {
+      background: #f0fdf4; border: 1px solid #bbf7d0;
+      border-radius: 8px; padding: 12px 16px;
+      font-size: 13px; color: #14532d; margin-bottom: 20px;
+    }
+
+    /* ── Acciones ── */
+    .card-actions {
+      padding: 20px 32px;
+      background: #f8fafc;
+      border-top: 1px solid #f1f5f9;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .btn-primary {
+      flex: 1;
+      padding: 11px 0;
+      background: #1e3a5f; color: #fff !important;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: background .15s;
+      text-align: center;
+    }
+    .btn-primary:hover { background: #16304f; }
+
+    .btn-cancel {
+      padding: 11px 20px;
+      background: none; color: #6b7280 !important;
+      border: 1.5px solid #e5e7eb; border-radius: 8px;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-cancel:hover { border-color: #9ca3af; color: #374151 !important; }
+
+    /* ── Ícono campo ID ── */
+    .input-wrap { position: relative; }
+    .input-wrap input { padding-right: 40px; }
+    .input-wrap .auto-badge {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 11px; font-weight: 600; color: #9ca3af;
+      background: #f3f4f6; border-radius: 4px; padding: 2px 6px;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <h1 style="margin-top:0;">Nuevo artículo</h1>
+<header class="page-header">
+  <a href="{% url 'almacen_list' %}" class="brand">🏭 Almacén</a>
+  <span class="sep">/</span>
+  <span class="crumb">Nuevo artículo</span>
+</header>
 
-    {# Muestra mensajes (éxito / error) si usas django.contrib.messages #}
+<div class="page-body">
+  <div class="form-shell">
+
+    <h1 class="form-title">Nuevo artículo</h1>
+    <p class="form-subtitle">Agrega un artículo al catálogo del almacén. El Id se genera automáticamente si lo dejas vacío.</p>
+
     {% if messages %}
       {% for message in messages %}
-        <div class="errors" style="{% if message.tags == 'success' %}background:#e6f4ea;color:#0f5132;border-color:#badbcc;{% endif %}">
+        <div class="{% if message.tags == 'success' %}alert-success{% else %}alert-error{% endif %}">
           {{ message }}
         </div>
       {% endfor %}
     {% endif %}
 
-    {# Muestra errores del form si existen #}
     {% if form.non_field_errors or form.errors %}
-      <div class="errors">
-        {{ form.non_field_errors }}
-        <ul style="margin:6px 0 0 18px;">
-        {% for field in form %}
-          {% for err in field.errors %}
-            <li><b>{{ field.label }}:</b> {{ err }}</li>
-          {% endfor %}
-        {% endfor %}
+      <div class="alert-error">
+        <strong>Revisa los siguientes errores:</strong>
+        <ul style="margin:6px 0 0 16px; padding:0;">
+          {% for field in form %}{% for err in field.errors %}
+            <li>{{ field.label }}: {{ err }}</li>
+          {% endfor %}{% endfor %}
+          {% for err in form.non_field_errors %}<li>{{ err }}</li>{% endfor %}
         </ul>
       </div>
     {% endif %}
@@ -48,31 +198,56 @@
     <form method="post" action="{% url 'almacen_item_new' %}">
       {% csrf_token %}
 
-      {# Render controlado (para que sea claro) #}
-      <p>
-        <label for="{{ form.sku.id_for_label }}">Id</label>
-        {{ form.sku }}
-      </p>
-      <p>
-        <label for="{{ form.name.id_for_label }}">Nombre del artículo</label>
-        {{ form.name }}
-      </p>
-      <p>
-        <label for="{{ form.unit.id_for_label }}">Unidad</label>
-        {{ form.unit }}
-      </p>
-      <p>
-        <label for="{{ form.location.id_for_label }}">Ubicación</label>
-        {{ form.location }}
-      </p>
+      <div class="card">
 
+        <div class="card-section">
+          <p class="section-label">Identificación</p>
 
-      <div class="actions">
-        <button type="submit" class="btn">Guardar</button>
-        <a href="{% url 'almacen_list' %}" class="btn secondary">Cancelar</a>
+          <div class="field">
+            <label for="{{ form.sku.id_for_label }}">
+              Id <span class="hint">— se genera solo si lo dejas vacío</span>
+            </label>
+            <div class="input-wrap">
+              {{ form.sku }}
+              <span class="auto-badge">AUTO</span>
+            </div>
+            {% if form.sku.errors %}<p class="field-error">{{ form.sku.errors|join:", " }}</p>{% endif %}
+          </div>
+
+          <div class="field">
+            <label for="{{ form.name.id_for_label }}">Nombre del artículo</label>
+            {{ form.name }}
+            {% if form.name.errors %}<p class="field-error">{{ form.name.errors|join:", " }}</p>{% endif %}
+          </div>
+        </div>
+
+        <div class="card-section">
+          <p class="section-label">Detalles</p>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="{{ form.unit.id_for_label }}">Unidad de medida</label>
+              {{ form.unit }}
+              {% if form.unit.errors %}<p class="field-error">{{ form.unit.errors|join:", " }}</p>{% endif %}
+            </div>
+            <div class="field">
+              <label for="{{ form.location.id_for_label }}">Ubicación <span class="hint">— opcional</span></label>
+              {{ form.location }}
+              {% if form.location.errors %}<p class="field-error">{{ form.location.errors|join:", " }}</p>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button type="submit" class="btn-primary">Guardar artículo</button>
+          <a href="{% url 'almacen_list' %}" class="btn-cancel">Cancelar</a>
+        </div>
+
       </div>
     </form>
+
   </div>
+</div>
 
 </body>
 </html>

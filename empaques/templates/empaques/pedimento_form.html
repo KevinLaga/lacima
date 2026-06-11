@@ -3,128 +3,299 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>{{ titulo }}</title>
+  <title>{{ titulo }} — Almacén</title>
   <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
   <style>
-    body { padding:20px; font-family:sans-serif; background:#f5f6fa; max-width:860px; }
-    h1 { margin:0 0 20px; font-size:24px; color:#1a1a2e; }
-    .toolbar { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
-    .btn {
-      display:inline-flex; align-items:center; gap:6px;
-      padding:8px 16px; border-radius:8px; font-size:14px; font-weight:600;
-      text-decoration:none; border:none; cursor:pointer; transition:opacity .15s;
-      color:#fff !important;
-    }
-    .btn:hover { opacity:.85; }
-    .btn-back  { background:#374151; }
-    .btn-green { background:#15803d; font-size:15px; padding:10px 22px; }
+    *, *::before, *::after { box-sizing: border-box; }
 
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5; min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .page-header {
+      background: #1e3a5f;
+      padding: 0 32px; height: 56px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .page-header .brand { color:#fff; font-size:17px; font-weight:700; text-decoration:none; }
+    .page-header .sep  { color:#4a7fa5; font-size:18px; }
+    .page-header .crumb { color:#93c5fd; font-size:14px; }
+
+    /* ── Layout ── */
+    .page-body {
+      flex: 1;
+      display: flex; justify-content: center; align-items: flex-start;
+      padding: 40px 24px;
+    }
+    .form-shell { width: 100%; max-width: 680px; }
+
+    .form-title    { margin: 0 0 4px; font-size:26px; font-weight:700; color:#1e3a5f; }
+    .form-subtitle { margin: 0 0 24px; font-size:14px; color:#6b7280; }
+
+    /* ── Alerts ── */
+    .alert {
+      border-radius:8px; padding:12px 16px; font-size:13px; margin-bottom:18px;
+    }
+    .alert-error   { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; }
+    .alert-success { background:#f0fdf4; border:1px solid #bbf7d0; color:#14532d; }
+
+    /* ── Card ── */
     .card {
-      background:#fff; border:1px solid #e2e8f0; border-radius:12px;
-      padding:20px 24px; margin-bottom:18px; box-shadow:0 1px 4px rgba(0,0,0,.06);
+      background:#fff; border-radius:14px;
+      box-shadow:0 4px 24px rgba(0,0,0,.08);
+      overflow:hidden; margin-bottom:16px;
     }
-    .card h2 { margin:0 0 16px; font-size:16px; color:#1d4ed8; border-bottom:2px solid #dbeafe; padding-bottom:8px; }
+    .card-section { padding:24px 28px; }
+    .card-section + .card-section { border-top:1px solid #f1f5f9; }
+    .section-label {
+      font-size:11px; font-weight:700; letter-spacing:1px;
+      text-transform:uppercase; color:#9ca3af; margin:0 0 16px;
+    }
 
-    .field { margin-bottom:14px; }
-    .field label { display:block; font-weight:600; font-size:13px; color:#374151; margin-bottom:5px; }
+    /* ── Fields ── */
+    .field { margin-bottom:18px; }
+    .field:last-child { margin-bottom:0; }
+    .field label {
+      display:block; font-size:13px; font-weight:600; color:#374151; margin-bottom:7px;
+    }
     .field input, .field select, .field textarea {
-      width:100%; box-sizing:border-box; padding:8px 10px;
-      border:1px solid #d1d5db; border-radius:7px; font-size:14px;
-      transition:border-color .15s;
+      display:block; width:100%;
+      padding:10px 14px;
+      border:1.5px solid #e5e7eb; border-radius:8px;
+      font-size:14px; color:#111827; background:#fafafa;
+      transition:border-color .15s, box-shadow .15s, background .15s;
+      outline:none;
     }
     .field input:focus, .field select:focus, .field textarea:focus {
-      outline:none; border-color:#1d4ed8; box-shadow:0 0 0 3px #dbeafe;
+      border-color:#1e3a5f; background:#fff;
+      box-shadow:0 0 0 3px rgba(30,58,95,.1);
     }
-    .field textarea { resize:vertical; min-height:60px; }
-    .errorlist { color:#dc2626; font-size:12px; margin:4px 0 0; padding:0; list-style:none; }
+    .field textarea { resize:vertical; min-height:72px; }
+    .field-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .field-error { font-size:12px; color:#dc2626; margin-top:4px; }
 
-    /* Formset */
+    /* empresa pill selector */
+    .empresa-pills { display:flex; flex-wrap:wrap; gap:8px; }
+    .empresa-pill {
+      padding:8px 16px; border-radius:20px;
+      border:2px solid #e5e7eb; background:#fff;
+      font-size:13px; font-weight:600; color:#374151;
+      cursor:pointer; transition:all .15s;
+    }
+    .empresa-pill:hover { border-color:#1e3a5f; color:#1e3a5f; background:#eff6ff; }
+    .empresa-pill input[type="radio"] { display:none; }
+    .empresa-pill.selected { border-color:#1e3a5f; background:#1e3a5f; color:#fff; }
+    /* hidden real select for form submission */
+    #id_empresa { display:none; }
+
+    /* ── Formset table ── */
     .formset-wrap { overflow-x:auto; }
-    table.fs { width:100%; border-collapse:collapse; }
-    table.fs th {
-      background:#f1f5f9; padding:9px 10px; border:1px solid #e2e8f0;
-      font-size:13px; font-weight:600; color:#374151; text-align:left;
+    .fs-table { width:100%; border-collapse:collapse; }
+    .fs-table thead tr { background:#f8fafc; }
+    .fs-table th {
+      padding:10px 12px; border-bottom:2px solid #e5e7eb;
+      font-size:12px; font-weight:700; letter-spacing:.5px;
+      text-transform:uppercase; color:#6b7280; text-align:left;
     }
-    table.fs td { padding:7px 8px; border:1px solid #e2e8f0; vertical-align:top; }
-    table.fs input, table.fs select {
-      width:100%; box-sizing:border-box; padding:6px 8px;
-      border:1px solid #d1d5db; border-radius:6px; font-size:14px;
+    .fs-table td { padding:8px 10px; border-bottom:1px solid #f1f5f9; vertical-align:top; }
+    .fs-table tr:last-child td { border-bottom:none; }
+    .fs-table tr:hover td { background:#fafafa; }
+    .fs-table select, .fs-table input {
+      display:block; width:100%;
+      padding:8px 10px; border:1.5px solid #e5e7eb; border-radius:7px;
+      font-size:14px; color:#111827; background:#fafafa; outline:none;
+      transition:border-color .15s, box-shadow .15s;
     }
-    table.fs input:focus, table.fs select:focus {
-      outline:none; border-color:#1d4ed8;
+    .fs-table select:focus, .fs-table input:focus {
+      border-color:#1e3a5f; background:#fff;
+      box-shadow:0 0 0 3px rgba(30,58,95,.1);
     }
-    .add-row {
-      margin-top:10px; background:#fff; border:2px dashed #1d4ed8;
-      color:#1d4ed8; padding:7px 16px; border-radius:7px; cursor:pointer;
-      font-size:13px; font-weight:600; transition:background .15s;
+    .fs-table .col-qty { width:160px; }
+
+    .btn-add-row {
+      margin-top:14px; padding:8px 18px;
+      background:#fff; border:2px dashed #1e3a5f;
+      color:#1e3a5f; border-radius:8px;
+      font-size:13px; font-weight:700;
+      cursor:pointer; transition:background .15s;
     }
-    .add-row:hover { background:#eff6ff; }
+    .btn-add-row:hover { background:#eff6ff; }
+
+    /* ── Actions ── */
+    .card-actions {
+      padding:20px 28px; background:#f8fafc;
+      border-top:1px solid #f1f5f9;
+      display:flex; align-items:center; gap:12px;
+    }
+    .btn-primary {
+      flex:1; padding:12px 0;
+      background:#1e3a5f; color:#fff !important;
+      border:none; border-radius:8px;
+      font-size:15px; font-weight:700;
+      cursor:pointer; transition:background .15s; text-align:center;
+    }
+    .btn-primary:hover { background:#16304f; }
+    .btn-cancel {
+      padding:12px 20px;
+      background:none; color:#6b7280 !important;
+      border:1.5px solid #e5e7eb; border-radius:8px;
+      font-size:14px; font-weight:600;
+      cursor:pointer; text-decoration:none;
+      transition:border-color .15s;
+    }
+    .btn-cancel:hover { border-color:#9ca3af; color:#374151 !important; }
   </style>
 </head>
 <body>
 
-<div class="toolbar">
-  <a href="{% url 'pedimento_list' %}{% if empresa_param %}?empresa={{ empresa_param|urlencode }}{% endif %}" class="btn btn-back">← Pedimentos</a>
+<header class="page-header">
+  <a href="{% url 'almacen_list' %}" class="brand">🏭 Almacén</a>
+  <span class="sep">/</span>
+  <a href="{% url 'pedimento_list' %}{% if empresa_param %}?empresa={{ empresa_param|urlencode }}{% endif %}"
+     style="color:#93c5fd; font-size:14px; text-decoration:none;">Pedimentos</a>
+  <span class="sep">/</span>
+  <span class="crumb">Nuevo</span>
+</header>
+
+<div class="page-body">
+<div class="form-shell">
+
+  <h1 class="form-title">Nuevo Pedimento</h1>
+  <p class="form-subtitle">Registra una entrada de artículos al almacén. El folio se genera automáticamente.</p>
+
+  {% if messages %}
+    {% for msg in messages %}
+      <div class="alert alert-error">{{ msg }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" id="pedimento-form">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    <!-- ── Empresa ── -->
+    <div class="card">
+      <div class="card-section">
+        <p class="section-label">Empresa</p>
+        {{ form.empresa }}  {# hidden, value set by pills #}
+        <div class="empresa-pills" id="empresa-pills">
+          {% for val, label in form.empresa.field.choices %}
+            {% if val %}
+              <label class="empresa-pill {% if form.empresa.value == val %}selected{% endif %}"
+                     data-value="{{ val }}">
+                <input type="radio" name="_empresa_pill" value="{{ val }}"
+                       {% if form.empresa.value == val %}checked{% endif %}>
+                {{ label }}
+              </label>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% if form.empresa.errors %}
+          <p class="field-error">Selecciona una empresa.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ── Datos generales ── -->
+    <div class="card">
+      <div class="card-section">
+        <p class="section-label">Datos del pedimento</p>
+        <div class="field-row">
+          <div class="field">
+            <label>Fecha de entrada</label>
+            {{ form.fecha }}
+            {% if form.fecha.errors %}<p class="field-error">{{ form.fecha.errors|join:", " }}</p>{% endif %}
+          </div>
+          <div class="field" style="display:flex; align-items:flex-end;">
+            <div style="background:#f0f4f8; border-radius:8px; padding:10px 14px; font-size:13px; color:#6b7280; width:100%;">
+              📋 Folio <strong style="color:#1e3a5f;">PED-#####</strong><br>
+              <span style="font-size:11px;">Se asigna al guardar</span>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Notas <span style="font-weight:400; color:#9ca3af; font-size:12px;">— opcional</span></label>
+          {{ form.notas }}
+          {% if form.notas.errors %}<p class="field-error">{{ form.notas.errors|join:", " }}</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Artículos ── -->
+    <div class="card">
+      <div class="card-section">
+        <p class="section-label">Artículos recibidos</p>
+        <div class="formset-wrap">
+          <table class="fs-table" id="formset-table">
+            <thead>
+              <tr>
+                <th>Artículo</th>
+                <th class="col-qty">Cantidad</th>
+              </tr>
+            </thead>
+            <tbody id="formset-body">
+              {% for f in formset %}
+                <tr class="formset-row">
+                  <td>
+                    {{ f.articulo }}{{ f.id }}
+                    {% if f.articulo.errors %}<p class="field-error">{{ f.articulo.errors|join:", " }}</p>{% endif %}
+                  </td>
+                  <td class="col-qty">
+                    {{ f.cantidad }}
+                    {% if f.cantidad.errors %}<p class="field-error">{{ f.cantidad.errors|join:", " }}</p>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <button type="button" class="btn-add-row" id="add-row-btn">+ Agregar artículo</button>
+      </div>
+
+      <div class="card-actions">
+        <button type="submit" class="btn-primary">💾 Guardar pedimento</button>
+        <a href="{% url 'pedimento_list' %}{% if empresa_param %}?empresa={{ empresa_param|urlencode }}{% endif %}"
+           class="btn-cancel">Cancelar</a>
+      </div>
+    </div>
+
+  </form>
+</div>
 </div>
 
-<h1>{{ titulo }}</h1>
-
-{% if messages %}
-  {% for msg in messages %}
-    <div style="background:#fee2e2;color:#7f1d1d;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-weight:500;">{{ msg }}</div>
-  {% endfor %}
-{% endif %}
-
-<form method="post">
-  {% csrf_token %}
-  {{ formset.management_form }}
-
-  <div class="card">
-    <h2>Datos del pedimento</h2>
-    {% for field in form %}
-      <div class="field">
-        <label>{{ field.label }}</label>
-        {{ field }}
-        {% if field.errors %}<ul class="errorlist">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-      </div>
-    {% endfor %}
-  </div>
-
-  <div class="card">
-    <h2>Artículos recibidos</h2>
-    <div class="formset-wrap">
-      <table class="fs" id="formset-table">
-        <thead>
-          <tr>
-            <th style="width:65%">Artículo</th>
-            <th>Cantidad</th>
-          </tr>
-        </thead>
-        <tbody id="formset-body">
-          {% for f in formset %}
-            <tr class="formset-row">
-              <td>{{ f.articulo }}{{ f.id }}{% if f.articulo.errors %}<ul class="errorlist">{% for e in f.articulo.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}</td>
-              <td>{{ f.cantidad }}{% if f.cantidad.errors %}<ul class="errorlist">{% for e in f.cantidad.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <button type="button" class="add-row" id="add-row-btn">+ Agregar artículo</button>
-  </div>
-
-  <button type="submit" class="btn btn-green">💾 Guardar pedimento</button>
-</form>
-
 <script>
-  const btn = document.getElementById('add-row-btn');
-  const tbody = document.getElementById('formset-body');
-  const totalForms = document.querySelector('[name$=TOTAL_FORMS]');
+  // ── Pills de empresa ──
+  const pills = document.querySelectorAll('.empresa-pill');
+  const selectEl = document.getElementById('id_empresa');
 
-  btn.addEventListener('click', () => {
+  pills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      pills.forEach(p => p.classList.remove('selected'));
+      pill.classList.add('selected');
+      selectEl.value = pill.dataset.value;
+    });
+  });
+
+  // Sincronizar select al cargar si ya tiene valor
+  if (selectEl.value) {
+    pills.forEach(p => {
+      if (p.dataset.value === selectEl.value) p.classList.add('selected');
+    });
+  }
+
+  // ── Agregar fila ──
+  const addBtn = document.getElementById('add-row-btn');
+  const tbody  = document.getElementById('formset-body');
+  const total  = document.querySelector('[name$=TOTAL_FORMS]');
+
+  addBtn.addEventListener('click', () => {
     const rows = tbody.querySelectorAll('.formset-row');
-    const idx = parseInt(totalForms.value);
-    const tpl = rows[rows.length - 1].cloneNode(true);
+    const idx  = parseInt(total.value);
+    const tpl  = rows[rows.length - 1].cloneNode(true);
 
     tpl.querySelectorAll('input, select, textarea').forEach(el => {
       el.name = el.name.replace(/-\d+-/, `-${idx}-`);
@@ -135,10 +306,12 @@
     tpl.querySelectorAll('label').forEach(el => {
       el.setAttribute('for', (el.getAttribute('for') || '').replace(/-\d+-/, `-${idx}-`));
     });
+    tpl.querySelectorAll('.field-error').forEach(el => el.remove());
 
     tbody.appendChild(tpl);
-    totalForms.value = idx + 1;
+    total.value = idx + 1;
   });
 </script>
+
 </body>
 </html>
