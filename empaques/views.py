@@ -2406,9 +2406,10 @@ def shipment_list(request):
             cell.border = border
         r += 1
 
-        for it in sh.items.select_related("presentation").all():
-            if not item_match_mode(it):
-                continue
+        for sh in embarques_qs.prefetch_related("items__presentation"):
+            for it in sh.items.select_related("presentation").all():
+                if not item_match_mode(it):
+                    continue
                 importe = it.quantity * float(it.presentation.price)
                 ws.cell(row=r, column=1, value=sh.date.strftime("%d/%m/%Y"))
                 ws.cell(row=r, column=2, value=sh.tracking_number)
