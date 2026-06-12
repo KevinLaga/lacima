@@ -300,6 +300,70 @@ def remision_detail(request, pk):
 
 
 # ─────────────────────────────────────────────
+# Inventario inicial
+# ─────────────────────────────────────────────
+
+@login_required
+@permission_required("empaques.add_pedimento", raise_exception=True)
+def inventario_inicial(request):
+    empresa = request.GET.get('empresa', '').strip()
+    if empresa not in EMPRESAS_ALMACEN:
+        empresa = ''
+
+    articulos = InventoryItem.objects.order_by('name')
+    errores = []
+
+    if request.method == 'POST':
+        empresa = request.POST.get('empresa', '').strip()
+        fecha   = request.POST.get('fecha', '').strip()
+
+        if empresa not in EMPRESAS_ALMACEN:
+            errores.append("Selecciona una empresa válida.")
+        if not fecha:
+            errores.append("La fecha es obligatoria.")
+
+        cantidades = {}
+        for art in articulos:
+            val = request.POST.get(f'qty_{art.pk}', '').strip()
+            if val:
+                try:
+                    qty = Decimal(val)
+                    if qty > 0:
+                        cantidades[art] = qty
+                except Exception:
+                    errores.append(f"Cantidad inválida para {art.name}.")
+
+        if not cantidades:
+            errores.append("Captura al menos una cantidad mayor a 0.")
+
+        if not errores:
+            with transaction.atomic():
+                from datetime import date as _date
+                fecha_obj = _date.fromisoformat(fecha)
+                ped = Pedimento.objects.create(
+                    empresa=empresa,
+                    fecha=fecha_obj,
+                    notas="Inventario inicial",
+                    created_by=request.user,
+                )
+                for art, qty in cantidades.items():
+                    PedimentoItem.objects.create(
+                        pedimento=ped,
+                        articulo=art,
+                        cantidad=qty,
+                    )
+            messages.success(request, f"Inventario inicial guardado como {ped.folio}.")
+            return redirect(f"{reverse('inventario_inicial')}?empresa={empresa}")
+
+    return render(request, 'empaques/inventario_inicial.html', {
+        'empresa': empresa,
+        'empresas': EMPRESAS_ALMACEN,
+        'articulos': articulos,
+        'errores': errores,
+    })
+
+
+# ─────────────────────────────────────────────
 # Movimiento individual (legacy, mantener funcional)
 # ─────────────────────────────────────────────
 

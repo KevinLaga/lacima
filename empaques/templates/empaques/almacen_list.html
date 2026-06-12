@@ -72,6 +72,7 @@
     <a href="{% url 'pedimento_new' %}?empresa={{ empresa|urlencode }}" class="btn btn-green">+ Pedimento</a>
     <a href="{% url 'remision_new' %}?empresa={{ empresa|urlencode }}" class="btn btn-green">+ Remisión</a>
   {% endif %}
+  <a href="{% url 'inventario_inicial' %}{% if empresa %}?empresa={{ empresa|urlencode }}{% endif %}" class="btn btn-gray">📋 Inventario inicial</a>
   {% if perms.empaques.add_inventoryitem %}
     <a href="{% url 'almacen_item_new' %}" class="btn btn-gray">+ Artículo</a>
   {% endif %}

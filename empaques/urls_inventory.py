@@ -18,6 +18,9 @@ urlpatterns = [
     path("almacen/remisiones/nueva/", v.remision_new, name="remision_new"),
     path("almacen/remisiones/<int:pk>/", v.remision_detail, name="remision_detail"),
 
+    # ── Inventario inicial ───────────────────────────────────────────
+    path("almacen/inventario-inicial/", v.inventario_inicial, name="inventario_inicial"),
+
     # ── Legacy: movimiento individual ────────────────────────────────
     path("almacen/movimiento/nuevo/", v.almacen_movement_new, name="almacen_movement_new"),
     path("almacen/movimiento/nuevo/<str:tipo>/", v.almacen_movement_new, name="almacen_movement_new_tipo"),
