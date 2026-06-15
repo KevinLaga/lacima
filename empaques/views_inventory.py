@@ -154,7 +154,7 @@ def pedimento_list(request):
     if orden not in ('fecha', '-fecha'):
         orden = '-fecha'
 
-    qs = Pedimento.objects.prefetch_related('items__articulo')
+    qs = Pedimento.objects.filter(es_inventario_inicial=False).prefetch_related('items__articulo')
     if empresa:
         qs = qs.filter(empresa=empresa)
     qs = qs.order_by(orden)
@@ -539,6 +539,7 @@ def inventario_inicial(request):
                     empresa=empresa,
                     fecha=fecha_obj,
                     notas="Inventario inicial",
+                    es_inventario_inicial=True,
                     created_by=request.user,
                 )
                 for art, qty in cantidades.items():

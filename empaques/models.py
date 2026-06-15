@@ -327,6 +327,7 @@ class Pedimento(models.Model):
     folio = models.CharField(max_length=50, unique=True, blank=True)
     fecha = models.DateField(db_index=True)
     notas = models.TextField(blank=True)
+    es_inventario_inicial = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
         on_delete=models.SET_NULL, related_name='pedimentos'
