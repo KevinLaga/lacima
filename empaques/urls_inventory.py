@@ -21,6 +21,9 @@ urlpatterns = [
     # ── Inventario inicial ───────────────────────────────────────────
     path("almacen/inventario-inicial/", v.inventario_inicial, name="inventario_inicial"),
 
+    # ── Reporte Excel ────────────────────────────────────────────────
+    path("almacen/reporte-excel/", v.almacen_reporte_xlsx, name="almacen_reporte_xlsx"),
+
     # ── Legacy: movimiento individual ────────────────────────────────
     path("almacen/movimiento/nuevo/", v.almacen_movement_new, name="almacen_movement_new"),
     path("almacen/movimiento/nuevo/<str:tipo>/", v.almacen_movement_new, name="almacen_movement_new_tipo"),

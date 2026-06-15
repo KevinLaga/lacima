@@ -6,7 +6,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.db import transaction
 from django.db.models import DecimalField, ExpressionWrapper, F, Q, Sum, Value as V
 from django.db.models.functions import Coalesce
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
@@ -297,6 +297,201 @@ def remision_detail(request, pk):
         'rem': rem,
         'traza': traza,
     })
+
+
+# ─────────────────────────────────────────────
+# Reporte Excel de inventario
+# ─────────────────────────────────────────────
+
+LOGO_MAP = {
+    "La Cima Produce":      "la-cima-produce",
+    "RC Organics":          "rc-organics",
+    "GH Farms":             "gh-farms",
+    "Gourmet Baja Farms":   "gourmet-baja-farms",
+    "GBF Farms":            "gbf-farms",
+    "AGRICOLA DH & G":      "AGRICOLA",
+    "AGRICOLA DH&G GONZALO":"AGRICOLA",
+}
+
+@login_required
+def almacen_reporte_xlsx(request):
+    import os
+    from io import BytesIO
+    from datetime import date as _date
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, GradientFill
+    from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.utils import get_column_letter
+    from django.conf import settings as django_settings
+
+    empresa = request.GET.get('empresa', '').strip()
+    if empresa not in EMPRESAS_ALMACEN:
+        return redirect(reverse('almacen_list'))
+
+    # ── Stock actual ──────────────────────────────────────────────────
+    rows = list(_stock_por_empresa(empresa))
+
+    # ── Estilos ───────────────────────────────────────────────────────
+    NAVY   = "1E3A5F"
+    LIGHT  = "EBF2FA"
+    WHITE  = "FFFFFF"
+    GREEN  = "166534"
+    RED    = "991B1B"
+    GRAY   = "6B7280"
+
+    title_font    = Font(name='Calibri', size=20, bold=True, color=NAVY)
+    sub_font      = Font(name='Calibri', size=11,  italic=True, color=GRAY)
+    th_font       = Font(name='Calibri', size=11,  bold=True,  color=WHITE)
+    th_fill       = PatternFill("solid", fgColor=NAVY)
+    row_fill_alt  = PatternFill("solid", fgColor=LIGHT)
+    bold_navy     = Font(name='Calibri', size=11,  bold=True,  color=NAVY)
+    ok_font       = Font(name='Calibri', size=11,  bold=True,  color=GREEN)
+    zero_font     = Font(name='Calibri', size=11,  bold=True,  color=RED)
+    normal_font   = Font(name='Calibri', size=11)
+    gray_font     = Font(name='Calibri', size=10,  color=GRAY)
+
+    thin  = Side(style='thin',   color='D1D5DB')
+    thick = Side(style='medium', color=NAVY)
+    border_th   = Border(left=thick, right=thick, top=thick, bottom=thick)
+    border_cell = Border(left=thin,  right=thin,  top=thin,  bottom=thin)
+    border_bot  = Border(left=thin,  right=thin,  top=thin,  bottom=thick)
+
+    center = Alignment(horizontal='center', vertical='center')
+    left   = Alignment(horizontal='left',   vertical='center')
+    right  = Alignment(horizontal='right',  vertical='center')
+
+    # ── Workbook ──────────────────────────────────────────────────────
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inventario"
+    ws.sheet_view.showGridLines = False
+
+    # ── Logo ──────────────────────────────────────────────────────────
+    logo_slug = LOGO_MAP.get(empresa)
+    LOGO_ROWS = 6   # filas reservadas para el logo
+    if logo_slug:
+        logo_path = os.path.join(django_settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
+        if os.path.exists(logo_path):
+            img = XLImage(logo_path)
+            target_h = 90
+            scale    = target_h / img.height
+            img.width  = int(img.width  * scale)
+            img.height = int(img.height * scale)
+            ws.add_image(img, "A1")
+
+    # ── Título (columnas D-H) ─────────────────────────────────────────
+    ws.merge_cells("D1:H3")
+    tc = ws["D1"]
+    tc.value     = f"Reporte de Inventario — {empresa}"
+    tc.font      = title_font
+    tc.alignment = Alignment(horizontal="left", vertical="center")
+
+    ws.merge_cells("D4:H5")
+    sc = ws["D4"]
+    sc.value     = f"Generado el {_date.today().strftime('%d/%m/%Y')}   |   Stock disponible al momento de descarga"
+    sc.font      = sub_font
+    sc.alignment = Alignment(horizontal="left", vertical="center")
+
+    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[2].height = 25
+    ws.row_dimensions[3].height = 25
+    ws.row_dimensions[4].height = 20
+    ws.row_dimensions[5].height = 20
+    ws.row_dimensions[6].height = 10  # spacer
+
+    # ── Encabezados de tabla ──────────────────────────────────────────
+    HDR_ROW = 7
+    COLS = ["Id", "Artículo", "Unidad", "Entradas totales", "Consumido", "Disponible"]
+    COL_WIDTHS = [12, 38, 12, 18, 14, 14]
+
+    for i, (h, w) in enumerate(zip(COLS, COL_WIDTHS), start=1):
+        c = ws.cell(row=HDR_ROW, column=i, value=h)
+        c.font      = th_font
+        c.fill      = th_fill
+        c.alignment = center
+        c.border    = border_th
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    ws.row_dimensions[HDR_ROW].height = 26
+    ws.freeze_panes = f"A{HDR_ROW + 1}"
+
+    # ── Filas de datos ────────────────────────────────────────────────
+    r = HDR_ROW + 1
+    total_entradas  = Decimal('0')
+    total_consumido = Decimal('0')
+    total_disponible = Decimal('0')
+
+    for idx, row in enumerate(rows):
+        alt     = (idx % 2 == 1)
+        fill    = row_fill_alt if alt else None
+        stock   = row['stock']
+        ent     = row['total']
+        cons    = row['consumido']
+
+        values = [
+            row['articulo__sku'],
+            row['articulo__name'],
+            row['articulo__unit'],
+            float(ent),
+            float(cons),
+            float(stock),
+        ]
+        for col, val in enumerate(values, start=1):
+            cell = ws.cell(row=r, column=col, value=val)
+            cell.border    = border_cell
+            cell.alignment = center if col != 2 else left
+            if fill:
+                cell.fill = fill
+
+            if col == 1:
+                cell.font = gray_font
+            elif col == 2:
+                cell.font = bold_navy
+            elif col == 6:
+                cell.font = ok_font if stock > 0 else zero_font
+            else:
+                cell.font = normal_font
+
+        ws.row_dimensions[r].height = 20
+        total_entradas   += ent
+        total_consumido  += cons
+        total_disponible += stock
+        r += 1
+
+    # ── Fila de totales ───────────────────────────────────────────────
+    if rows:
+        ws.row_dimensions[r].height = 22
+        ws.cell(row=r, column=1, value="TOTAL").font = Font(name='Calibri', size=11, bold=True, color=WHITE)
+        ws.cell(row=r, column=1).fill = PatternFill("solid", fgColor=NAVY)
+        ws.cell(row=r, column=1).alignment = center
+
+        ws.cell(row=r, column=2, value="").fill = PatternFill("solid", fgColor=NAVY)
+        ws.cell(row=r, column=3, value="").fill = PatternFill("solid", fgColor=NAVY)
+
+        for col, val in [(4, float(total_entradas)), (5, float(total_consumido)), (6, float(total_disponible))]:
+            cell      = ws.cell(row=r, column=col, value=val)
+            cell.font = Font(name='Calibri', size=11, bold=True, color=WHITE)
+            cell.fill = PatternFill("solid", fgColor=NAVY)
+            cell.alignment = center
+            cell.border    = border_bot
+        r += 1
+
+    # ── Pie de página ─────────────────────────────────────────────────
+    
+
+    # ── Respuesta HTTP ────────────────────────────────────────────────
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    from django.utils.text import slugify
+    filename = f"inventario_{slugify(empresa)}_{_date.today().strftime('%Y%m%d')}.xlsx"
+    resp = HttpResponse(
+        buf.read(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return resp
 
 
 # ─────────────────────────────────────────────

@@ -24,6 +24,7 @@
     .btn-blue   { background:#1d4ed8; }
     .btn-amber  { background:#b45309; }
     .btn-gray   { background:#6b7280; }
+    .btn-excel  { background:#166534; }
 
     /* Selector empresa */
     .selector-card {
@@ -73,6 +74,9 @@
     <a href="{% url 'remision_new' %}?empresa={{ empresa|urlencode }}" class="btn btn-green">+ Remisión</a>
   {% endif %}
   <a href="{% url 'inventario_inicial' %}{% if empresa %}?empresa={{ empresa|urlencode }}{% endif %}" class="btn btn-gray">📋 Inventario inicial</a>
+  {% if empresa %}
+    <a href="{% url 'almacen_reporte_xlsx' %}?empresa={{ empresa|urlencode }}" class="btn btn-excel">⬇ Descargar Excel</a>
+  {% endif %}
   {% if perms.empaques.add_inventoryitem %}
     <a href="{% url 'almacen_item_new' %}" class="btn btn-gray">+ Artículo</a>
   {% endif %}
