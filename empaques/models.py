@@ -67,6 +67,7 @@ class Shipment(models.Model):
     order_gh       = models.CharField("Núm. orden GH Farms", max_length=50, blank=True, null=True)
     order_dhg       = models.CharField("Núm. orden AGRICOLA DH & G", max_length=50, blank=True, null=True)
     order_dhg_gonzalo       = models.CharField("Núm. orden AGRICOLA DH&G GONZALO", max_length=50, blank=True, null=True)
+    order_dhg_cruces        = models.CharField("Núm. orden AGRICOLA DH&G CRUCES",  max_length=50, blank=True, null=True)
     date = models.DateField(verbose_name="Fecha")  
     carrier = models.CharField(max_length=50, verbose_name="Transportista", blank=True)
     tractor_plates = models.CharField(max_length=20, verbose_name="Placas tractor", blank=True)
@@ -129,6 +130,7 @@ CLIENTE_CHOICES = [
     ('GBF Farms', 'GBF Farms'),
     ('AGRICOLA DH & G', 'AGRICOLA DH & G'),
     ("AGRICOLA DH&G GONZALO", "AGRICOLA DH&G GONZALO"),
+    ("AGRICOLA DH&G CRUCES",  "AGRICOLA DH&G CRUCES"),
 
 ]
 class ShipmentItem(models.Model):

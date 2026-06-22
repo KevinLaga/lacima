@@ -170,8 +170,13 @@ COMPANY_CANON = {
     'agricola dh & g gonzalo': 'AGRICOLA DH&G GONZALO',
     'agricola gonzalo': 'AGRICOLA DH&G GONZALO',
     'gonzalo': 'AGRICOLA DH&G GONZALO',
+    'AGRICOLA DH&G CRUCES': 'AGRICOLA DH&G CRUCES',
+    'agricola dh&g cruces': 'AGRICOLA DH&G CRUCES',
+    'agricola dh & g cruces': 'AGRICOLA DH&G CRUCES',
+    'agricola cruces': 'AGRICOLA DH&G CRUCES',
+    'cruces': 'AGRICOLA DH&G CRUCES',
 }
-COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO']
+COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO', 'AGRICOLA DH&G CRUCES']
 DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
 
 import unicodedata
@@ -757,9 +762,12 @@ def _client_order_for(shipment, company_label):
     if "gbf" in lbl:
         return getattr(shipment, "order_gbf", None)
 
-    # IMPORTANTE: Gonzalo primero, porque también contiene "agricola"
+    # IMPORTANTE: variantes específicas primero (gonzalo y cruces), luego el genérico
     if "gonzalo" in lbl:
         return getattr(shipment, "order_dhg_gonzalo", None)
+
+    if "cruces" in lbl:
+        return getattr(shipment, "order_dhg_cruces", None)
 
     if "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
         return getattr(shipment, "order_dhg", None)
@@ -1514,7 +1522,7 @@ def production_today(request):
         "rows": rows,
         "ship_cols_labels": ship_cols,
         "empresa": empresa,
-        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH & G GONZALO"],
+        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH&G GONZALO", "AGRICOLA DH&G CRUCES"],
 
         # Bloque inferior
         "exist_piso_ayer": exist_piso_ayer,
@@ -1588,7 +1596,8 @@ def production_xlsx(request, prod_date):
         "GOURMET": "Gourmet Baja Farms S. DE R.L. DE C.V.",
         "GBF":     "GBF Farms S. DE R.L. DE C.V.",
         "AGRICOLA DH & G": "AGRICOLA DH & G",
-        "AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO"
+        "AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO",
+        "AGRICOLA DH&G CRUCES": "AGRICOLA DH&G CRUCES",
     }
     LOGO_SLUG = {
         "LACIMA":  "la-cima-produce",
@@ -1596,8 +1605,9 @@ def production_xlsx(request, prod_date):
         "GH":      "gh-farms",
         "GOURMET": "gourmet-baja-farms",
         "GBF":     "gbf-farms",
-        "AGRICOLA DH & G": "agricola",
-        "AGRICOLA DH&G GONZALO": "agricola"
+        "AGRICOLA DH & G": "AGRICOLA",
+        "AGRICOLA DH&G GONZALO": "AGRICOLA",
+        "AGRICOLA DH&G CRUCES": "AGRICOLA",
     }
     legal_name = LEGAL_COMPANY.get(empresa, empresa)
     logo_slug  = LOGO_SLUG.get(empresa)
@@ -2869,9 +2879,12 @@ def shipment_list(request):
                 if "gbf" in cname:
                     return getattr(embarque, "order_gbf", None)
 
-                # IMPORTANTE: Gonzalo primero
+                # IMPORTANTE: variantes específicas primero (gonzalo y cruces), luego el genérico
                 if "gonzalo" in cname:
                     return getattr(embarque, "order_dhg_gonzalo", None)
+
+                if "cruces" in cname:
+                    return getattr(embarque, "order_dhg_cruces", None)
 
                 if "agricola" in cname or "dhg" in cname or "dh&g" in cname or "dh & g" in cname:
                     return getattr(embarque, "order_dhg", None)
@@ -3331,6 +3344,10 @@ def shipment_list(request):
                 return getattr(embarque, "order_gourmet", None)
             if "gbf" in cname:
                 return getattr(embarque, "order_gbf", None)
+            if "gonzalo" in cname:
+                return getattr(embarque, "order_dhg_gonzalo", None)
+            if "cruces" in cname:
+                return getattr(embarque, "order_dhg_cruces", None)
             if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
                 return getattr(embarque, "order_dhg", None)
             return None

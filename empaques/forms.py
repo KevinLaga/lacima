@@ -51,6 +51,7 @@ class ShipmentForm(forms.ModelForm):
     order_gh      = forms.CharField(label='Núm. orden GH Farms',      required=False)
     order_dhg      = forms.CharField(label='Núm. orden AGRICOLA DH & G', required=False)
     order_dhg_gonzalo      = forms.CharField(label='Núm. orden AGRICOLA DH & G GONZALO', required=False)
+    order_dhg_cruces       = forms.CharField(label='Núm. orden AGRICOLA DH&G CRUCES',   required=False)
 
     class Meta:
         model = Shipment
@@ -61,7 +62,7 @@ class ShipmentForm(forms.ModelForm):
             'delivery_signature','driver_signature','invoice_number','tarimas_peco', "is_national",
 
 
-            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg','order_dhg_gonzalo',
+            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg','order_dhg_gonzalo','order_dhg_cruces',
         ]
         widgets = {
             "is_national": forms.CheckboxInput(attrs={"id":"id_is_national"})
@@ -74,6 +75,7 @@ class ShipmentForm(forms.ModelForm):
             'order_gh':      'Núm. orden GH Farms',
             'order_dhg':      'Núm. orden AGRICOLA DH & G',
             'order_dhg_gonzalo':      'Núm. orden AGRICOLA DH & G GONZALO',
+            'order_dhg_cruces':       'Núm. orden AGRICOLA DH&G CRUCES',
 
             "is_national": "Nacional",
         }
@@ -88,6 +90,7 @@ CLIENTE_CHOICES = [
     ('GBF Farms', 'GBF Farms'),
     ('AGRICOLA DH & G', 'AGRICOLA DH & G'),
     ("AGRICOLA DH&G GONZALO", "AGRICOLA DH&G GONZALO"),
+    ("AGRICOLA DH&G CRUCES",  "AGRICOLA DH&G CRUCES"),
 ]
 
 class ShipmentItemForm(ModelForm):
