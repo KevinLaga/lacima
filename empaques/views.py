@@ -4763,7 +4763,7 @@ def daily_report(request, shipment_id=None):
 
     # ---- HTML normal -----
 
-    # Agrupar ítems por shipment → tarima, crear pares para el grid tipo Excel
+    # Agrupar ítems por shipment → tarima (lista ordenada)
     shipments_data = []
     for s in qs:
         tarimas = {}
@@ -4775,35 +4775,24 @@ def daily_report(request, shipment_id=None):
             t = item.tarima or 1
             tarimas.setdefault(t, []).append(item)
 
-        # Temperatura por tarima (primer valor no vacío)
-        def _temp(t_n):
-            for it in tarimas.get(t_n, []):
+        # Lista ordenada: [{'num': n, 'items': [...], 'temp': '36.0°F'}, ...]
+        tarima_list = []
+        for t_num in sorted(tarimas.keys()):
+            items = tarimas[t_num]
+            temp = ''
+            for it in items:
                 if it.temperatura not in (None, ''):
                     try:
-                        return f"{float(it.temperatura):.1f}°F"
+                        temp = f"{float(it.temperatura):.1f}°F"
                     except Exception:
-                        return str(it.temperatura)
-            return ''
-
-        # Pares: [(num_izq, items_izq, temp_izq, num_der, items_der, temp_der), ...]
-        sorted_keys = sorted(tarimas.keys())
-        pairs = []
-        for i in range(0, len(sorted_keys), 2):
-            n_l = sorted_keys[i]
-            n_r = sorted_keys[i + 1] if i + 1 < len(sorted_keys) else None
-            pairs.append({
-                'num_l':   n_l,
-                'items_l': tarimas[n_l][:4],
-                'temp_l':  _temp(n_l),
-                'num_r':   n_r,
-                'items_r': tarimas[n_r][:4] if n_r else [],
-                'temp_r':  _temp(n_r) if n_r else '',
-            })
+                        temp = str(it.temperatura)
+                    break
+            tarima_list.append({'num': t_num, 'items': items, 'temp': temp})
 
         shipments_data.append({
-            'shipment': s,
-            'pairs':    pairs,
-            'has_items': bool(tarimas),
+            'shipment':    s,
+            'tarimas':     tarima_list,
+            'has_items':   bool(tarimas),
         })
 
     return render(request, 'empaques/daily_report.html', {

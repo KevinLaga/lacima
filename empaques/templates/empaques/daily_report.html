@@ -14,6 +14,7 @@
       color: #1a2535;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       font-size: 13px;
+      line-height: 1.4;
     }
 
     /* ── Topbar ── */
@@ -27,64 +28,76 @@
       position: sticky;
       top: 0;
       z-index: 50;
-      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+      box-shadow: 0 2px 8px rgba(0,0,0,.22);
     }
     .topbar a    { color: #fff; text-decoration: none; font-size: 14px; font-weight: 600; }
     .topbar .sep { color: #4a7fa5; font-size: 18px; font-weight: 300; }
-    .topbar .date { color: #93c5fd; font-size: 13px; }
-    .topbar-space { flex: 1; }
+    .topbar .date-badge {
+      background: rgba(255,255,255,.12);
+      color: #dbeafe;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 3px 12px;
+      border-radius: 20px;
+      letter-spacing: .2px;
+    }
 
-    /* ── Controls strip ── */
+    /* ── Controls ── */
     .controls {
       background: #fff;
       border-bottom: 1px solid #dce6f0;
       padding: 10px 24px;
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
     }
     .ctrl-group { display: flex; align-items: center; gap: 6px; }
     .ctrl-sep   { width: 1px; height: 26px; background: #dce6f0; }
-    .lbl        { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #7a9bbb; }
+    .lbl        { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #8aaac8; }
 
     input[type="date"], input[type="text"] {
       border: 1.5px solid #c8d8ec; border-radius: 6px;
       padding: 5px 10px; font-size: 13px; color: #1a2535;
-      background: #f8fafc; outline: none; transition: border-color .15s;
+      background: #f8fafc; outline: none;
     }
-    input:focus { border-color: #1e3a5f; background: #fff; }
+    input[type="date"]:focus, input[type="text"]:focus { border-color: #1e3a5f; }
     input[type="date"] { width: 145px; }
-    input[type="text"] { width: 190px; }
+    input[type="text"] { width: 185px; }
 
     .btn {
       display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 13px; border-radius: 6px; font-size: 12px;
-      font-weight: 600; cursor: pointer; text-decoration: none;
-      border: 1.5px solid transparent; white-space: nowrap; transition: opacity .15s;
+      padding: 5px 13px; border-radius: 6px;
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; text-decoration: none;
+      border: 1.5px solid transparent; white-space: nowrap;
+      transition: opacity .15s;
     }
     .btn:hover { opacity: .82; }
     .btn-primary { background: #1e3a5f; color: #fff; }
     .btn-ghost   { background: #f0f4f8; border-color: #c8d8ec; color: #3d5a78; }
-    .btn-link    { background: none; color: #3d5a78; border-color: #c8d8ec; }
+    .btn-link    { background: none; border-color: #c8d8ec; color: #5a7a9a; }
 
     .tabs { display: flex; border: 1.5px solid #c8d8ec; border-radius: 7px; overflow: hidden; }
     .tab  {
-      padding: 5px 14px; font-size: 12px; font-weight: 600; color: #5a7a9a;
-      text-decoration: none; background: #f8fafc; transition: background .12s, color .12s; white-space: nowrap;
+      padding: 5px 14px; font-size: 12px; font-weight: 600;
+      color: #5a7a9a; text-decoration: none; background: #f8fafc;
+      transition: background .12s, color .12s; white-space: nowrap;
     }
-    .tab + .tab { border-left: 1.5px solid #c8d8ec; }
-    .tab.active { background: #1e3a5f; color: #fff; }
+    .tab + .tab  { border-left: 1.5px solid #c8d8ec; }
+    .tab.active  { background: #1e3a5f; color: #fff; }
 
     /* ── Downloads ── */
     .downloads {
       background: #fff; border-bottom: 1px solid #dce6f0;
-      padding: 8px 24px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 8px 24px;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
     }
-    .dl-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #7a9bbb; }
+    .dl-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #8aaac8; }
     .btn-dl {
       display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: 11px; font-weight: 700;
       text-decoration: none; border: 1.5px solid;
       transition: opacity .15s, transform .1s; white-space: nowrap;
     }
@@ -94,147 +107,212 @@
     .dl-dot     { width: 7px; height: 7px; border-radius: 50%; background: var(--co,#c8d8ec); flex-shrink: 0; }
 
     /* ── Page ── */
-    .page { padding: 20px 24px 40px; }
+    .page { padding: 20px 24px 48px; max-width: 1100px; margin: 0 auto; }
 
-    /* ── Shipment block ── */
-    .ship-block { margin-bottom: 28px; }
+    /* ── Shipment card ── */
+    .ship-card {
+      background: #fff;
+      border: 1px solid #d4e0f0;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.06);
+    }
 
     .ship-head {
-      background: #1e3a5f; color: #fff; padding: 9px 16px;
-      border-radius: 8px 8px 0 0;
-      display: flex; align-items: center; gap: 12px;
+      background: #1e3a5f;
+      padding: 10px 18px;
+      display: flex; align-items: center; gap: 10px;
     }
-    .ship-num  { font-size: 14px; font-weight: 800; letter-spacing: .3px; }
+    .ship-num  { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: .3px; }
     .ship-pill {
       font-size: 11px; font-weight: 600; padding: 2px 9px;
-      border-radius: 20px; background: rgba(255,255,255,.15); color: #c5daf5; white-space: nowrap;
+      border-radius: 20px; background: rgba(255,255,255,.15);
+      color: #bdd6f5; white-space: nowrap;
     }
     .ship-space { flex: 1; }
 
     /* ── Tarima table ── */
-    .tarima-wrap {
-      background: #fff;
-      border: 1px solid #c8d8ec;
-      border-top: none;
-      border-radius: 0 0 8px 8px;
-      overflow-x: auto;
-    }
+    .tbl-wrap { overflow-x: auto; }
 
-    /*
-      13 columns:
-      [num-l] [pres0] [qty0] [pres1] [qty1] [temp-l] | [div] | [num-r] [pres0] [qty0] [pres1] [qty1] [temp-r]
-    */
-    table.ttbl {
+    table.tbl {
+      width: 100%;
       border-collapse: collapse;
-      min-width: 640px;
     }
-    .ttbl col.cn   { width: 38px; }
-    .ttbl col.cp   { width: 160px; }
-    .ttbl col.cq   { width: 48px; }
-    .ttbl col.ct   { width: 64px; }
-    .ttbl col.cdiv { width: 10px; }
 
-    /* Header row */
-    .ttbl thead th {
-      background: #1e3a5f;
-      color: #fff;
+    .tbl thead th {
+      background: #eef4fb;
+      color: #2a4a7a;
       font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .5px;
-      padding: 8px 10px;
-      text-align: center;
-      border: 1px solid #2a5080;
+      padding: 8px 14px;
+      border-bottom: 2px solid #c8d8ec;
       white-space: nowrap;
     }
-    .ttbl thead .th-div { background: #f0f4f8; border: none; }
-    .ttbl thead .th-sub {
-      background: #2a5080;
-      font-size: 10px;
-      letter-spacing: .3px;
-      font-weight: 600;
-      color: #93c5fd;
-      padding: 5px 8px;
+    .tbl thead th.right { text-align: right; }
+    .tbl thead th.center { text-align: center; }
+
+    .tbl tbody tr { border-bottom: 1px solid #eef3fa; }
+    .tbl tbody tr:last-child { border-bottom: none; }
+    .tbl tbody tr:hover td { background: #f7fafd; }
+
+    /* Tarima group separator */
+    .tbl tbody tr.tarima-first td {
+      border-top: 2px solid #dce6f0;
+      padding-top: 10px;
+    }
+    .tbl tbody tr.tarima-first:first-child td {
+      border-top: none;
     }
 
-    /* Data cells */
-    .ttbl td {
-      border: 1px solid #dce6f0;
-      vertical-align: middle;
-      padding: 0;
-    }
-
-    /* Número de tarima */
-    .td-num {
+    /* Tarima number cell */
+    .td-tarima {
       text-align: center;
-      font-size: 17px;
+      vertical-align: middle;
+      font-size: 22px;
       font-weight: 800;
       color: #1e3a5f;
-      background: #eef4fb;
-      padding: 6px 4px;
-      border-right: 2px solid #b0c8e4 !important;
-      letter-spacing: -.5px;
+      padding: 8px 10px;
+      width: 52px;
+      border-right: 2px solid #dce6f0;
     }
-    .td-num.right { border-right: 1px solid #dce6f0 !important; border-left: 2px solid #b0c8e4 !important; }
-    .td-num.empty { color: #c8d8ec; background: #fafcfe; }
-
-    /* Presentación */
-    .td-pres {
-      padding: 6px 9px;
-      background: #fff;
-      border-right: 1px dashed #d0e0f0 !important;
+    .td-tarima-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #8aaac8;
+      display: block;
+      line-height: 1;
+      margin-bottom: 2px;
     }
-    .td-pres .pn { font-size: 12px; font-weight: 700; color: #1a2535; line-height: 1.2; }
-    .td-pres .ps { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: #6a8caa; }
-    .td-pres.empty { background: #fafcfe; }
-    /* Client color stripe on left edge */
-    .td-pres.co { border-left: 3px solid var(--co,#c8d8ec) !important; }
-
-    /* Cantidad */
-    .td-qty {
+    .td-temp-cell {
       text-align: center;
-      font-size: 17px;
-      font-weight: 800;
-      color: #1e4d8c;
-      background: #f5f8ff;
-      padding: 4px 6px;
-      font-variant-numeric: tabular-nums;
-      border-right: 2px solid #b0c8e4 !important;
+      vertical-align: middle;
+      padding: 8px 6px;
+      width: 64px;
+      border-right: 2px solid #dce6f0;
     }
-    .td-qty.right { border-right: 1px solid #dce6f0 !important; border-left: 1px dashed #d0e0f0 !important; }
-    .td-qty.empty { color: #d0dff0; background: #fafcfe; font-size: 12px; font-weight: 400; }
-
-    /* Temperatura */
-    .td-temp {
-      text-align: center;
+    .temp-badge {
+      display: inline-block;
+      background: #e0eeff;
+      color: #1a5a9a;
       font-size: 11px;
       font-weight: 700;
-      color: #1a5a9a;
-      background: #e8f2ff;
-      padding: 4px 3px;
+      padding: 3px 8px;
+      border-radius: 6px;
       white-space: nowrap;
-      border-left: 2px solid #b0c8e4 !important;
-    }
-    .td-temp.empty { color: #c8d8ec; background: #fafcfe; }
-
-    /* Divisor central */
-    .td-div {
-      background: #e8eef5;
-      border-left: 2px solid #b0c8e4 !important;
-      border-right: 2px solid #b0c8e4 !important;
-      padding: 0;
     }
 
-    /* ── Totales ── */
-    .totals-row {
-      background: #1e3a5f; border-radius: 8px;
-      padding: 14px 24px; display: flex; gap: 0;
-      margin-top: 8px; overflow: hidden;
+    /* Empty tarima num (subsequent rows in same tarima) */
+    .td-blank {
+      border-right: 2px solid #dce6f0;
+      background: #fafcfe;
+    }
+
+    /* Client cell */
+    td.td-cliente {
+      padding: 9px 14px;
+      white-space: nowrap;
+    }
+    .co-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--co,#5a7a9a) 12%, #fff);
+      border: 1px solid color-mix(in srgb, var(--co,#5a7a9a) 30%, #fff);
+      font-size: 11px;
+      font-weight: 700;
+      color: color-mix(in srgb, var(--co,#5a7a9a) 90%, #000);
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .co-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--co,#5a7a9a);
+      flex-shrink: 0;
+    }
+
+    td.td-pres {
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1a2535;
+    }
+
+    td.td-size {
+      padding: 9px 10px;
+    }
+    .size-chip {
+      display: inline-block;
+      background: #f0f4f8;
+      color: #4a6a8a;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      padding: 3px 8px;
+      border-radius: 5px;
+      border: 1px solid #dce6f0;
+      white-space: nowrap;
+    }
+
+    td.td-qty {
+      text-align: right;
+      padding: 9px 16px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #1e4d8c;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    td.td-qty .unit {
+      font-size: 10px;
+      font-weight: 600;
+      color: #8aaac8;
+      margin-left: 2px;
+    }
+
+    td.td-eq {
+      text-align: right;
+      padding: 9px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #4a6a8a;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Totals footer row inside table */
+    .tbl tfoot tr { background: #eef4fb; border-top: 2px solid #c8d8ec; }
+    .tbl tfoot td {
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #1e3a5f;
+    }
+    .tbl tfoot td.right { text-align: right; font-size: 16px; color: #1e4d8c; }
+    .tbl tfoot td.lbl-right { text-align: right; color: #4a6a8a; font-size: 12px; }
+
+    /* ── Global totals bar ── */
+    .totals-bar {
+      background: #1e3a5f;
+      border-radius: 10px;
+      padding: 16px 28px;
+      display: flex;
+      gap: 0;
+      margin-top: 4px;
     }
     .tot-item { flex: 1; text-align: center; padding: 0 20px; }
     .tot-item + .tot-item { border-left: 1px solid #2a5080; }
     .tot-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #7aabdc; margin-bottom: 4px; }
-    .tot-val   { font-size: 26px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+    .tot-val   { font-size: 28px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
     .tot-val.amber { color: #f5a623; }
 
     .empty-msg { text-align: center; padding: 60px 20px; color: #8aabcc; font-size: 15px; }
@@ -247,9 +325,8 @@
 <div class="topbar">
   <a href="{% url 'shipment_list' %}">← Embarques</a>
   <span class="sep">/</span>
-  <span>Reporte del día</span>
-  <span class="sep">/</span>
-  <span class="date">{{ report_date }}</span>
+  <span style="color:#fff;font-weight:600">Reporte del día</span>
+  <span class="date-badge">{{ report_date }}</span>
 </div>
 
 <!-- ── Controls ── -->
@@ -265,9 +342,9 @@
 
   <form method="get" action="{% url 'daily_report' %}" class="ctrl-group">
     {% if request.GET.mode %}<input type="hidden" name="mode" value="{{ request.GET.mode }}">{% endif %}
-    <span class="lbl">Embarque</span>
-    <input type="text" name="tracking" placeholder="N° de embarque…" value="{{ request.GET.tracking }}">
-    <button type="submit" class="btn btn-ghost">Buscar</button>
+    <span class="lbl">N° embarque</span>
+    <input type="text" name="tracking" placeholder="Buscar…" value="{{ request.GET.tracking }}">
+    <button type="submit" class="btn btn-ghost">Ir</button>
     {% if request.GET.tracking or request.GET.shipment_id %}
       <a href="{% url 'daily_report' %}?date={{ report_date|date:'Y-m-d' }}" class="btn btn-link">✕ Limpiar</a>
     {% endif %}
@@ -304,147 +381,74 @@
 <div class="page">
 
 {% for sd in shipments_data %}{% if sd.has_items %}
-<div class="ship-block">
+<div class="ship-card">
 
-  <!-- Encabezado del embarque -->
   <div class="ship-head">
     <span class="ship-num">{{ sd.shipment.tracking_number }}</span>
     {% if sd.shipment.invoice_number %}<span class="ship-pill">Factura {{ sd.shipment.invoice_number }}</span>{% endif %}
-    {% if sd.shipment.carrier %}<span class="ship-pill">{{ sd.shipment.carrier }}</span>{% endif %}
-    {% if sd.shipment.driver %}<span class="ship-pill">{{ sd.shipment.driver }}</span>{% endif %}
+    {% if sd.shipment.carrier       %}<span class="ship-pill">{{ sd.shipment.carrier }}</span>{% endif %}
+    {% if sd.shipment.driver        %}<span class="ship-pill">{{ sd.shipment.driver }}</span>{% endif %}
     <span class="ship-space"></span>
     {% if sd.shipment.departure_time %}<span class="ship-pill">{{ sd.shipment.departure_time }}</span>{% endif %}
   </div>
 
-  <!-- Grid de tarimas (espejo del Excel) -->
-  <div class="tarima-wrap">
-    <table class="ttbl">
-      <colgroup>
-        <col class="cn">               {# Núm izq #}
-        <col class="cp"><col class="cq"> {# slot 0 izq #}
-        <col class="cp"><col class="cq"> {# slot 1 izq #}
-        <col class="ct">               {# Temp izq #}
-        <col class="cdiv">             {# Divisor #}
-        <col class="cn">               {# Núm der #}
-        <col class="cp"><col class="cq"> {# slot 0 der #}
-        <col class="cp"><col class="cq"> {# slot 1 der #}
-        <col class="ct">               {# Temp der #}
-      </colgroup>
+  <div class="tbl-wrap">
+    <table class="tbl">
       <thead>
         <tr>
-          <th>#</th>
-          <th colspan="4">TARIMA — IZQUIERDA</th>
-          <th>TEMP</th>
-          <th class="th-div"></th>
-          <th>#</th>
-          <th colspan="4">TARIMA — DERECHA</th>
-          <th>TEMP</th>
-        </tr>
-        <tr>
-          <th class="th-sub"></th>
-          <th class="th-sub">Presentación</th><th class="th-sub">Cjas</th>
-          <th class="th-sub">Presentación</th><th class="th-sub">Cjas</th>
-          <th class="th-sub"></th>
-          <th class="th-div"></th>
-          <th class="th-sub"></th>
-          <th class="th-sub">Presentación</th><th class="th-sub">Cjas</th>
-          <th class="th-sub">Presentación</th><th class="th-sub">Cjas</th>
-          <th class="th-sub"></th>
+          <th class="center" style="width:52px">Tarima</th>
+          <th class="center" style="width:64px">Temp.</th>
+          <th>Empresa</th>
+          <th>Presentación</th>
+          <th>Tamaño</th>
+          <th class="right">Cantidad</th>
+          <th class="right">Equiv. 11 lbs</th>
         </tr>
       </thead>
       <tbody>
+        {% for tar in sd.tarimas %}
+          {% for item in tar.items %}
+            <tr class="{% if forloop.first %}tarima-first{% endif %}">
 
-      {% for pair in sd.pairs %}
+              {# Tarima number — only on first item of group #}
+              {% if forloop.first %}
+                <td class="td-tarima" rowspan="{{ tar.items|length }}">
+                  <span class="td-tarima-label">Tar.</span>{{ tar.num }}
+                </td>
+                <td class="td-temp-cell" rowspan="{{ tar.items|length }}">
+                  {% if tar.temp %}<span class="temp-badge">{{ tar.temp }}</span>{% endif %}
+                </td>
+              {% endif %}
 
-        {# ── Fila superior (slots 0 y 1) ── #}
-        <tr>
-          {# Número izquierdo — rowspan 2 #}
-          <td class="td-num" rowspan="2">{{ pair.num_l }}</td>
+              <td class="td-cliente">
+                <span class="co-badge" data-cliente="{{ item.cliente }}">
+                  <span class="co-dot"></span>{{ item.cliente|default:"—" }}
+                </span>
+              </td>
 
-          {# Slot izq 0 #}
-          {% with it=pair.items_l.0 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty empty">—</td>
-          {% endif %}{% endwith %}
+              <td class="td-pres">{{ item.presentation.name }}</td>
 
-          {# Slot izq 1 #}
-          {% with it=pair.items_l.1 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty empty">—</td>
-          {% endif %}{% endwith %}
+              <td class="td-size">
+                <span class="size-chip">{{ item.size }}</span>
+              </td>
 
-          {# Temperatura izq — rowspan 2 #}
-          <td class="td-temp{% if not pair.temp_l %} empty{% endif %}" rowspan="2">{{ pair.temp_l }}</td>
+              <td class="td-qty">
+                {{ item.quantity }}<span class="unit">cjas</span>
+              </td>
 
-          {# Divisor — rowspan 2 #}
-          <td class="td-div" rowspan="2"></td>
+              <td class="td-eq">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
 
-          {# Número derecho — rowspan 2 #}
-          {% if pair.num_r %}<td class="td-num right" rowspan="2">{{ pair.num_r }}</td>
-          {% else %}           <td class="td-num empty right" rowspan="2"></td>{% endif %}
-
-          {# Slot der 0 #}
-          {% with it=pair.items_r.0 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty right">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty right empty">—</td>
-          {% endif %}{% endwith %}
-
-          {# Slot der 1 #}
-          {% with it=pair.items_r.1 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty right">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty right empty">—</td>
-          {% endif %}{% endwith %}
-
-          {# Temperatura der — rowspan 2 #}
-          <td class="td-temp{% if not pair.temp_r %} empty{% endif %}" rowspan="2">{{ pair.temp_r }}</td>
-        </tr>
-
-        {# ── Fila inferior (slots 2 y 3) ── #}
-        <tr>
-          {# Slot izq 2 #}
-          {% with it=pair.items_l.2 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty empty">—</td>
-          {% endif %}{% endwith %}
-
-          {# Slot izq 3 #}
-          {% with it=pair.items_l.3 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty empty">—</td>
-          {% endif %}{% endwith %}
-
-          {# Slot der 2 #}
-          {% with it=pair.items_r.2 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty right">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty right empty">—</td>
-          {% endif %}{% endwith %}
-
-          {# Slot der 3 #}
-          {% with it=pair.items_r.3 %}{% if it %}
-            <td class="td-pres co" data-cliente="{{ it.cliente }}"><div class="pn">{{ it.presentation.name }}</div><span class="ps">{{ it.size }}</span></td>
-            <td class="td-qty right">{{ it.quantity }}</td>
-          {% else %}
-            <td class="td-pres empty"></td><td class="td-qty right empty">—</td>
-          {% endif %}{% endwith %}
-        </tr>
-
-      {% endfor %}
-
+            </tr>
+          {% endfor %}
+        {% endfor %}
       </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5" class="lbl-right">TOTALES DEL EMBARQUE</td>
+          <td class="right">{{ sd.shipment.total_boxes }}</td>
+          <td class="right">—</td>
+        </tr>
+      </tfoot>
     </table>
   </div>
 
@@ -456,9 +460,9 @@
 </div>
 {% endfor %}
 
-<!-- ── Totales ── -->
+<!-- ── Totales generales ── -->
 {% if total_boxes %}
-<div class="totals-row">
+<div class="totals-bar">
   <div class="tot-item">
     <div class="tot-label">Total cajas</div>
     <div class="tot-val amber">{{ total_boxes }}</div>
@@ -477,7 +481,6 @@
 </div><!-- /page -->
 
 <script>
-/* Colores por empresa */
 const CO = {
   'La Cima Produce':       '#16a34a',
   'RC Organics':           '#0284c7',
