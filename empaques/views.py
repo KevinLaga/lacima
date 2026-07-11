@@ -4761,22 +4761,57 @@ def daily_report(request, shipment_id=None):
         return response
 
 
-    # ---- HTML normal ----- 
+    # ---- HTML normal -----
 
-
+    # Agrupar ítems por shipment → tarima, crear pares para el grid tipo Excel
+    shipments_data = []
     for s in qs:
-        for item in s.items.all():
+        tarimas = {}
+        for item in s.items.select_related('presentation').all():
             if not item_match_mode(item):
                 continue
             item.eq_11lbs_calc = (int(item.quantity or 0)) * float(item.presentation.conversion_factor)
             item.amount_calc   = (int(item.quantity or 0)) * float(item.presentation.price)
+            t = item.tarima or 1
+            tarimas.setdefault(t, []).append(item)
+
+        # Temperatura por tarima (primer valor no vacío)
+        def _temp(t_n):
+            for it in tarimas.get(t_n, []):
+                if it.temperatura not in (None, ''):
+                    try:
+                        return f"{float(it.temperatura):.1f}°F"
+                    except Exception:
+                        return str(it.temperatura)
+            return ''
+
+        # Pares: [(num_izq, items_izq, temp_izq, num_der, items_der, temp_der), ...]
+        sorted_keys = sorted(tarimas.keys())
+        pairs = []
+        for i in range(0, len(sorted_keys), 2):
+            n_l = sorted_keys[i]
+            n_r = sorted_keys[i + 1] if i + 1 < len(sorted_keys) else None
+            pairs.append({
+                'num_l':   n_l,
+                'items_l': tarimas[n_l][:4],
+                'temp_l':  _temp(n_l),
+                'num_r':   n_r,
+                'items_r': tarimas[n_r][:4] if n_r else [],
+                'temp_r':  _temp(n_r) if n_r else '',
+            })
+
+        shipments_data.append({
+            'shipment': s,
+            'pairs':    pairs,
+            'has_items': bool(tarimas),
+        })
 
     return render(request, 'empaques/daily_report.html', {
-        'report_date': report_date,
-        'shipments': qs,
-        'total_boxes': total_boxes,
+        'report_date':    report_date,
+        'shipments_data': shipments_data,
+        'total_boxes':    total_boxes,
         'total_eq_11lbs': total_eq_11lbs,
-        'total_amount': total_amount,
-        'clientes': clientes_slug,
-        'mode': mode,
+        'total_amount':   total_amount,
+        'clientes':       clientes_slug,
+        'mode':           mode,
     })
