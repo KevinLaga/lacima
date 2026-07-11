@@ -1,147 +1,631 @@
 {% load static %}
 {% if perms.empaques.view_shipment or perms.empaques.export_reports %}
 <!DOCTYPE html>
-<html>
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Reporte Diario – {{ report_date }}</title>
-  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --bg:        #0B1728;
+      --surface:   #12213A;
+      --s2:        #172A48;
+      --s3:        #1E3460;
+      --border:    #203558;
+      --border-2:  #2A4470;
+      --text:      #E1EAF5;
+      --muted:     #4E6B8C;
+      --muted-2:   #7A9BBF;
+      --accent:    #F5A623;
+      --accent-dim:#3D2E0A;
+      --green:     #22C55E;
+      --red:       #F87171;
+      --total-bg:  #1A3058;
+      --shadow:    0 2px 12px rgba(0,0,0,.45);
+      --radius:    10px;
+    }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        --bg:        #EEF3FA;
+        --surface:   #FFFFFF;
+        --s2:        #F5F8FD;
+        --s3:        #E4EDF8;
+        --border:    #C8D8EC;
+        --border-2:  #A8C0DC;
+        --text:      #0B1728;
+        --muted:     #6B8AAA;
+        --muted-2:   #4A688C;
+        --accent:    #C07A00;
+        --accent-dim:#FFF3D6;
+        --green:     #15803D;
+        --red:       #DC2626;
+        --total-bg:  #1E3A5F;
+        --shadow:    0 2px 12px rgba(11,23,40,.12);
+      }
+    }
+    :root[data-theme="light"] {
+      --bg:        #EEF3FA;
+      --surface:   #FFFFFF;
+      --s2:        #F5F8FD;
+      --s3:        #E4EDF8;
+      --border:    #C8D8EC;
+      --border-2:  #A8C0DC;
+      --text:      #0B1728;
+      --muted:     #6B8AAA;
+      --muted-2:   #4A688C;
+      --accent:    #C07A00;
+      --accent-dim:#FFF3D6;
+      --green:     #15803D;
+      --red:       #DC2626;
+      --total-bg:  #1E3A5F;
+      --shadow:    0 2px 12px rgba(11,23,40,.12);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+      line-height: 1.4;
+    }
+
+    /* ── Topbar ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 52px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: var(--shadow);
+    }
+    .topbar-brand {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      color: var(--muted-2);
+      white-space: nowrap;
+      text-decoration: none;
+    }
+    .topbar-sep { color: var(--border-2); font-size: 18px; }
+    .topbar-date {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .topbar-spacer { flex: 1; }
+
+    /* ── Controls ── */
+    .controls {
+      background: var(--s2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ctrl-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+    }
+    input[type="date"],
+    input[type="text"] {
+      background: var(--surface);
+      border: 1px solid var(--border-2);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 6px 10px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input[type="date"]:focus,
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="date"] { width: 148px; }
+    input[type="text"] { width: 200px; }
+
+    .btn-ctrl {
+      background: var(--s3);
+      border: 1px solid var(--border-2);
+      border-radius: 7px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .btn-ctrl:hover { background: var(--border-2); }
+    .btn-ctrl.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0B1728;
+    }
+    .btn-ctrl.primary:hover { opacity: .88; }
+
+    /* Mode tabs */
+    .mode-tabs { display: flex; gap: 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-2); }
+    .mode-tab {
+      background: var(--surface);
+      border: none;
+      color: var(--muted-2);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .12s, color .12s;
+      white-space: nowrap;
+    }
+    .mode-tab + .mode-tab { border-left: 1px solid var(--border-2); }
+    .mode-tab.active {
+      background: #1E3A5F;
+      color: #fff;
+    }
+
+    /* ── Download section ── */
+    .downloads {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .dl-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .btn-dl {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1.5px solid;
+      transition: opacity .15s, transform .1s;
+      white-space: nowrap;
+    }
+    .btn-dl:hover { opacity: .8; transform: translateY(-1px); }
+    .btn-dl-general {
+      background: #1E3A5F;
+      border-color: #2A5080;
+      color: #fff;
+    }
+    .btn-dl-client {
+      background: transparent;
+      border-color: var(--co, #4E6B8C);
+      color: var(--co, #7A9BBF);
+    }
+    .dl-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--co, #4E6B8C);
+      flex-shrink: 0;
+    }
+
+    /* ── Main content ── */
+    .page-body { padding: 20px; }
+
+    /* ── Shipment section ── */
+    .shipment-section { margin-bottom: 24px; }
+    .shipment-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius) var(--radius) 0 0;
+      border-bottom: 2px solid var(--border-2);
+    }
+    .sh-tracking {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: .3px;
+    }
+    .sh-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: var(--s3);
+      color: var(--muted-2);
+    }
+    .sh-spacer { flex: 1; }
+    .sh-count {
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Tiles grid ── */
+    .tiles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius) var(--radius);
+      overflow: hidden;
+    }
+
+    /* ── Tarima tile ── */
+    .tarima-tile {
+      background: var(--surface);
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      min-height: 140px;
+      position: relative;
+      transition: background .12s;
+    }
+    .tarima-tile:hover { background: var(--s2); }
+
+    .tile-top-bar {
+      height: 5px;
+      background: var(--co, #4E6B8C);
+      flex-shrink: 0;
+    }
+    .tile-body {
+      padding: 10px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+    .tile-tarima-num {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+    .tile-company {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: color-mix(in srgb, var(--co, #4E6B8C) 18%, transparent);
+      border: 1px solid color-mix(in srgb, var(--co, #4E6B8C) 35%, transparent);
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--co, var(--muted-2));
+      letter-spacing: .3px;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      align-self: flex-start;
+    }
+    .tile-co-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--co, #4E6B8C);
+      flex-shrink: 0;
+    }
+    .tile-presentation {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 2px;
+      line-height: 1.2;
+    }
+    .tile-size {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted-2);
+      background: var(--s3);
+      padding: 2px 7px;
+      border-radius: 4px;
+      align-self: flex-start;
+    }
+    .tile-footer {
+      margin-top: auto;
+      padding: 8px 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .tile-qty {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .tile-qty-label {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+    .tile-temp {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted-2);
+      background: var(--s3);
+      padding: 2px 7px;
+      border-radius: 5px;
+      white-space: nowrap;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+    .empty-state strong { display: block; font-size: 20px; margin-bottom: 6px; color: var(--muted-2); }
+
+    /* ── Totals bar ── */
+    .totals-bar {
+      background: var(--total-bg);
+      border: 1px solid #2A4A7F;
+      border-radius: var(--radius);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .total-item {
+      flex: 1;
+      text-align: center;
+      padding: 0 20px;
+    }
+    .total-item + .total-item {
+      border-left: 1px solid #2A4A7F;
+    }
+    .total-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .7px;
+      color: #7AABD4;
+      margin-bottom: 4px;
+    }
+    .total-val {
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .total-val.amber { color: var(--accent); }
+
+    /* ── Permission denied ── */
+    .perm-denied {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 60vh;
+      color: var(--muted);
+      font-size: 15px;
+    }
+  </style>
 </head>
 <body>
-  <h1>Reporte del {{ report_date }}</h1>
 
-  <!-- Filtro por fecha -->
-  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom:.5rem;">
-    <label for="id_date">Fecha:</label>
+<!-- ── Topbar ─────────────────────────────────────────────── -->
+<div class="topbar">
+  <a href="{% url 'shipment_list' %}" class="topbar-brand">← Embarques</a>
+  <span class="topbar-sep">/</span>
+  <span class="topbar-date">Reporte del {{ report_date }}</span>
+  <div class="topbar-spacer"></div>
+</div>
+
+<!-- ── Controls ───────────────────────────────────────────── -->
+<div class="controls">
+
+  <!-- Fecha -->
+  <form method="get" action="{% url 'daily_report' %}" class="ctrl-group">
+    {% if request.GET.mode %}<input type="hidden" name="mode" value="{{ request.GET.mode }}">{% endif %}
+    <label class="ctrl-label" for="id_date">Fecha</label>
     <input type="date" id="id_date" name="date" value="{{ report_date|date:'Y-m-d' }}">
-    <button type="submit">Ver</button>
-    <a href="{% url 'shipment_list' %}">Ver todo</a>
+    <button type="submit" class="btn-ctrl primary">Ver</button>
   </form>
 
-  <!-- Búsqueda por N° de embarque (tracking) -->
-  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom:1rem;">
-    <input type="text" name="tracking" placeholder="Buscar por N° de embarque..." value="{{ request.GET.tracking }}">
-    <button type="submit">Ir</button>
+  <!-- Búsqueda por tracking -->
+  <form method="get" action="{% url 'daily_report' %}" class="ctrl-group">
+    {% if request.GET.mode %}<input type="hidden" name="mode" value="{{ request.GET.mode }}">{% endif %}
+    <label class="ctrl-label" for="id_tracking">Embarque</label>
+    <input type="text" id="id_tracking" name="tracking" placeholder="N° de embarque…" value="{{ request.GET.tracking }}">
+    <button type="submit" class="btn-ctrl">Buscar</button>
     {% if request.GET.tracking or request.GET.shipment_id %}
-      <a href="{% url 'daily_report' %}?date={{ report_date|date:'Y-m-d' }}">Volver al día</a>
+      <a href="{% url 'daily_report' %}?date={{ report_date|date:'Y-m-d' }}" class="btn-ctrl">✕ Limpiar</a>
     {% endif %}
   </form>
-  <!-- Filtro producto (Espárrago / Arándano / Ambos) -->
-  <form method="get" action="{% url 'daily_report' %}" style="margin-bottom:1rem;">
-    {# preserva el contexto actual (shipment_id / tracking / date) #}
-    {% if request.GET.shipment_id %}
-      <input type="hidden" name="shipment_id" value="{{ request.GET.shipment_id }}">
-    {% elif request.GET.tracking %}
-      <input type="hidden" name="tracking" value="{{ request.GET.tracking }}">
-    {% else %}
-      <input type="hidden" name="date" value="{{ report_date|date:'Y-m-d' }}">
-    {% endif %}
 
-    <label for="id_mode">Producto:</label>
-    <select id="id_mode" name="mode">
-      <option value="esparrago" {% if request.GET.mode|default:"esparrago" == "esparrago" %}selected{% endif %}>Espárrago</option>
-      <option value="arandano"  {% if request.GET.mode == "arandano" %}selected{% endif %}>Arándano</option>
-      <option value="all"       {% if request.GET.mode == "all" %}selected{% endif %}>Ambos</option>
-    </select>
+  <!-- Modo producto -->
+  <div class="ctrl-group">
+    <span class="ctrl-label">Producto</span>
+    <div class="mode-tabs">
+      {% with sid=request.GET.shipment_id trk=request.GET.tracking dt=report_date|date:'Y-m-d' %}
+        {% with base="?mode=esparrago" %}
+          <a href="{% url 'daily_report' %}?mode=esparrago{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ dt }}{% endif %}"
+             class="mode-tab {% if mode == 'esparrago' or not mode %}active{% endif %}">Espárrago</a>
+          <a href="{% url 'daily_report' %}?mode=arandano{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ dt }}{% endif %}"
+             class="mode-tab {% if mode == 'arandano' %}active{% endif %}">Arándano</a>
+          <a href="{% url 'daily_report' %}?mode=all{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ dt }}{% endif %}"
+             class="mode-tab {% if mode == 'all' %}active{% endif %}">Ambos</a>
+        {% endwith %}
+      {% endwith %}
+    </div>
+  </div>
 
-    <button type="submit">Aplicar</button>
-  </form>
+</div>
 
-
- {% if perms.empaques.export_reports %}
-  <!-- Botones de descarga (propagan selección actual) -->
-  <p>
-    {% with sid=request.GET.shipment_id trk=request.GET.tracking md=request.GET.mode|default:"esparrago" %}
-      <a href="{% url 'daily_report' %}?format=xlsx&mode={{ md }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
-        <b>Descargar Excel General</b>
+<!-- ── Descargas ───────────────────────────────────────────── -->
+{% if perms.empaques.export_reports %}
+<div class="downloads">
+  <span class="dl-label">Descargar</span>
+  {% with sid=request.GET.shipment_id trk=request.GET.tracking md=request.GET.mode|default:"esparrago" dt=report_date|date:'Y-m-d' %}
+    <a href="{% url 'daily_report' %}?format=xlsx&mode={{ md }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ dt }}{% endif %}"
+       class="btn-dl btn-dl-general">
+      ⬇ Excel General
+    </a>
+    {% for c, cslug in clientes %}
+      <a href="{% url 'daily_report' %}?format=xlsx_{{ cslug }}&mode={{ md }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ dt }}{% endif %}"
+         class="btn-dl btn-dl-client" data-cliente="{{ c }}">
+        <span class="dl-dot"></span>{{ c }}
       </a>
-
-      {% for c, cslug in clientes %}
-        | <a href="{% url 'daily_report' %}?format=xlsx_{{ cslug }}&mode={{ md }}{% if sid %}&shipment_id={{ sid }}{% elif trk %}&tracking={{ trk }}{% else %}&date={{ report_date|date:'Y-m-d' }}{% endif %}">
-            <b>Descargar Excel {{ c }}</b>
-          </a>
-      {% endfor %}
-    {% endwith %}
-  </p>
+    {% endfor %}
+  {% endwith %}
+</div>
 {% endif %}
 
-  <!-- Tabla -->
-  <table border="1" cellpadding="5" cellspacing="0">
-    <thead>
-      <tr>
-        <th>Embarque</th>
-        <th>Factura</th>
-        <th>Presentación</th>
-        <th>Tamaño</th>
-        <th>Cantidad</th>
-        <th>Equiv. 11 lbs</th>
-        <th>Importe ($)</th>
-        <th>Cliente</th>
-        <th>Temperatura</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for s in shipments %}
-      {% for item in s.items.all %}
+<!-- ── Content ─────────────────────────────────────────────── -->
+<div class="page-body">
 
-        {% if mode == "all" %}
-          <tr>
-            <td>{{ s.tracking_number }}</td>
-            <td>{{ s.invoice_number }}</td>
-            <td>{{ item.presentation.name }}</td>
-            <td>{{ item.size }}</td>
-            <td style="text-align:right">{{ item.quantity }}</td>
-            <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
-            <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
-            <td>{{ item.cliente }}</td>
-            <td>{{ item.temperatura }}</td>
-          </tr>
+  {% for s in shipments %}
+    {% comment %}Collect tile count for header badge{% endcomment %}
+    <section class="shipment-section">
 
-        {% elif mode == "arandano" and item.presentation.is_arandano %}
-          <tr>
-            <td>{{ s.tracking_number }}</td>
-            <td>{{ s.invoice_number }}</td>
-            <td>{{ item.presentation.name }}</td>
-            <td>{{ item.size }}</td>
-            <td style="text-align:right">{{ item.quantity }}</td>
-            <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
-            <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
-            <td>{{ item.cliente }}</td>
-            <td>{{ item.temperatura }}</td>
-          </tr>
-
-        {% elif mode == "esparrago" and not item.presentation.is_arandano %}
-          <tr>
-            <td>{{ s.tracking_number }}</td>
-            <td>{{ s.invoice_number }}</td>
-            <td>{{ item.presentation.name }}</td>
-            <td>{{ item.size }}</td>
-            <td style="text-align:right">{{ item.quantity }}</td>
-            <td style="text-align:right">{{ item.eq_11lbs_calc|floatformat:"2" }}</td>
-            <td style="text-align:right">{{ item.amount_calc|floatformat:"2" }}</td>
-            <td>{{ item.cliente }}</td>
-            <td>{{ item.temperatura }}</td>
-          </tr>
+      <div class="shipment-header">
+        <span class="sh-tracking">{{ s.tracking_number }}</span>
+        {% if s.invoice_number %}
+          <span class="sh-pill">Factura {{ s.invoice_number }}</span>
         {% endif %}
+        {% if s.carrier %}
+          <span class="sh-pill">{{ s.carrier }}</span>
+        {% endif %}
+        <span class="sh-spacer"></span>
+        {% if s.departure_time %}
+          <span class="sh-count">{{ s.departure_time }}</span>
+        {% endif %}
+      </div>
 
-      {% endfor %}
-    {% empty %}
-      <tr><td colspan="9">No hay embarques para esta fecha.</td></tr>
-    {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <th colspan="4" style="text-align:right">TOTALES:</th>
-        <th style="text-align:right">{{ total_boxes }}</th>
-        <th style="text-align:right">{{ total_eq_11lbs|floatformat:"2" }}</th>
-        <th style="text-align:right">{{ total_amount|floatformat:"2" }}</th>
-        <th colspan="2"></th>
-      </tr>
-    </tfoot>
-  </table>
+      <div class="tiles-grid">
+        {% for item in s.items.all %}
+          {% if mode == "all" or mode == "arandano" and item.presentation.is_arandano or mode == "esparrago" and not item.presentation.is_arandano %}
+            <div class="tarima-tile" data-cliente="{{ item.cliente }}">
+              <div class="tile-top-bar"></div>
+              <div class="tile-body">
+                <div class="tile-tarima-num">Tarima {{ item.tarima }}</div>
+                {% if item.cliente %}
+                  <div class="tile-company">
+                    <span class="tile-co-dot"></span>
+                    {{ item.cliente }}
+                  </div>
+                {% endif %}
+                <div class="tile-presentation">{{ item.presentation.name }}</div>
+                <span class="tile-size">{{ item.size }}</span>
+              </div>
+              <div class="tile-footer">
+                <div>
+                  <div class="tile-qty">{{ item.quantity }}</div>
+                  <div class="tile-qty-label">cajas</div>
+                </div>
+                {% if item.temperatura %}
+                  <span class="tile-temp">{{ item.temperatura }}°F</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+
+    </section>
+  {% empty %}
+    <div class="empty-state">
+      <strong>Sin embarques</strong>
+      No hay registros para esta fecha.
+    </div>
+  {% endfor %}
+
+  <!-- ── Totales ── -->
+  {% if total_boxes %}
+  <div class="totals-bar">
+    <div class="total-item">
+      <div class="total-label">Total cajas</div>
+      <div class="total-val amber">{{ total_boxes }}</div>
+    </div>
+    <div class="total-item">
+      <div class="total-label">Equiv. 11 lbs</div>
+      <div class="total-val">{{ total_eq_11lbs|floatformat:"2" }}</div>
+    </div>
+    <div class="total-item">
+      <div class="total-label">Importe total</div>
+      <div class="total-val">$ {{ total_amount|floatformat:"2" }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- /page-body -->
+
+<script>
+  /* Company → color mapping */
+  const CO = {
+    'La Cima Produce':      '#22C55E',
+    'RC Organics':          '#38BDF8',
+    'GH Farms':             '#A78BFA',
+    'Gourmet Baja Farms':   '#FB923C',
+    'GBF Farms':            '#F472B6',
+    'AGRICOLA DH & G':      '#FBBF24',
+    'AGRICOLA DH&G GONZALO':'#FCA5A5',
+    'AGRICOLA DH&G CRUCES': '#6EE7B7',
+  };
+
+  /* Apply colors to tiles */
+  document.querySelectorAll('.tarima-tile[data-cliente]').forEach(el => {
+    const c = el.getAttribute('data-cliente');
+    const color = CO[c] || '#4E6B8C';
+    el.style.setProperty('--co', color);
+  });
+
+  /* Apply colors to download buttons */
+  document.querySelectorAll('.btn-dl-client[data-cliente]').forEach(el => {
+    const c = el.getAttribute('data-cliente');
+    const color = CO[c] || '#4E6B8C';
+    el.style.setProperty('--co', color);
+  });
+</script>
 
 </body>
 </html>
+
 {% else %}
-<p>No tienes permiso para ver esta página.</p>
+<div class="perm-denied">No tienes permiso para ver esta página.</div>
 {% endif %}
