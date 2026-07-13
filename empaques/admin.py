@@ -55,16 +55,16 @@ class ShipmentAdmin(admin.ModelAdmin):
     # Muestra y permite editar EN LISTA los números por cliente
     list_display = (
         "id", "date", "tracking_number", "invoice_number",
-        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces",
+        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal",
         "carrier", "tarimas_peco","is_national",
     )
     list_display_links = ("id", "tracking_number")  # estos NO pueden ir en list_editable
-    list_editable = ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces")
+    list_editable = ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal")
 
     list_filter = ("date", "carrier", "is_national")
     search_fields = (
         "tracking_number", "invoice_number",
-        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces",
+        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal",
         "driver", "carrier", "tractor_plates", "box_plates",
     )
 
@@ -89,7 +89,7 @@ class ShipmentAdmin(admin.ModelAdmin):
                        'is_national',)
         }),
         ("Números de orden por cliente (solo para mostrar en los Excel por cliente)", {
-            "fields": ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces"),
+            "fields": ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal"),
         }),
     )
 
