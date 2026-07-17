@@ -1667,10 +1667,13 @@ def production_xlsx(request, prod_date):
         if logo_path:
             try:
                 img = XLImage(logo_path)
-                target_h = 120
-                scale = target_h / float(img.height)
-                img.width  = int(img.width * scale)
-                img.height = int(img.height * scale)
+                _fixed = {"garal": (149, 85)}
+                if logo_slug in _fixed:
+                    img.width, img.height = _fixed[logo_slug]
+                else:
+                    scale = 85 / float(img.height)
+                    img.width  = int(img.width * scale)
+                    img.height = 85
                 ws.add_image(img, "A1")
             except Exception:
                 pass
