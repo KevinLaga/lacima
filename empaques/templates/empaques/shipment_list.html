@@ -142,9 +142,9 @@
     /* ── Table ── */
     .table-card {
       background:#fff; border:1px solid #e5e7eb; border-radius:14px;
-      box-shadow:0 2px 8px rgba(0,0,0,.06); overflow:hidden;
+      box-shadow:0 2px 8px rgba(0,0,0,.06); overflow-x:auto;
     }
-    .table-card table { width:100%; border-collapse:collapse; }
+    .table-card table { width:100%; border-collapse:collapse; min-width:1100px; }
     .table-card thead tr { background:#1e3a5f; }
     .table-card th {
       padding:12px 13px; color:#fff !important; font-size:13px; font-weight:700;
@@ -156,6 +156,16 @@
     }
     .table-card tr:last-child td { border-bottom:none; }
     .table-card tbody tr:hover td { background:#f8fafc; }
+
+    /* Columna Acciones fija a la derecha */
+    .table-card th.col-acciones,
+    .table-card td.col-acciones {
+      position:sticky; right:0; z-index:2;
+      background:#1e3a5f;
+      box-shadow:-3px 0 6px rgba(0,0,0,.08);
+    }
+    .table-card td.col-acciones { background:#fff; }
+    .table-card tbody tr:hover td.col-acciones { background:#f8fafc; }
 
     .badge-nacional    { background:#dcfce7; color:#166534; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
     .badge-exportacion { background:#dbeafe; color:#1e40af; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:700; }
@@ -405,7 +415,7 @@
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. GONZALO</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. CRUCES</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">EL GARAL</th>
-          <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">Acciones</th>
+          <th class="col-acciones" style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -431,7 +441,7 @@
             <td class="num-col">{% if s.order_dhg_gonzalo %}<span class="order-num">{{ s.order_dhg_gonzalo }}</span>{% endif %}</td>
             <td class="num-col">{% if s.order_dhg_cruces %}<span class="order-num">{{ s.order_dhg_cruces }}</span>{% endif %}</td>
             <td class="num-col">{% if s.order_el_garal %}<span class="order-num">{{ s.order_el_garal }}</span>{% endif %}</td>
-            <td style="white-space:nowrap;">
+            <td class="col-acciones" style="white-space:nowrap;">
               <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}&mode=all" class="link-action">Ver día</a>
               <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}&mode=all" class="link-action">Ver reporte</a>
             </td>
