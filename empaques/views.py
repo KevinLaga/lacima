@@ -82,22 +82,25 @@ def _pd_combos_active():
 
 import unicodedata, re
 # ---- Lista de clientes ----
-clientes = [ 
+clientes = [
     "La Cima Produce",
     "RC Organics",
     "GH Farms",
     "Gourmet Baja Farms",
     "GBF Farms",
-    "AGRICOLA DH&G GONZALO"
-    
+    "AGRICOLA DH&G GONZALO",
+    "AGRICOLA DH&G CRUCES",
+    "PRODUCTORA EL GARAL",
 ]
 LEGAL_CLIENT_NAME = {
 "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
 "RC Organics": "Empaque N.1 S. DE R.L. DE C.V.",
-"GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",  
+"GH Farms": "Empaque N.1 S. DE R.L. DE C.V.",
 "Gourmet Baja Farms": "Gourmet Baja Farms S. DE R.L. DE C.V.",
 "GBF Farms": "GBF Farms S. DE R.L. DE C.V.",
 "AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO",
+"AGRICOLA DH&G CRUCES":  "AGRICOLA DH&G CRUCES",
+"PRODUCTORA EL GARAL":   "PRODUCTORA EL GARAL",
 }
 LOGO_SLUG = {
     'RC': 'rc-organics',
