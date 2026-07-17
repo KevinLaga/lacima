@@ -4497,7 +4497,11 @@ def daily_report(request, shipment_id=None):
             ws.row_dimensions[r].height = 18.75
 
         # --- Logo en A1 (escalado) ---
-        logo_path = os.path.join(settings.BASE_DIR, 'static', 'logos', f'{slugify(cliente)}.png')
+        _logo_override = {
+            "PRODUCTORA EL GARAL": "garal.jpg",
+        }
+        _logo_file = _logo_override.get(cliente, f'{slugify(cliente)}.png')
+        logo_path = os.path.join(settings.BASE_DIR, 'static', 'logos', _logo_file)
         if os.path.exists(logo_path):
             img = XLImage(logo_path)
             target_h = 140
