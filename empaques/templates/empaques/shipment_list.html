@@ -403,6 +403,8 @@
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">GBF</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. DH&amp;G</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. GONZALO</th>
+          <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. CRUCES</th>
+          <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">EL GARAL</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">Acciones</th>
         </tr>
       </thead>
@@ -427,6 +429,8 @@
             <td class="num-col">{% if s.order_gbf %}<span class="order-num">{{ s.order_gbf }}</span>{% endif %}</td>
             <td class="num-col">{% if s.order_dhg %}<span class="order-num">{{ s.order_dhg }}</span>{% endif %}</td>
             <td class="num-col">{% if s.order_dhg_gonzalo %}<span class="order-num">{{ s.order_dhg_gonzalo }}</span>{% endif %}</td>
+            <td class="num-col">{% if s.order_dhg_cruces %}<span class="order-num">{{ s.order_dhg_cruces }}</span>{% endif %}</td>
+            <td class="num-col">{% if s.order_el_garal %}<span class="order-num">{{ s.order_el_garal }}</span>{% endif %}</td>
             <td style="white-space:nowrap;">
               <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}&mode=all" class="link-action">Ver día</a>
               <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}&mode=all" class="link-action">Ver reporte</a>
@@ -434,7 +438,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="13" style="text-align:center; color:#9ca3af; padding:32px;">
+            <td colspan="15" style="text-align:center; color:#9ca3af; padding:32px;">
               No hay embarques registrados.
             </td>
           </tr>
