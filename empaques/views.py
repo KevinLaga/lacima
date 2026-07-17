@@ -1619,7 +1619,7 @@ def production_xlsx(request, prod_date):
         "AGRICOLA DH & G": "AGRICOLA",
         "AGRICOLA DH&G GONZALO": "AGRICOLA",
         "AGRICOLA DH&G CRUCES": "AGRICOLA",
-        "PRODUCTORA EL GARAL": "AGRICOLA",
+        "PRODUCTORA EL GARAL": "garal",
     }
     legal_name = LEGAL_COMPANY.get(empresa, empresa)
     logo_slug  = LOGO_SLUG.get(empresa)
@@ -1658,8 +1658,13 @@ def production_xlsx(request, prod_date):
     # --- Encabezado con logo/fecha/títulos/número de hoja ---
     # Logo en A1
     if logo_slug:
-        logo_path = os.path.join(settings.BASE_DIR, "static", "logos", f"{logo_slug}.png")
-        if os.path.exists(logo_path):
+        _logos_dir = os.path.join(settings.BASE_DIR, "static", "logos")
+        logo_path = next(
+            (os.path.join(_logos_dir, f"{logo_slug}{ext}") for ext in (".png", ".jpg", ".jpeg")
+             if os.path.exists(os.path.join(_logos_dir, f"{logo_slug}{ext}"))),
+            None
+        )
+        if logo_path:
             try:
                 img = XLImage(logo_path)
                 target_h = 85
