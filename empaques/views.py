@@ -1667,7 +1667,7 @@ def production_xlsx(request, prod_date):
         if logo_path:
             try:
                 img = XLImage(logo_path)
-                target_h = 85
+                target_h = 120
                 scale = target_h / float(img.height)
                 img.width  = int(img.width * scale)
                 img.height = int(img.height * scale)
