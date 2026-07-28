@@ -69,7 +69,19 @@ class Shipment(models.Model):
     order_dhg_gonzalo       = models.CharField("Núm. orden AGRICOLA DH&G GONZALO", max_length=50, blank=True, null=True)
     order_dhg_cruces        = models.CharField("Núm. orden AGRICOLA DH&G CRUCES",  max_length=50, blank=True, null=True)
     order_el_garal          = models.CharField("Núm. orden PRODUCTORA EL GARAL",   max_length=50, blank=True, null=True)
-    date = models.DateField(verbose_name="Fecha")  
+
+    # --- Números de factura por cliente ---
+    invoice_lacima        = models.CharField("Núm. factura CIMA",                   max_length=50, blank=True, null=True)
+    invoice_rc            = models.CharField("Núm. factura RC Organics",            max_length=50, blank=True, null=True)
+    invoice_gourmet       = models.CharField("Núm. factura Gourmet Baja",           max_length=50, blank=True, null=True)
+    invoice_gbf           = models.CharField("Núm. factura GBF Farms",              max_length=50, blank=True, null=True)
+    invoice_gh            = models.CharField("Núm. factura GH Farms",               max_length=50, blank=True, null=True)
+    invoice_dhg           = models.CharField("Núm. factura AGRICOLA DH & G",        max_length=50, blank=True, null=True)
+    invoice_dhg_gonzalo   = models.CharField("Núm. factura AGRICOLA DH&G GONZALO",  max_length=50, blank=True, null=True)
+    invoice_dhg_cruces    = models.CharField("Núm. factura AGRICOLA DH&G CRUCES",   max_length=50, blank=True, null=True)
+    invoice_el_garal      = models.CharField("Núm. factura PRODUCTORA EL GARAL",    max_length=50, blank=True, null=True)
+
+    date = models.DateField(verbose_name="Fecha")
     carrier = models.CharField(max_length=50, verbose_name="Transportista", blank=True)
     tractor_plates = models.CharField(max_length=20, verbose_name="Placas tractor", blank=True)
     box_plates = models.CharField(max_length=20, verbose_name="Placas caja", blank=True)

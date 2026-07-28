@@ -65,6 +65,7 @@ class ShipmentAdmin(admin.ModelAdmin):
     search_fields = (
         "tracking_number", "invoice_number",
         "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal",
+        "invoice_lacima", "invoice_rc", "invoice_gh", "invoice_gourmet", "invoice_gbf","invoice_dhg","invoice_dhg_gonzalo","invoice_dhg_cruces","invoice_el_garal",
         "driver", "carrier", "tractor_plates", "box_plates",
     )
 
@@ -90,6 +91,9 @@ class ShipmentAdmin(admin.ModelAdmin):
         }),
         ("Números de orden por cliente (solo para mostrar en los Excel por cliente)", {
             "fields": ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal"),
+        }),
+        ("Números de factura por cliente (solo para mostrar en los Excel por cliente)", {
+            "fields": ("invoice_lacima", "invoice_rc", "invoice_gh", "invoice_gourmet", "invoice_gbf","invoice_dhg","invoice_dhg_gonzalo","invoice_dhg_cruces","invoice_el_garal"),
         }),
     )
 

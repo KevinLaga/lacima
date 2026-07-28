@@ -784,6 +784,44 @@ def _client_order_for(shipment, company_label):
 
     return None
 
+def _client_invoice_for(shipment, company_label):
+    """
+    Número de factura del embarque para un cliente concreto.
+    Si el cliente no tiene factura propia, cae a la factura general del embarque.
+    """
+    if not shipment:
+        return None
+
+    lbl = (company_label or "").lower()
+    field = None
+
+    if "cima" in lbl:
+        field = "invoice_lacima"
+    elif lbl.startswith("rc"):
+        field = "invoice_rc"
+    elif "gh" in lbl and "rc" not in lbl:
+        field = "invoice_gh"
+    elif "gourmet" in lbl:
+        field = "invoice_gourmet"
+    elif "gbf" in lbl:
+        field = "invoice_gbf"
+    # IMPORTANTE: variantes específicas primero (gonzalo y cruces), luego el genérico
+    elif "gonzalo" in lbl:
+        field = "invoice_dhg_gonzalo"
+    elif "cruces" in lbl:
+        field = "invoice_dhg_cruces"
+    elif "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
+        field = "invoice_dhg"
+    elif "garal" in lbl or "productora" in lbl:
+        field = "invoice_el_garal"
+
+    if field:
+        val = getattr(shipment, field, None)
+        if val not in (None, ""):
+            return val
+
+    return getattr(shipment, "invoice_number", None)
+
 def _round_half_up_to_int(x: float | Decimal) -> int:
     return int(Decimal(str(x)).quantize(Decimal('0'), rounding=ROUND_HALF_UP))
 def _pass_mode(it, mode: str) -> bool:
@@ -870,7 +908,7 @@ def _compute_company_summary(company_name, tuples_cs):
         detalle.append((
             s.date.strftime("%d/%m/%Y"),
             s.tracking_number,
-            s.invoice_number,
+            _client_invoice_for(s, company_name),
             pres, size, qty, round(importe, 2)
         ))
 
@@ -2443,7 +2481,7 @@ def shipment_list(request):
                 importe = it.quantity * float(it.presentation.price)
                 ws.cell(row=r, column=1, value=sh.date.strftime("%d/%m/%Y"))
                 ws.cell(row=r, column=2, value=sh.tracking_number)
-                ws.cell(row=r, column=3, value=sh.invoice_number)
+                ws.cell(row=r, column=3, value=_client_invoice_for(sh, it.cliente))
                 ws.cell(row=r, column=4, value=it.presentation.name)
                 ws.cell(row=r, column=5, value=it.size)
                 ws.cell(row=r, column=6, value=it.quantity)
@@ -2936,7 +2974,7 @@ def shipment_list(request):
 
                 vals = [
                     num_emb,
-                    s.invoice_number,
+                    _client_invoice_for(s, emp_label),
                     s.date.strftime('%d/%m/%Y'),
                     str(it.presentation.name).strip(),
                     str(it.size).strip(),
@@ -3073,7 +3111,7 @@ def shipment_list(request):
                 detalle.append((
                     s.date.strftime('%d/%m/%Y'),
                     s.tracking_number,
-                    s.invoice_number,
+                    _client_invoice_for(s, comp_label_norm),
                     pres_name,
                     size_name,
                     qty,
@@ -3859,7 +3897,7 @@ def shipment_list(request):
             ws.cell(row=row, column=2, value=str(getattr(s, "tracking_number", "") or "")).border = thin
             ws.cell(row=row, column=2).alignment = center
 
-            ws.cell(row=row, column=3, value=str(getattr(s, "invoice_number", "") or "")).border = thin
+            ws.cell(row=row, column=3, value=str(_client_invoice_for(s, empresa) or "")).border = thin
             ws.cell(row=row, column=3).alignment = center
 
             c_fecha = ws.cell(row=row, column=4, value=s.date)   # guarda como fecha real
@@ -4202,11 +4240,12 @@ def daily_report(request, shipment_id=None):
             return "Sí" if v else "No" 
         return str(v)
 
-    def write_shipment_info(ws, start_row, start_col, embarque, include_peco=False):
+    def write_shipment_info(ws, start_row, start_col, embarque, include_peco=False, cliente=None):
         """Escribe bloque con datos del embarque. Devuelve el último row usado."""
         label_font = Font(name='Calibri', size=18, bold=True, color="666666")
         value_font = Font(name='Calibri', size=16)
         seals = ", ".join([s for s in [embarque.seal_1, embarque.seal_2, embarque.seal_3, embarque.seal_4] if s])
+        factura = _client_invoice_for(embarque, cliente) if cliente else embarque.invoice_number
         info = [
             ("Núm. Orden",     _str(embarque.tracking_number)),
             ("FECHA", fecha_es(getattr(embarque, "date", None))),
@@ -4223,7 +4262,7 @@ def daily_report(request, shipment_id=None):
             ("Chismógrafo",    _str(embarque.chismografo)),
             ("Firma Entrega",  _str(embarque.delivery_signature)),
             ("Firma Operador", _str(embarque.driver_signature)),
-            ("Factura",        _str(embarque.invoice_number)),
+            ("Factura",        _str(factura)),
             ("Dirección",      "H. GALEANA N. 85 LOC A-B, C. ZARAGOZA"),
             ("Y R. ZAPATA COL. CENTRO, 23600", ""),
         ]
@@ -4440,7 +4479,7 @@ def daily_report(request, shipment_id=None):
                 eq = item.quantity * float(item.presentation.conversion_factor)
                 amt = item.quantity * float(item.presentation.price)
                 ws.cell(row=row, column=1, value=_str(s.tracking_number))
-                ws.cell(row=row, column=2, value=_str(s.invoice_number))
+                ws.cell(row=row, column=2, value=_str(_client_invoice_for(s, item.cliente)))
                 ws.cell(row=row, column=3, value=_str(item.presentation.name))
                 ws.cell(row=row, column=4, value=_str(item.size))
                 ws.cell(row=row, column=5, value=item.quantity)

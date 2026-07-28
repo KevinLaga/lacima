@@ -54,6 +54,17 @@ class ShipmentForm(forms.ModelForm):
     order_dhg_cruces       = forms.CharField(label='Núm. orden AGRICOLA DH&G CRUCES',   required=False)
     order_el_garal         = forms.CharField(label='Núm. orden PRODUCTORA EL GARAL',    required=False)
 
+    # --- Números de factura por cliente ---
+    invoice_lacima       = forms.CharField(label='Núm. factura CIMA',                  required=False)
+    invoice_rc           = forms.CharField(label='Núm. factura RC',                    required=False)
+    invoice_gourmet      = forms.CharField(label='Núm. factura Gourmet Baja',          required=False)
+    invoice_gbf          = forms.CharField(label='Núm. factura GBF Farms',             required=False)
+    invoice_gh           = forms.CharField(label='Núm. factura GH Farms',              required=False)
+    invoice_dhg          = forms.CharField(label='Núm. factura AGRICOLA DH & G',       required=False)
+    invoice_dhg_gonzalo  = forms.CharField(label='Núm. factura AGRICOLA DH&G GONZALO', required=False)
+    invoice_dhg_cruces   = forms.CharField(label='Núm. factura AGRICOLA DH&G CRUCES',  required=False)
+    invoice_el_garal     = forms.CharField(label='Núm. factura PRODUCTORA EL GARAL',   required=False)
+
     class Meta:
         model = Shipment
         fields = [
@@ -64,6 +75,8 @@ class ShipmentForm(forms.ModelForm):
 
 
             'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg','order_dhg_gonzalo','order_dhg_cruces','order_el_garal',
+
+            'invoice_lacima','invoice_rc','invoice_gourmet','invoice_gbf','invoice_gh','invoice_dhg','invoice_dhg_gonzalo','invoice_dhg_cruces','invoice_el_garal',
         ]
         widgets = {
             "is_national": forms.CheckboxInput(attrs={"id":"id_is_national"})
@@ -78,6 +91,16 @@ class ShipmentForm(forms.ModelForm):
             'order_dhg_gonzalo':      'Núm. orden AGRICOLA DH & G GONZALO',
             'order_dhg_cruces':       'Núm. orden AGRICOLA DH&G CRUCES',
             'order_el_garal':         'Núm. orden PRODUCTORA EL GARAL',
+
+            'invoice_lacima':      'Núm. factura CIMA',
+            'invoice_rc':          'Núm. factura RC',
+            'invoice_gourmet':     'Núm. factura Gourmet Baja',
+            'invoice_gbf':         'Núm. factura GBF Farms',
+            'invoice_gh':          'Núm. factura GH Farms',
+            'invoice_dhg':         'Núm. factura AGRICOLA DH & G',
+            'invoice_dhg_gonzalo': 'Núm. factura AGRICOLA DH&G GONZALO',
+            'invoice_dhg_cruces':  'Núm. factura AGRICOLA DH&G CRUCES',
+            'invoice_el_garal':    'Núm. factura PRODUCTORA EL GARAL',
 
             "is_national": "Nacional",
         }
