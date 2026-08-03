@@ -91,6 +91,8 @@ clientes = [
     "AGRICOLA DH&G GONZALO",
     "AGRICOLA DH&G CRUCES",
     "PRODUCTORA EL GARAL",
+    "AGRICOLA DH&G AVILA",
+    "AGRICOLA DH&G OTATES",
 ]
 LEGAL_CLIENT_NAME = {
 "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
@@ -101,6 +103,8 @@ LEGAL_CLIENT_NAME = {
 "AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO",
 "AGRICOLA DH&G CRUCES":  "AGRICOLA DH&G CRUCES",
 "PRODUCTORA EL GARAL":   "PRODUCTORA EL GARAL",
+"AGRICOLA DH&G AVILA":   "AGRICOLA DH&G AVILA",
+"AGRICOLA DH&G OTATES":  "AGRICOLA DH&G OTATES",
 }
 LOGO_SLUG = {
     'RC': 'rc-organics',
@@ -182,8 +186,18 @@ COMPANY_CANON = {
     'productora el garal': 'PRODUCTORA EL GARAL',
     'el garal': 'PRODUCTORA EL GARAL',
     'garal': 'PRODUCTORA EL GARAL',
+    'AGRICOLA DH&G AVILA': 'AGRICOLA DH&G AVILA',
+    'agricola dh&g avila': 'AGRICOLA DH&G AVILA',
+    'agricola dh & g avila': 'AGRICOLA DH&G AVILA',
+    'agricola avila': 'AGRICOLA DH&G AVILA',
+    'avila': 'AGRICOLA DH&G AVILA',
+    'AGRICOLA DH&G OTATES': 'AGRICOLA DH&G OTATES',
+    'agricola dh&g otates': 'AGRICOLA DH&G OTATES',
+    'agricola dh & g otates': 'AGRICOLA DH&G OTATES',
+    'agricola otates': 'AGRICOLA DH&G OTATES',
+    'otates': 'AGRICOLA DH&G OTATES',
 }
-COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO', 'AGRICOLA DH&G CRUCES', 'PRODUCTORA EL GARAL']
+COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO', 'AGRICOLA DH&G CRUCES', 'PRODUCTORA EL GARAL', 'AGRICOLA DH&G AVILA', 'AGRICOLA DH&G OTATES']
 DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
 
 import unicodedata
@@ -745,8 +759,15 @@ def _canon_company_label(name: str | None) -> str:
         return "GBF Farms"
     if "gh" in n:
         return "GH Farms"
+    # Variantes específicas antes del genérico (todas contienen "agricola")
     if "gonzalo" in n:
         return "AGRICOLA DH&G GONZALO"
+    if "cruces" in n:
+        return "AGRICOLA DH&G CRUCES"
+    if "avila" in n:
+        return "AGRICOLA DH&G AVILA"
+    if "otates" in n:
+        return "AGRICOLA DH&G OTATES"
     if "agricola" in n or "dhg" in n or "dh&g" in n or "dh & g" in n:
         return "AGRICOLA DH & G"
     return name.strip()
@@ -775,6 +796,12 @@ def _client_order_for(shipment, company_label):
 
     if "cruces" in lbl:
         return getattr(shipment, "order_dhg_cruces", None)
+
+    if "avila" in lbl:
+        return getattr(shipment, "order_dhg_avila", None)
+
+    if "otates" in lbl:
+        return getattr(shipment, "order_dhg_otates", None)
 
     if "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
         return getattr(shipment, "order_dhg", None)
@@ -810,6 +837,10 @@ def _client_invoice_for(shipment, company_label):
         field = "invoice_dhg_gonzalo"
     elif "cruces" in lbl:
         field = "invoice_dhg_cruces"
+    elif "avila" in lbl:
+        field = "invoice_dhg_avila"
+    elif "otates" in lbl:
+        field = "invoice_dhg_otates"
     elif "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
         field = "invoice_dhg"
     elif "garal" in lbl or "productora" in lbl:
@@ -842,9 +873,16 @@ def _iter_company_items(embarques, empresa_filter: str | None, mode: str = "espa
         txt = str(valor or "").strip()
         low = txt.lower().replace("  ", " ")
 
-        # IMPORTANTE: Gonzalo primero, porque también contiene "agricola"
+        # IMPORTANTE: las variantes específicas van primero, porque todas
+        # contienen "agricola" y si no caerían en el genérico de abajo.
         if "gonzalo" in low:
             return "AGRICOLA DH&G GONZALO"
+        if "cruces" in low:
+            return "AGRICOLA DH&G CRUCES"
+        if "avila" in low:
+            return "AGRICOLA DH&G AVILA"
+        if "otates" in low:
+            return "AGRICOLA DH&G OTATES"
 
         if "agricola" in low or "dhg" in low or "dh&g" in low or "dh & g" in low:
             return "AGRICOLA DH & G"
@@ -1570,7 +1608,7 @@ def production_today(request):
         "rows": rows,
         "ship_cols_labels": ship_cols,
         "empresa": empresa,
-        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH&G GONZALO", "AGRICOLA DH&G CRUCES", "PRODUCTORA EL GARAL"],
+        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH&G GONZALO", "AGRICOLA DH&G CRUCES", "PRODUCTORA EL GARAL", "AGRICOLA DH&G AVILA", "AGRICOLA DH&G OTATES"],
 
         # Bloque inferior
         "exist_piso_ayer": exist_piso_ayer,
@@ -1647,6 +1685,8 @@ def production_xlsx(request, prod_date):
         "AGRICOLA DH&G GONZALO": "AGRICOLA DH&G GONZALO",
         "AGRICOLA DH&G CRUCES": "AGRICOLA DH&G CRUCES",
         "PRODUCTORA EL GARAL": "PRODUCTORA EL GARAL",
+        "AGRICOLA DH&G AVILA": "AGRICOLA DH&G AVILA",
+        "AGRICOLA DH&G OTATES": "AGRICOLA DH&G OTATES",
     }
     LOGO_SLUG = {
         "LACIMA":  "la-cima-produce",
@@ -1658,6 +1698,8 @@ def production_xlsx(request, prod_date):
         "AGRICOLA DH&G GONZALO": "AGRICOLA",
         "AGRICOLA DH&G CRUCES": "AGRICOLA",
         "PRODUCTORA EL GARAL": "garal",
+        "AGRICOLA DH&G AVILA": "AGRICOLA",
+        "AGRICOLA DH&G OTATES": "AGRICOLA",
     }
     legal_name = LEGAL_COMPANY.get(empresa, empresa)
     logo_slug  = LOGO_SLUG.get(empresa)
@@ -1765,6 +1807,11 @@ def production_xlsx(request, prod_date):
     tot_eq11 = [0.0]*11
     total_eq11_produccion = 0.0  # Eq. 11 lb de la PRODUCCIÓN DEL DÍA
 
+    # --- Datos de AYER (base de 'Exist. anterior', igual que la vista web) ---
+    yday       = d - _timedelta(days=1)
+    saved_yday = _load_prod(yday, empresa) or {}
+    rows_yday  = saved_yday.get("rows") or {}
+
     # --- Filas de datos ---
     for pres, size in combos:
         key_saved = f"{pres}|{size}"
@@ -1772,13 +1819,18 @@ def production_xlsx(request, prod_date):
         k_norm    = _combo_key(pres, size)
         per4      = per_ship.get(k_norm, [0, 0, 0, 0])
 
-        exist_prev   = saved_row.get("exist_prev", 0)
-        prod_dia     = saved_row.get("prod_dia", 0)
-        exist_alm    = saved_row.get("exist_almacen", 0)
-        debe         = saved_row.get("debe", 0)
-        pago         = saved_row.get("pago", 0)
-        presto       = saved_row.get("presto", 0)
-        le_pagaron   = saved_row.get("le_pagaron", 0)
+        # Capturas manuales: sí vienen del guardado del día
+        exist_alm    = int(saved_row.get("exist_almacen", 0) or 0)
+        debe         = int(saved_row.get("debe", 0) or 0)
+        pago         = int(saved_row.get("pago", 0) or 0)
+        presto       = int(saved_row.get("presto", 0) or 0)
+        le_pagaron   = int(saved_row.get("le_pagaron", 0) or 0)
+
+        # Derivados: se RECALCULAN en vivo (igual que production_today) para que el
+        # Excel refleje correcciones hechas a los embarques después de guardar la hoja.
+        exist_prev = int(rows_yday.get(key_saved, {}).get("exist_almacen", 0) or 0)
+        total_emb  = totals.get(k_norm, 0)
+        prod_dia   = exist_alm - exist_prev - debe + pago + presto - le_pagaron + total_emb
 
         row_vals = [
             f"{pres} / {size}",
@@ -1833,8 +1885,7 @@ def production_xlsx(request, prod_date):
 
     # === Resumen inferior (incluye acumulados y factores) ===
     # Bloque del propio día (coincide con la vista)
-    yday = d - _timedelta(days=1)
-    saved_yday = _load_prod(yday, empresa) or {}
+    # 'yday' / 'saved_yday' ya se cargaron arriba para 'Exist. anterior'
     exist_piso_ayer = int((saved_yday or {}).get("exist_piso_hoy", 0))
     exist_piso_hoy  = int((saved or {}).get("exist_piso_hoy", 0))
     cajas_campo_recibidas = int((saved or {}).get("cajas_campo_recibidas", 0))
@@ -2944,6 +2995,12 @@ def shipment_list(request):
                 if "cruces" in cname:
                     return getattr(embarque, "order_dhg_cruces", None)
 
+                if "avila" in cname:
+                    return getattr(embarque, "order_dhg_avila", None)
+
+                if "otates" in cname:
+                    return getattr(embarque, "order_dhg_otates", None)
+
                 if "agricola" in cname or "dhg" in cname or "dh&g" in cname or "dh & g" in cname:
                     return getattr(embarque, "order_dhg", None)
 
@@ -3409,6 +3466,10 @@ def shipment_list(request):
                 return getattr(embarque, "order_dhg_gonzalo", None)
             if "cruces" in cname:
                 return getattr(embarque, "order_dhg_cruces", None)
+            if "avila" in cname:
+                return getattr(embarque, "order_dhg_avila", None)
+            if "otates" in cname:
+                return getattr(embarque, "order_dhg_otates", None)
             if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
                 return getattr(embarque, "order_dhg", None)
             if "garal" in cname or "productora" in cname:
