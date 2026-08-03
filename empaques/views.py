@@ -542,6 +542,49 @@ def _combo_key(pres, size):
     """Alias para mantener compatibilidad: misma normalización que _canon_pair."""
     return _canon_pair(pres, size)
 
+
+def _norm_pres_key(pres, size):
+    """
+    Clave normalizada de (presentación, tamaño) para localizar filas guardadas.
+
+    Ignora mayúsculas/minúsculas y espacios repetidos, de modo que
+    'ALCACHOFA  MED. 12|STANDARD' y 'Alcachofa Med. 12|Standard'
+    se traten como la MISMA presentación.
+    """
+    p = re.sub(r"\s+", " ", str(pres or "")).strip().upper()
+    return (p, _canon_size(size))
+
+
+def _row_weight(row):
+    """Cuánta información trae una fila guardada (para desempatar duplicados)."""
+    total = 0
+    for k in ("exist_almacen", "exist_prev", "debe", "pago", "presto",
+              "le_pagaron", "prod_dia"):
+        try:
+            total += abs(float((row or {}).get(k, 0) or 0))
+        except (TypeError, ValueError):
+            pass
+    return total
+
+
+def _rows_by_norm(rows):
+    """
+    Indexa las filas guardadas de un JSON por clave normalizada.
+
+    Si dos claves distintas normalizan a la misma presentación (por ejemplo por
+    diferencias de mayúsculas), se conserva la que trae datos.
+    """
+    out = {}
+    for ks, val in (rows or {}).items():
+        if "|" in str(ks):
+            pres, size = str(ks).split("|", 1)
+        else:
+            pres, size = str(ks), ""
+        k = _norm_pres_key(pres, size)
+        if k not in out or _row_weight(val) > _row_weight(out[k]):
+            out[k] = val
+    return out
+
 def _combos_from_db():
     """
     TODAS las combinaciones (presentación, tamaño) que existen en la BD,
@@ -688,6 +731,63 @@ def _effective_acum_base(day, empresa, saved_today):
     base_c = base_c_auto if base_c_auto is not None else int(saved_today.get("acum_cosechadas_ayer", 0))
     base_e = base_e_auto if base_e_auto is not None else float(saved_today.get("acum_empacadas_ayer", 0.0))
     return int(base_c or 0), float(base_e or 0.0)
+
+
+def _live_prod_rows(d, empresa, combos):
+    """
+    Filas de producción del día RECALCULADAS EN VIVO, con la misma fórmula que
+    la vista web (production_today).
+
+    Las capturas manuales (exist_almacen, debe, pago, presto, le_pagaron) sí
+    salen del JSON del día, pero los derivados (exist_prev, total_emb, prod_dia)
+    se recalculan, para que los reportes reflejen correcciones hechas a los
+    embarques DESPUÉS de haber guardado la hoja.
+
+    Fuente única para el Excel diario y el semanal: así no pueden divergir.
+    """
+    saved      = _load_prod(d, empresa) or {}
+    # Indexadas por clave normalizada: así se encuentran aunque la presentación
+    # se haya guardado con otras mayúsculas o espacios.
+    rows_saved = _rows_by_norm(saved.get("rows"))
+    rows_yday  = _rows_by_norm((_load_prod(d - timedelta(days=1), empresa) or {}).get("rows"))
+    _cols, totals, per_ship, _eq = _group_shipments_by_combo(d, empresa)
+
+    out = []
+    for pres, size in combos:
+        ks     = f"{pres}|{size}"
+        nk     = _norm_pres_key(pres, size)
+        sr     = rows_saved.get(nk, {})
+        k_norm = _combo_key(pres, size)
+
+        exist_alm  = int(sr.get("exist_almacen", 0) or 0)
+        debe       = int(sr.get("debe", 0) or 0)
+        pago       = int(sr.get("pago", 0) or 0)
+        presto     = int(sr.get("presto", 0) or 0)
+        le_pagaron = int(sr.get("le_pagaron", 0) or 0)
+
+        exist_prev = int((rows_yday.get(nk) or {}).get("exist_almacen", 0) or 0)
+        total_emb  = totals.get(k_norm, 0)
+
+        out.append({
+            "pres": pres, "size": size, "key": ks,
+            "per4": per_ship.get(k_norm, [0, 0, 0, 0]),
+            "exist_prev": exist_prev,
+            "exist_almacen": exist_alm,
+            "debe": debe, "pago": pago, "presto": presto, "le_pagaron": le_pagaron,
+            "total_emb": total_emb,
+            "prod_dia": exist_alm - exist_prev - debe + pago + presto - le_pagaron + total_emb,
+        })
+    return out
+
+
+def _live_prod_totals(d, empresa, combos, pres_cf):
+    """(cartones, eq11) del día, recalculados en vivo con _live_prod_rows."""
+    cartones = 0
+    eq11 = 0.0
+    for rr in _live_prod_rows(d, empresa, combos):
+        cartones += rr["prod_dia"]
+        eq11 += rr["prod_dia"] * pres_cf.get((rr["pres"] or "").strip().upper(), 1.0)
+    return cartones, eq11
 
 
 
@@ -1431,7 +1531,10 @@ def production_today(request):
     # Estado del día actual + 'ayer'
     saved_today = _load_prod(prod_date, empresa) or {}
     saved_yday  = _load_prod(prod_date - timedelta(days=1), empresa) or {}
-    rows_yday   = saved_yday.get("rows", {})
+    # Indexadas por clave normalizada (ver _rows_by_norm): una presentación
+    # guardada con otras mayúsculas/espacios se sigue reconociendo.
+    rows_yday   = _rows_by_norm(saved_yday.get("rows"))
+    rows_today  = _rows_by_norm(saved_today.get("rows"))
     order_number = (saved_today.get("order_number") or "")
 
     # Embarques del día (filtrados por empresa)
@@ -1450,11 +1553,11 @@ def production_today(request):
 
     for pres, size in combos:
         k_totals = _combo_key(pres, size)
-        k_saved  = f"{pres}|{size}"
+        k_norm   = _norm_pres_key(pres, size)
         k_form   = f"{slugify(pres)}__{slugify(size)}"
 
-        exist_prev = int(rows_yday.get(k_saved, {}).get("exist_almacen", 0))
-        row_today  = (saved_today.get("rows") or {}).get(k_saved, {})
+        exist_prev = int((rows_yday.get(k_norm) or {}).get("exist_almacen", 0))
+        row_today  = rows_today.get(k_norm) or {}
 
         exist_almacen = int(row_today.get("exist_almacen", 0))
         debe          = int(row_today.get("debe", 0))
@@ -1527,7 +1630,7 @@ def production_today(request):
             k_totals = _combo_key(pres, size)
             k_form   = f"{slugify(pres)}__{slugify(size)}"
 
-            exist_prev    = int(rows_yday.get(k_saved, {}).get("exist_almacen", 0))
+            exist_prev    = int((rows_yday.get(_norm_pres_key(pres, size)) or {}).get("exist_almacen", 0))
             exist_almacen = _num(k_form, "exist_almacen")
             debe          = _num(k_form, "debe")
             pago          = _num(k_form, "pago")
@@ -1807,36 +1910,21 @@ def production_xlsx(request, prod_date):
     tot_eq11 = [0.0]*11
     total_eq11_produccion = 0.0  # Eq. 11 lb de la PRODUCCIÓN DEL DÍA
 
-    # --- Datos de AYER (base de 'Exist. anterior', igual que la vista web) ---
+    # --- Datos de AYER (se usan abajo para 'existencia de piso') ---
     yday       = d - _timedelta(days=1)
     saved_yday = _load_prod(yday, empresa) or {}
-    rows_yday  = saved_yday.get("rows") or {}
 
-    # --- Filas de datos ---
-    for pres, size in combos:
-        key_saved = f"{pres}|{size}"
-        saved_row = (saved.get("rows") or {}).get(key_saved, {})
-        k_norm    = _combo_key(pres, size)
-        per4      = per_ship.get(k_norm, [0, 0, 0, 0])
-
-        # Capturas manuales: sí vienen del guardado del día
-        exist_alm    = int(saved_row.get("exist_almacen", 0) or 0)
-        debe         = int(saved_row.get("debe", 0) or 0)
-        pago         = int(saved_row.get("pago", 0) or 0)
-        presto       = int(saved_row.get("presto", 0) or 0)
-        le_pagaron   = int(saved_row.get("le_pagaron", 0) or 0)
-
-        # Derivados: se RECALCULAN en vivo (igual que production_today) para que el
-        # Excel refleje correcciones hechas a los embarques después de guardar la hoja.
-        exist_prev = int(rows_yday.get(key_saved, {}).get("exist_almacen", 0) or 0)
-        total_emb  = totals.get(k_norm, 0)
-        prod_dia   = exist_alm - exist_prev - debe + pago + presto - le_pagaron + total_emb
+    # --- Filas de datos (recalculadas en vivo, ver _live_prod_rows) ---
+    for rr in _live_prod_rows(d, empresa, combos):
+        pres, size = rr["pres"], rr["size"]
+        per4       = rr["per4"]
+        prod_dia   = rr["prod_dia"]
 
         row_vals = [
             f"{pres} / {size}",
-            exist_prev, prod_dia, exist_alm,
+            rr["exist_prev"], prod_dia, rr["exist_almacen"],
             per4[0], per4[1], per4[2], per4[3],
-            debe, pago, presto, le_pagaron,
+            rr["debe"], rr["pago"], rr["presto"], rr["le_pagaron"],
         ]
         for c, v in enumerate(row_vals, start=1):
             cell = ws.cell(row=r, column=c, value=v)
@@ -1895,12 +1983,12 @@ def production_xlsx(request, prod_date):
     # MISMA base efectiva “hasta AYER” que la vista (respeta manual si use_manual_acum)
     base_c_hayer, base_e_hayer = _effective_acum_base(d, empresa, saved)
 
-    # Si el día actual no guardó los acumulados, recalcular como en la vista usando la base efectiva + HOY
-    acum_cosechadas = saved.get("acum_cosechadas")
-    acum_empacadas  = saved.get("acum_empacadas")
-    if acum_cosechadas is None or acum_empacadas is None:
-        acum_cosechadas = int(base_c_hayer) + int(cajas_campo_trabajadas or 0)
-        acum_empacadas  = float(base_e_hayer) + float(total_eq11_produccion or 0.0)
+    # Acumulados SIEMPRE recalculados sobre la base efectiva + HOY, igual que la
+    # vista web. No se leen del JSON: si se corrigió un embarque después de
+    # guardar la hoja, el valor guardado quedaría viejo y no cuadraría con el
+    # 'TOTAL (Eq. 11 lbs)' de esta misma hoja, que sí es en vivo.
+    acum_cosechadas = int(base_c_hayer) + int(cajas_campo_trabajadas or 0)
+    acum_empacadas  = float(base_e_hayer) + float(total_eq11_produccion or 0.0)
 
     factor_dia    = (total_eq11_produccion / cajas_campo_trabajadas) if cajas_campo_trabajadas else 0.0
     factor_global = (float(acum_empacadas) / int(acum_cosechadas)) if acum_cosechadas else 0.0
@@ -1992,20 +2080,8 @@ def production_weekly_xlsx(request):
         for n, cf in Presentation.objects.values_list("name", "conversion_factor")
     }
 
-    # Helper: calcular "cartones" y "eq11_produccion" desde saved["rows"]
-    def _calc_cartones_eq11(saved):
-        rows = (saved or {}).get("rows") or {}
-        cartones = 0
-        eq11 = 0.0
-        for k_saved, r in rows.items():
-            prod_dia = int(r.get("prod_dia", 0) or 0)
-            cartones += prod_dia
-
-            # k_saved = "PRESENTACION|TAMAÑO"
-            pres_name = (k_saved.split("|", 1)[0] if "|" in k_saved else k_saved).strip().upper()
-            cf = pres_cf.get(pres_name, 1.0)
-            eq11 += prod_dia * cf
-        return cartones, eq11
+    # Combos a considerar (mismos que el diario)
+    combos = _display_combos() or (_all_combos_from_db() or _ordered_combos())
 
     # Helper: calcular cajas campo trabajadas (no dependemos de que esté guardado)
     def _calc_cajas_campo_trabajadas(d, empresa, saved_today):
@@ -2042,7 +2118,7 @@ def production_weekly_xlsx(request):
                 last_saved_in_week = saved
                 last_day_in_week = d
 
-            cart, eq11 = _calc_cartones_eq11(saved)
+            cart, eq11 = _live_prod_totals(d, empresa, combos, pres_cf)
             cartones_by_day.append(cart)
             eq11_by_day.append(round(eq11, 2))
 
@@ -2057,13 +2133,20 @@ def production_weekly_xlsx(request):
 
         empresas_con_datos.append(empresa)
 
-        # Acumulado temporada: toma el último guardado dentro de la semana (si existe)
+        # Acumulado de temporada al último día con datos de la semana.
+        # Se RECALCULA (base efectiva hasta ayer + ese día) en vez de leer los
+        # acum_* guardados, que quedan viejos si se corrige un embarque después
+        # de guardar la hoja. Misma fórmula que la vista web y que el Excel diario.
         acum_emp = 0.0
         acum_cos = 0
         factor_global = 0.0
-        if last_saved_in_week:
-            acum_cos = int(last_saved_in_week.get("acum_cosechadas", 0) or 0)
-            acum_emp = float(last_saved_in_week.get("acum_empacadas", 0.0) or 0.0)
+        if last_day_in_week:
+            _c, eq11_ese_dia = _live_prod_totals(last_day_in_week, empresa, combos, pres_cf)
+            base_c, base_e = _effective_acum_base(last_day_in_week, empresa, last_saved_in_week or {})
+            trabajadas = _calc_cajas_campo_trabajadas(
+                last_day_in_week, empresa, last_saved_in_week or {})
+            acum_cos = int(base_c) + int(trabajadas or 0)
+            acum_emp = float(base_e) + float(eq11_ese_dia or 0.0)
             factor_global = (acum_emp / acum_cos) if acum_cos else 0.0
 
         data[empresa] = {
@@ -2124,9 +2207,15 @@ def production_weekly_xlsx(request):
             cell.alignment = center
         row += 1
 
-    def _write_company_two_rows(empresa, label1, arr1, fmt1, label2, arr2, fmt2):
+    def _write_company_two_rows(empresa, label1, arr1, fmt1, label2, arr2, fmt2,
+                                tot1_override=None, tot2_override=None):
         """
         Escribe 2 filas por empresa con la celda de empresa fusionada verticalmente.
+
+        El TOTAL de cada fila es la suma de los días, salvo que se pase un
+        *_override. Eso hace falta para métricas que NO son aditivas (el FACTOR
+        se calcula Eq11 de la semana / cajas campo de la semana, no sumando los
+        factores diarios).
         """
         nonlocal row
 
@@ -2141,7 +2230,7 @@ def production_weekly_xlsx(request):
         ws.cell(row=start_row, column=2, value=label1).border = thin
         ws.cell(row=start_row, column=2).alignment = center
         vals1 = list(arr1)
-        tot1 = sum(vals1)
+        tot1 = sum(vals1) if tot1_override is None else tot1_override
         for i, v in enumerate(vals1, start=0):
             cell = ws.cell(row=start_row, column=3+i, value=v)
             cell.border = thin
@@ -2156,7 +2245,7 @@ def production_weekly_xlsx(request):
         ws.cell(row=start_row+1, column=2, value=label2).border = thin
         ws.cell(row=start_row+1, column=2).alignment = center
         vals2 = list(arr2)
-        tot2 = sum(vals2)
+        tot2 = sum(vals2) if tot2_override is None else tot2_override
         for i, v in enumerate(vals2, start=0):
             cell = ws.cell(row=start_row+1, column=3+i, value=v)
             cell.border = thin
@@ -2189,10 +2278,16 @@ def production_weekly_xlsx(request):
 
     for empresa in empresas_con_datos:
         dct = data[empresa]
+        # El factor de la semana NO es la suma de los factores diarios:
+        # es el Eq. 11 lb empacado en la semana entre las cajas de campo de la semana.
+        eq11_semana  = sum(dct["eq11"])
+        cajas_semana = sum(dct["cajas_campo"])
+        factor_semana = round(eq11_semana / cajas_semana, 4) if cajas_semana else 0.0
         _write_company_two_rows(
             empresa,
-            "CAJAS CAMPO", dct["cajas_campo"], "#,##0", 
-            "FACTOR", dct["factor"], "0.0000",  
+            "CAJAS CAMPO", dct["cajas_campo"], "#,##0",
+            "FACTOR", dct["factor"], "0.0000",
+            tot2_override=factor_semana,
         )
 
     row += 2 
