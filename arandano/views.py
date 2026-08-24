@@ -408,13 +408,13 @@ def salidas_create(request):
             "campos": Campo.objects.filter(activo=True).order_by("nombre"),
         })
 
-    # GET: construir initial por variedades del campo actual
+    # GET: construir initial por variedades del campo actual  no fakin weyqwgdds si me acuerdo 
     fecha_get = request.GET.get("fecha") or localdate().isoformat()
 
     form = SalidaDiaForm(initial={
         "campo": campo_actual.id if campo_actual else None,
         "fecha": fecha_get,
-    })
+    }) #caffeine que bien narra este hijo de perra a este niño le falta un dopping no vaya a ser lol tio lol, vrg se ve fuerte el hijo de perrra , 
 
     vids = []
     if campo_actual:
@@ -432,7 +432,7 @@ def salidas_create(request):
 
     formset = ItemsFormSet(initial=initial_rows, prefix="items")
 
-    # Limitar queryset de variedad por campo
+    # Limitar queryset de variedad por campo KEK
     for f in formset.forms:
         if "variedad" in f.fields:
             f.fields["variedad"].queryset = Variedad.objects.filter(pk__in=vids).order_by("nombre")

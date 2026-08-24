@@ -207,6 +207,7 @@
       {% now "Y-m-d" as hoy %}
       <a href="{% url 'production_today' %}?date={{ hoy }}">Producción del día</a>
       <a href="{% url 'almacen_list' %}">🏭 Almacén</a>
+      <a href="{% url 'creditos:credito_list' %}">💳 Créditos</a>
       <a href="{% url 'admin:index' %}">⚙️ Admin</a>
     </nav>
   </div>

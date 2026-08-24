@@ -40,4 +40,5 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path('__debug_db__', _dbg_db),
     path("arandano/", include(("arandano.urls", "arandano"), namespace="arandano")),
+    path("creditos/", include(("creditos.urls", "creditos"), namespace="creditos")),
 ]

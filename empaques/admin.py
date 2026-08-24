@@ -208,11 +208,10 @@ def _distinct_sizes():
         ShipmentItem.objects
         .exclude(size__isnull=True)
         .exclude(size__exact="")
-        .values_list("size", flat=True)
+        .values_list("size", flat=True) # que pasaria
         .distinct()
-        .order_by("size")
+        .order_by("size") 
     )
-
 class ProductionDisplayAdminForm(forms.ModelForm):
     # Sobrescribimos el field para volverlo un ChoiceField
     size = forms.ChoiceField(label="Tamaño", choices=(), required=True)

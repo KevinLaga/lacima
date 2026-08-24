@@ -1,0 +1,346 @@
+{% load static %}<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Créditos — La Cima</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin:0; padding:0;
+      font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background:#f0f2f5; min-height:100vh;
+    }
+
+    /* Header */
+    .page-header {
+      background:#1e3a5f; padding:0 28px; height:56px;
+      display:flex; align-items:center; justify-content:space-between;
+      position:sticky; top:0; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,.2);
+    }
+    .header-left { display:flex; align-items:center; gap:20px; }
+    .brand { color:#fff; font-size:17px; font-weight:700; text-decoration:none; letter-spacing:.3px; }
+    .header-nav { display:flex; gap:6px; }
+    .header-nav a {
+      color:#93c5fd; font-size:13px; font-weight:600; text-decoration:none;
+      padding:5px 11px; border-radius:6px; transition:background .15s;
+    }
+    .header-nav a:hover { background:rgba(255,255,255,.1); color:#fff; }
+    .header-nav a.active { background:rgba(255,255,255,.16); color:#fff; }
+    .btn-logout {
+      background:#b91c1c; color:#fff !important; border:none;
+      padding:6px 14px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;
+    }
+    .btn-logout:hover { background:#991b1b; }
+
+    .page-body { padding:28px 28px 48px; max-width:1500px; margin:0 auto; }
+    .top-bar {
+      display:flex; align-items:center; justify-content:space-between;
+      flex-wrap:wrap; gap:14px; margin-bottom:22px;
+    }
+    .page-title { font-size:24px; font-weight:700; color:#1e3a5f; margin:0; }
+    .top-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .btn {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:9px 18px; border-radius:8px; font-size:14px; font-weight:600;
+      text-decoration:none; border:none; cursor:pointer; color:#fff !important;
+      transition:opacity .15s;
+    }
+    .btn:hover { opacity:.87; }
+    .btn-primary { background:#1e3a5f; }
+    .btn-gray    { background:#4b5563; }
+
+    .section-title {
+      font-size:12px; font-weight:700; letter-spacing:1px;
+      text-transform:uppercase; color:#9ca3af; margin:0 0 14px;
+    }
+
+    /* Messages */
+    .msg { padding:11px 16px; border-radius:9px; font-size:14px; margin-bottom:14px; font-weight:600; }
+    .msg.success { background:#dcfce7; color:#166534; }
+    .msg.error   { background:#fee2e2; color:#991b1b; }
+    .msg.info    { background:#dbeafe; color:#1e40af; }
+
+    /* Resumen */
+    .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:14px; margin-bottom:24px; }
+    .card {
+      background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+      padding:16px 18px; box-shadow:0 1px 4px rgba(0,0,0,.05);
+    }
+    .card .lbl { font-size:11px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:#9ca3af; }
+    .card .big { font-size:23px; font-weight:700; color:#1e3a5f; margin-top:6px; }
+    .card .sub { font-size:12px; color:#6b7280; margin-top:4px; }
+    .card.saldo .big { color:#b45309; }
+
+    /* Menú de vencimiento */
+    .vence-menu { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+    .vence-tab {
+      display:inline-flex; align-items:center; gap:7px;
+      background:#fff; border:1.5px solid #e5e7eb; border-radius:999px;
+      padding:8px 16px; font-size:13px; font-weight:600; color:#4b5563;
+      text-decoration:none; transition:all .15s;
+    }
+    .vence-tab:hover { border-color:#1e3a5f; color:#1e3a5f; }
+    .vence-tab.active { background:#1e3a5f; border-color:#1e3a5f; color:#fff; }
+    .vence-tab .n {
+      background:#f1f5f9; color:#4b5563; border-radius:999px;
+      padding:1px 8px; font-size:11px; font-weight:700;
+    }
+    .vence-tab.active .n { background:rgba(255,255,255,.25); color:#fff; }
+    .vence-tab.danger { border-color:#fecaca; color:#b91c1c; }
+    .vence-tab.danger .n { background:#fee2e2; color:#b91c1c; }
+    .vence-tab.danger.active { background:#b91c1c; border-color:#b91c1c; color:#fff; }
+    .vence-tab.danger.active .n { background:rgba(255,255,255,.25); color:#fff; }
+
+    /* Filtros */
+    .filters {
+      background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+      padding:16px 18px; box-shadow:0 1px 4px rgba(0,0,0,.05); margin-bottom:22px;
+      display:grid; grid-template-columns:repeat(auto-fit, minmax(165px,1fr));
+      gap:12px; align-items:end;
+    }
+    .fld label {
+      display:block; font-size:11px; font-weight:700; color:#6b7280;
+      margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;
+    }
+    .fld select {
+      width:100%; padding:8px 10px; border:1.5px solid #e5e7eb; border-radius:7px;
+      font-size:13px; color:#111827; background:#fafafa; outline:none;
+    }
+    .fld select:focus { border-color:#1e3a5f; background:#fff; }
+    .chk { display:flex; align-items:center; gap:8px; font-size:13px; color:#374151; font-weight:600; }
+    .btn-filter {
+      padding:9px 18px; background:#1e3a5f; color:#fff; border:none;
+      border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;
+    }
+    .btn-filter:hover { background:#16304f; }
+
+    /* Tabla */
+    .table-card {
+      background:#fff; border:1px solid #e5e7eb; border-radius:14px;
+      box-shadow:0 2px 8px rgba(0,0,0,.06); overflow-x:auto;
+    }
+    table { width:100%; border-collapse:collapse; min-width:1150px; }
+    thead tr { background:#1e3a5f; }
+    th {
+      padding:12px 13px; color:#fff !important; font-size:12px; font-weight:700;
+      text-align:left; letter-spacing:.3px; white-space:nowrap;
+    }
+    td {
+      padding:11px 13px; font-size:13px; color:#1f2937;
+      border-bottom:1px solid #f1f5f9; vertical-align:middle;
+    }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr:hover td { background:#f8fafc; }
+    tbody tr.is-vencido td { background:#fff5f5; }
+    tbody tr.is-vencido:hover td { background:#ffecec; }
+    .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+    .empresa-tag {
+      display:inline-block; padding:3px 9px; border-radius:6px;
+      font-size:11px; font-weight:700; background:#e0e7ff; color:#3730a3;
+    }
+    .banco-tag { font-size:12px; font-weight:600; color:#374151; }
+    .muted { color:#9ca3af; font-size:12px; }
+
+    .badge {
+      display:inline-block; padding:3px 10px; border-radius:12px;
+      font-size:11px; font-weight:700; white-space:nowrap;
+    }
+    .b-vencido   { background:#fee2e2; color:#991b1b; }
+    .b-urgente   { background:#ffedd5; color:#9a3412; }
+    .b-proximo   { background:#fef9c3; color:#854d0e; }
+    .b-vigente   { background:#dcfce7; color:#166534; }
+    .b-liquidado { background:#e5e7eb; color:#4b5563; }
+
+    .bar { height:6px; background:#f1f5f9; border-radius:4px; overflow:hidden; margin-top:5px; min-width:80px; }
+    .bar > i { display:block; height:100%; background:#15803d; border-radius:4px; }
+
+    .link-action {
+      color:#1e3a5f; font-weight:600; font-size:12px;
+      text-decoration:none; padding:4px 9px; border-radius:6px; background:#eef2f7;
+    }
+    .link-action:hover { background:#dde5ee; }
+    .empty { text-align:center; color:#9ca3af; padding:38px; }
+  </style>
+</head>
+<body>
+
+<header class="page-header">
+  <div class="header-left">
+    <span class="brand">🌿 La Cima</span>
+    <nav class="header-nav">
+      <a href="{% url 'shipment_list' %}">Embarques</a>
+      {% now "Y-m-d" as hoy_str %}
+      <a href="{% url 'production_today' %}?date={{ hoy_str }}">Producción del día</a>
+      <a href="{% url 'almacen_list' %}">🏭 Almacén</a>
+      <a href="{% url 'creditos:credito_list' %}" class="active">💳 Créditos</a>
+      <a href="{% url 'admin:index' %}">⚙️ Admin</a>
+    </nav>
+  </div>
+  <div class="header-right">
+    <form method="post" action="{% url 'logout' %}" style="margin:0">
+      {% csrf_token %}
+      <button type="submit" class="btn-logout">⎋ Cerrar sesión</button>
+    </form>
+  </div>
+</header>
+
+<div class="page-body">
+
+  {% if messages %}
+    {% for m in messages %}
+      <div class="msg {{ m.tags }}">{{ m }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <div class="top-bar">
+    <h1 class="page-title">Créditos</h1>
+    <div class="top-actions">
+      <a href="{% url 'creditos:garantia_list' %}" class="btn btn-gray">🏞 Garantías</a>
+      <a href="{% url 'creditos:credito_create' %}" class="btn btn-primary">+ Nuevo crédito</a>
+    </div>
+  </div>
+
+  <!-- Resumen por moneda -->
+  {% if totales %}
+    <p class="section-title">Resumen de lo mostrado</p>
+    <div class="cards">
+      {% for t in totales %}
+        <div class="card">
+          <div class="lbl">Monto total · {{ t.moneda }}</div>
+          <div class="big">{{ t.simbolo }}{{ t.monto|floatformat:2 }}</div>
+          <div class="sub">{{ t.n }} crédito{{ t.n|pluralize:"s" }}</div>
+        </div>
+        <div class="card">
+          <div class="lbl">Abonado · {{ t.moneda }}</div>
+          <div class="big" style="color:#15803d">{{ t.simbolo }}{{ t.abonado|floatformat:2 }}</div>
+        </div>
+        <div class="card saldo">
+          <div class="lbl">Saldo por pagar · {{ t.moneda }}</div>
+          <div class="big">{{ t.simbolo }}{{ t.saldo|floatformat:2 }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- Menú: proximidad a vencer -->
+  <p class="section-title">Filtrar por vencimiento</p>
+  <div class="vence-menu">
+    {% for clave, etiqueta, n in vence_filtros %}
+      <a class="vence-tab {% if clave == 'vencidos' %}danger{% endif %} {% if f.vence == clave %}active{% endif %}"
+         href="?vence={{ clave }}{% if f.empresa %}&empresa={{ f.empresa }}{% endif %}{% if f.banco %}&banco={{ f.banco }}{% endif %}{% if f.moneda %}&moneda={{ f.moneda }}{% endif %}&orden={{ f.orden }}{% if f.ocultar_liquidados %}&ocultar_liquidados=1{% endif %}">
+        {{ etiqueta }} <span class="n">{{ n }}</span>
+      </a>
+    {% endfor %}
+  </div>
+
+  <!-- Filtros -->
+  <form method="get" class="filters">
+    <input type="hidden" name="vence" value="{{ f.vence }}">
+    <div class="fld">
+      <label>Empresa</label>
+      <select name="empresa">
+        <option value="">Todas</option>
+        {% for val, lbl in empresas %}
+          <option value="{{ val }}" {% if f.empresa == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fld">
+      <label>Banco</label>
+      <select name="banco">
+        <option value="">Todos</option>
+        {% for val, lbl in bancos %}
+          <option value="{{ val }}" {% if f.banco == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fld">
+      <label>Moneda</label>
+      <select name="moneda">
+        <option value="">Todas</option>
+        {% for val, lbl in monedas %}
+          <option value="{{ val }}" {% if f.moneda == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fld">
+      <label>Ordenar por</label>
+      <select name="orden">
+        {% for val, lbl in orden_opciones %}
+          <option value="{{ val }}" {% if f.orden == val %}selected{% endif %}>{{ lbl }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="fld">
+      <label class="chk">
+        <input type="checkbox" name="ocultar_liquidados" value="1"
+               {% if f.ocultar_liquidados %}checked{% endif %}>
+        Ocultar liquidados
+      </label>
+    </div>
+    <div class="fld">
+      <button type="submit" class="btn-filter">Aplicar</button>
+    </div>
+  </form>
+
+  <!-- Tabla -->
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Banco</th>
+          <th>Tipo</th>
+          <th>Garantía</th>
+          <th class="num">Monto</th>
+          <th class="num">Abonado</th>
+          <th class="num">Saldo</th>
+          <th class="num">Tasa</th>
+          <th>Plazo</th>
+          <th>Disposición</th>
+          <th>Vencimiento</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in creditos %}
+          <tr class="{% if c.estado == 'vencido' %}is-vencido{% endif %}">
+            <td><span class="empresa-tag">{{ c.get_empresa_display }}</span></td>
+            <td><span class="banco-tag">{{ c.get_banco_display }}</span></td>
+            <td>{{ c.tipo_credito_label }}</td>
+            <td>
+              {% if c.garantia %}{{ c.garantia.nombre }}
+              {% else %}<span class="muted">—</span>{% endif %}
+            </td>
+            <td class="num"><strong>{{ c.monto_fmt }}</strong></td>
+            <td class="num">
+              {{ c.abonado_fmt }}
+              <div class="bar"><i style="width:{{ c.porcentaje_pagado|floatformat:0 }}%"></i></div>
+            </td>
+            <td class="num"><strong>{{ c.saldo_fmt }}</strong></td>
+            <td class="num">{% if c.tasa is not None %}{{ c.tasa|floatformat:3 }}%{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td>{% if c.plazo_meses %}{{ c.plazo_meses }} mes{{ c.plazo_meses|pluralize:"es" }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td style="white-space:nowrap;">{{ c.fecha_disposicion|date:"d/m/Y" }}</td>
+            <td style="white-space:nowrap;">
+              <strong>{{ c.fecha_vencimiento|date:"d/m/Y" }}</strong>
+              <div class="muted">{{ c.vencimiento_texto }}</div>
+            </td>
+            <td><span class="badge b-{{ c.estado }}">{{ c.estado_label }}</span></td>
+            <td style="white-space:nowrap;">
+              <a href="{% url 'creditos:credito_detail' c.pk %}" class="link-action">Ver / abonar</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="13" class="empty">No hay créditos que coincidan con el filtro.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

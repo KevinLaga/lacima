@@ -16,7 +16,7 @@ urlpatterns = [
     # ── Remisiones ───────────────────────────────────────────────────
     path("almacen/remisiones/", v.remision_list, name="remision_list"),
     path("almacen/remisiones/nueva/", v.remision_new, name="remision_new"),
-    path("almacen/remisiones/<int:pk>/", v.remision_detail, name="remision_detail"),
+    path("almacen/remisiones/<int:pk>/", v.remision_detail, name="remision_detail"), 
 
     # ── Inventario inicial ───────────────────────────────────────────
     path("almacen/inventario-inicial/", v.inventario_inicial, name="inventario_inicial"),

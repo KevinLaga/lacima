@@ -38,7 +38,7 @@ class SalidaDiaForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["fecha"].input_formats = ["%Y-%m-%d"]
+        self.fields["fecha"].input_formats = ["%Y-%m-%d"] 
 
     def clean(self):
         cleaned = super().clean()

@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "empaques.apps.EmpaquesConfig",
     "arandano",
+    "creditos.apps.CreditosConfig",
 ]
 
 # -----------------------------
