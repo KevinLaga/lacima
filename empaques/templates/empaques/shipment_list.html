@@ -371,6 +371,7 @@
       <h3><span class="icon">📈</span> Acumulados por empresa</h3>
       <form method="get" action="{% url 'shipment_list' %}">
         <input type="hidden" name="descargar" value="acumulados">
+        <input type="hidden" name="mode" value="{{ request.GET.mode|default:'esparrago' }}">
         <div class="dl-field">
           <label>Empresa</label>
           <select name="empresa" required>
