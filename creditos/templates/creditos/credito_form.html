@@ -40,11 +40,23 @@
     .fld label { display:block; font-size:11px; font-weight:700; color:#6b7280;
                  margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px; }
     .fld input, .fld select, .fld textarea {
-      width:100%; padding:9px 11px; border:1.5px solid #e5e7eb; border-radius:7px;
+      width:100%; box-sizing:border-box;
+      padding:9px 11px; border:1.5px solid #e5e7eb; border-radius:7px;
       font-size:13px; color:#111827; background:#fafafa; outline:none;
       font-family:inherit;
     }
-    .fld input:focus, .fld select:focus, .fld textarea:focus { border-color:#1e3a5f; background:#fff; }
+    /* El select nativo recorta el texto si no se le da alto propio */
+    .fld select {
+      height:40px; line-height:38px; padding:0 32px 0 11px;
+      -webkit-appearance:none; -moz-appearance:none; appearance:none;
+      background-color:#fafafa;
+      background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M1.4 0 6 4.6 10.6 0 12 1.4 6 7.4 0 1.4z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 11px center;
+      text-overflow:ellipsis;
+    }
+    .fld input:focus, .fld textarea:focus { border-color:#1e3a5f; background:#fff; }
+    .fld select:focus { border-color:#1e3a5f; background-color:#fff; }
+    .fld select option { color:#111827; background:#fff; }
     .fld .help { font-size:11px; color:#9ca3af; margin-top:4px; }
     .errs { color:#b91c1c; font-size:12px; margin-top:4px; font-weight:600; }
     .full { grid-column:1 / -1; }
@@ -159,6 +171,10 @@
           <div class="fld">
             <label>{{ form.tasa.label }}</label>
             {{ form.tasa }}
+            <div class="help">
+              Se suma al monto para calcular el total a pagar.
+              Ej: 4.15 sobre $100,000 = $4,150 de interés → $104,150 a liquidar.
+            </div>
             {% if form.tasa.errors %}<div class="errs">{{ form.tasa.errors|striptags }}</div>{% endif %}
           </div>
           <div class="fld">

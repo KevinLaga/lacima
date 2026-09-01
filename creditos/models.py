@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import models
 from django.db.models import Sum
@@ -137,6 +137,26 @@ class Credito(models.Model):
     def anio_vencimiento(self):
         return self.fecha_vencimiento.year if self.fecha_vencimiento else None
 
+    # ── Intereses ──
+
+    @property
+    def interes(self) -> Decimal:
+        """
+        Interés a pagar: la tasa aplicada como porcentaje sobre el monto.
+
+        Es un porcentaje plano sobre el capital (ej. tasa 4.15 sobre un monto
+        de 100,000 = 4,150). No se prorratea por tiempo ni se capitaliza.
+        """
+        if not self.monto or self.tasa is None:
+            return Decimal("0.00")
+        bruto = Decimal(self.monto) * Decimal(self.tasa) / Decimal("100")
+        return bruto.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @property
+    def total_a_pagar(self) -> Decimal:
+        """Monto del crédito + intereses. Es lo que hay que cubrir para liquidar."""
+        return Decimal(self.monto or 0) + self.interes
+
     # ── Abonos y saldo ──
 
     @property
@@ -146,7 +166,16 @@ class Credito(models.Model):
 
     @property
     def saldo(self) -> Decimal:
-        return Decimal(self.monto or 0) - self.total_abonado
+        """Lo que falta por abonar para liquidar, ya con los intereses incluidos."""
+        return self.total_a_pagar - self.total_abonado
+
+    @property
+    def interes_fmt(self):
+        return f"{self.simbolo}{self.interes:,.2f}"
+
+    @property
+    def total_a_pagar_fmt(self):
+        return f"{self.simbolo}{self.total_a_pagar:,.2f}"
 
     @property
     def saldo_fmt(self):
@@ -158,9 +187,10 @@ class Credito(models.Model):
 
     @property
     def porcentaje_pagado(self) -> float:
-        if not self.monto:
+        total = self.total_a_pagar
+        if not total:
             return 0.0
-        pct = float(self.total_abonado) / float(self.monto) * 100.0
+        pct = float(self.total_abonado) / float(total) * 100.0
         return max(0.0, min(100.0, pct))
 
     @property

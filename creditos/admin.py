@@ -21,7 +21,8 @@ class GarantiaAdmin(admin.ModelAdmin):
 class CreditoAdmin(admin.ModelAdmin):
     list_display = (
         "id", "empresa", "banco", "tipo_credito_label", "garantia",
-        "moneda", "monto", "col_abonado", "col_saldo",
+        "moneda", "monto", "tasa", "col_interes", "col_total",
+        "col_abonado", "col_saldo",
         "fecha_disposicion", "fecha_vencimiento", "col_estado",
     )
     list_filter   = ("empresa", "banco", "tipo_credito", "moneda", "fecha_vencimiento")
@@ -48,6 +49,14 @@ class CreditoAdmin(admin.ModelAdmin):
     @admin.display(description="Tipo")
     def tipo_credito_label(self, obj):
         return obj.tipo_credito_label
+
+    @admin.display(description="Interés")
+    def col_interes(self, obj):
+        return obj.interes_fmt
+
+    @admin.display(description="Total a pagar")
+    def col_total(self, obj):
+        return obj.total_a_pagar_fmt
 
     @admin.display(description="Abonado")
     def col_abonado(self, obj):

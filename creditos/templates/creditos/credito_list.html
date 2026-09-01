@@ -98,21 +98,34 @@
     .filters {
       background:#fff; border:1px solid #e5e7eb; border-radius:12px;
       padding:16px 18px; box-shadow:0 1px 4px rgba(0,0,0,.05); margin-bottom:22px;
-      display:grid; grid-template-columns:repeat(auto-fit, minmax(165px,1fr));
-      gap:12px; align-items:end;
+      display:grid; grid-template-columns:repeat(auto-fit, minmax(195px,1fr));
+      gap:12px 14px; align-items:end;
     }
     .fld label {
       display:block; font-size:11px; font-weight:700; color:#6b7280;
       margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px;
     }
     .fld select {
-      width:100%; padding:8px 10px; border:1.5px solid #e5e7eb; border-radius:7px;
-      font-size:13px; color:#111827; background:#fafafa; outline:none;
+      width:100%; box-sizing:border-box;
+      padding:0 32px 0 11px;          /* espacio para la flecha, sin recortar el texto */
+      height:40px; line-height:38px;
+      border:1.5px solid #e5e7eb; border-radius:7px;
+      font-size:13px; font-family:inherit; color:#111827;
+      background-color:#fafafa; outline:none;
+      /* Flecha propia: los selects nativos recortan el texto en algunos navegadores */
+      -webkit-appearance:none; -moz-appearance:none; appearance:none;
+      background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M1.4 0 6 4.6 10.6 0 12 1.4 6 7.4 0 1.4z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;
+      background-position:right 11px center;
+      text-overflow:ellipsis;
     }
-    .fld select:focus { border-color:#1e3a5f; background:#fff; }
-    .chk { display:flex; align-items:center; gap:8px; font-size:13px; color:#374151; font-weight:600; }
+    .fld select:focus { border-color:#1e3a5f; background-color:#fff; }
+    .fld select option { color:#111827; background:#fff; }
+    .chk { display:flex; align-items:center; gap:8px; height:40px;
+           font-size:13px; color:#374151; font-weight:600; }
     .btn-filter {
-      padding:9px 18px; background:#1e3a5f; color:#fff; border:none;
+      width:100%; height:40px; padding:0 18px;
+      background:#1e3a5f; color:#fff; border:none;
       border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;
     }
     .btn-filter:hover { background:#16304f; }
@@ -122,21 +135,38 @@
       background:#fff; border:1px solid #e5e7eb; border-radius:14px;
       box-shadow:0 2px 8px rgba(0,0,0,.06); overflow-x:auto;
     }
-    table { width:100%; border-collapse:collapse; min-width:1150px; }
+    table { width:100%; border-collapse:collapse; min-width:1620px; }
     thead tr { background:#1e3a5f; }
-    th {
+    /* El fondo va en el TH: admin/css/base.css pinta el th y taparía el del tr */
+    .table-card thead th {
+      background:#1e3a5f !important;
       padding:12px 13px; color:#fff !important; font-size:12px; font-weight:700;
       text-align:left; letter-spacing:.3px; white-space:nowrap;
+      border-bottom:none;
     }
+    .table-card thead th.num { text-align:right; }
     td {
       padding:11px 13px; font-size:13px; color:#1f2937;
       border-bottom:1px solid #f1f5f9; vertical-align:middle;
+      white-space:nowrap;   /* la tarjeta ya desliza en horizontal */
     }
     tbody tr:last-child td { border-bottom:none; }
     tbody tr:hover td { background:#f8fafc; }
     tbody tr.is-vencido td { background:#fff5f5; }
     tbody tr.is-vencido:hover td { background:#ffecec; }
     .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+
+    /* Columna Acciones siempre visible al deslizar */
+    .table-card th.col-acciones,
+    .table-card td.col-acciones {
+      position:sticky; right:0; z-index:2;
+      box-shadow:-3px 0 6px rgba(0,0,0,.08);
+    }
+    .table-card thead th.col-acciones { background:#1e3a5f !important; }
+    .table-card td.col-acciones { background:#fff; }
+    .table-card tbody tr:hover td.col-acciones { background:#f8fafc; }
+    .table-card tbody tr.is-vencido td.col-acciones { background:#fff5f5; }
+    .table-card tbody tr.is-vencido:hover td.col-acciones { background:#ffecec; }
 
     .empresa-tag {
       display:inline-block; padding:3px 9px; border-radius:6px;
@@ -216,16 +246,26 @@
       {% for t in totales %}
         <div class="card">
           <div class="lbl">Monto total · {{ t.moneda }}</div>
-          <div class="big">{{ t.simbolo }}{{ t.monto|floatformat:2 }}</div>
+          <div class="big">{{ t.monto_fmt }}</div>
           <div class="sub">{{ t.n }} crédito{{ t.n|pluralize:"s" }}</div>
         </div>
         <div class="card">
+          <div class="lbl">Intereses · {{ t.moneda }}</div>
+          <div class="big" style="color:#7c3aed">{{ t.interes_fmt }}</div>
+          <div class="sub">según la tasa de cada crédito</div>
+        </div>
+        <div class="card">
+          <div class="lbl">Total a pagar · {{ t.moneda }}</div>
+          <div class="big">{{ t.total_fmt }}</div>
+          <div class="sub">monto + intereses</div>
+        </div>
+        <div class="card">
           <div class="lbl">Abonado · {{ t.moneda }}</div>
-          <div class="big" style="color:#15803d">{{ t.simbolo }}{{ t.abonado|floatformat:2 }}</div>
+          <div class="big" style="color:#15803d">{{ t.abonado_fmt }}</div>
         </div>
         <div class="card saldo">
-          <div class="lbl">Saldo por pagar · {{ t.moneda }}</div>
-          <div class="big">{{ t.simbolo }}{{ t.saldo|floatformat:2 }}</div>
+          <div class="lbl">Falta por pagar · {{ t.moneda }}</div>
+          <div class="big">{{ t.saldo_fmt }}</div>
         </div>
       {% endfor %}
     </div>
@@ -302,14 +342,16 @@
           <th>Tipo</th>
           <th>Garantía</th>
           <th class="num">Monto</th>
+          <th class="num">Tasa</th>
+          <th class="num">Interés</th>
+          <th class="num">Total a pagar</th>
           <th class="num">Abonado</th>
           <th class="num">Saldo</th>
-          <th class="num">Tasa</th>
           <th>Plazo</th>
           <th>Disposición</th>
           <th>Vencimiento</th>
           <th>Estado</th>
-          <th>Acciones</th>
+          <th class="col-acciones">Acciones</th>
         </tr>
       </thead>
       <tbody>
@@ -322,13 +364,15 @@
               {% if c.garantia %}{{ c.garantia.nombre }}
               {% else %}<span class="muted">—</span>{% endif %}
             </td>
-            <td class="num"><strong>{{ c.monto_fmt }}</strong></td>
+            <td class="num">{{ c.monto_fmt }}</td>
+            <td class="num">{% if c.tasa is not None %}{{ c.tasa|floatformat:3 }}%{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{% if c.tasa is not None %}{{ c.interes_fmt }}{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num"><strong>{{ c.total_a_pagar_fmt }}</strong></td>
             <td class="num">
               {{ c.abonado_fmt }}
               <div class="bar"><i style="width:{{ c.porcentaje_pagado|floatformat:0 }}%"></i></div>
             </td>
             <td class="num"><strong>{{ c.saldo_fmt }}</strong></td>
-            <td class="num">{% if c.tasa is not None %}{{ c.tasa|floatformat:3 }}%{% else %}<span class="muted">—</span>{% endif %}</td>
             <td>{% if c.plazo_meses %}{{ c.plazo_meses }} mes{{ c.plazo_meses|pluralize:"es" }}{% else %}<span class="muted">—</span>{% endif %}</td>
             <td style="white-space:nowrap;">{{ c.fecha_disposicion|date:"d/m/Y" }}</td>
             <td style="white-space:nowrap;">
@@ -336,12 +380,12 @@
               <div class="muted">{{ c.vencimiento_texto }}</div>
             </td>
             <td><span class="badge b-{{ c.estado }}">{{ c.estado_label }}</span></td>
-            <td style="white-space:nowrap;">
+            <td class="col-acciones">
               <a href="{% url 'creditos:credito_detail' c.pk %}" class="link-action">Ver / abonar</a>
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="13" class="empty">No hay créditos que coincidan con el filtro.</td></tr>
+          <tr><td colspan="15" class="empty">No hay créditos que coincidan con el filtro.</td></tr>
         {% endfor %}
       </tbody>
     </table>

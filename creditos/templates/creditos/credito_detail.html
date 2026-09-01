@@ -71,6 +71,8 @@
     .money .big { font-size:20px; font-weight:700; margin-top:5px; color:#1e3a5f; }
     .money.ab .big { color:#15803d; }
     .money.sa .big { color:#b45309; }
+    .money.in .big { color:#7c3aed; }
+    .money.to .big { color:#1e3a5f; }
 
     .bar { height:9px; background:#f1f5f9; border-radius:5px; overflow:hidden; margin-top:14px; }
     .bar > i { display:block; height:100%; background:#15803d; }
@@ -153,20 +155,41 @@
         <div class="inner">
           <div class="money-row">
             <div class="money">
-              <div class="lbl">Monto</div>
+              <div class="lbl">Monto del crédito</div>
               <div class="big">{{ credito.monto_fmt }}</div>
             </div>
+            <div class="money in">
+              <div class="lbl">
+                Interés{% if credito.tasa is not None %} ({{ credito.tasa|floatformat:3 }}%){% endif %}
+              </div>
+              <div class="big">{{ credito.interes_fmt }}</div>
+            </div>
+            <div class="money to">
+              <div class="lbl">Total a pagar</div>
+              <div class="big">{{ credito.total_a_pagar_fmt }}</div>
+            </div>
+          </div>
+          <div class="money-row" style="margin-top:14px;">
             <div class="money ab">
               <div class="lbl">Abonado</div>
               <div class="big">{{ credito.abonado_fmt }}</div>
             </div>
             <div class="money sa">
-              <div class="lbl">Saldo</div>
+              <div class="lbl">Falta por pagar</div>
               <div class="big">{{ credito.saldo_fmt }}</div>
+            </div>
+            <div class="money">
+              <div class="lbl">Vencimiento</div>
+              <div class="big" style="font-size:16px;">{{ credito.fecha_vencimiento|date:"d/m/Y" }}</div>
             </div>
           </div>
           <div class="bar"><i style="width:{{ credito.porcentaje_pagado|floatformat:0 }}%"></i></div>
-          <div class="bar-txt">{{ credito.porcentaje_pagado|floatformat:1 }}% pagado</div>
+          <div class="bar-txt">
+            {{ credito.porcentaje_pagado|floatformat:1 }}% pagado sobre el total a pagar
+            {% if credito.tasa is not None %}
+              · {{ credito.monto_fmt }} + {{ credito.interes_fmt }} de interés
+            {% endif %}
+          </div>
         </div>
       </div>
 

@@ -42,15 +42,27 @@ def _totales_por_moneda(creditos):
             "moneda": c.moneda,
             "simbolo": SIMBOLO_MONEDA.get(c.moneda, "$"),
             "monto": Decimal("0"),
+            "interes": Decimal("0"),
+            "total": Decimal("0"),
             "abonado": Decimal("0"),
             "saldo": Decimal("0"),
             "n": 0,
         })
         d["monto"]   += Decimal(c.monto or 0)
+        d["interes"] += c.interes
+        d["total"]   += c.total_a_pagar
         d["abonado"] += c.total_abonado
         d["saldo"]   += c.saldo
         d["n"]       += 1
-    return [acc[k] for k in sorted(acc)]
+
+    salida = []
+    for k in sorted(acc):
+        d = acc[k]
+        # Ya formateados con separador de miles (floatformat no agrupa)
+        for campo in ("monto", "interes", "total", "abonado", "saldo"):
+            d[campo + "_fmt"] = f"{d['simbolo']}{d[campo]:,.2f}"
+        salida.append(d)
+    return salida
 
 
 def _aplicar_filtros(request):
@@ -252,7 +264,7 @@ def credito_export_xlsx(request):
     right = Alignment(horizontal="right", vertical="center")
 
     # ── Título y filtros aplicados ──
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=13)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=15)
     c = ws.cell(row=1, column=1, value="Créditos")
     c.font = Font(name="Calibri", size=16, bold=True, color="1E3A5F")
     c.alignment = Alignment(horizontal="left", vertical="center")
@@ -269,7 +281,7 @@ def credito_export_xlsx(request):
     if filtros["ocultar_liquidados"]:
         partes.append("Sin liquidados")
 
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=13)
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=15)
     c = ws.cell(row=2, column=1, value="  ·  ".join(partes))
     c.font = Font(name="Calibri", size=10, italic=True, color="6D6D6D")
     c.alignment = Alignment(horizontal="left", vertical="center")
@@ -277,8 +289,9 @@ def credito_export_xlsx(request):
     # ── Encabezados (mismas columnas que la tabla en pantalla) ──
     headers = [
         ("Empresa", 20), ("Banco", 20), ("Tipo", 24), ("Garantía", 22),
-        ("Moneda", 9), ("Monto", 16), ("Abonado", 16), ("Saldo", 16),
-        ("Tasa (%)", 11), ("Plazo (meses)", 13),
+        ("Moneda", 9), ("Monto", 16), ("Tasa (%)", 11), ("Interés", 16),
+        ("Total a pagar", 17), ("Abonado", 16), ("Saldo", 16),
+        ("Plazo (meses)", 13),
         ("Disposición", 13), ("Vencimiento", 13), ("Estado", 13),
     ]
     r = 4
@@ -303,9 +316,11 @@ def credito_export_xlsx(request):
             cr.garantia.nombre if cr.garantia else "",
             cr.moneda,
             float(cr.monto or 0),
+            float(cr.tasa) if cr.tasa is not None else None,
+            float(cr.interes),
+            float(cr.total_a_pagar),
             float(cr.total_abonado),
             float(cr.saldo),
-            float(cr.tasa) if cr.tasa is not None else None,
             cr.plazo_meses,
             cr.fecha_disposicion,
             cr.fecha_vencimiento,
@@ -314,15 +329,15 @@ def credito_export_xlsx(request):
         for col, v in enumerate(vals, start=1):
             cell = ws.cell(row=r, column=col, value=v)
             cell.border = border
-            if col in (6, 7, 8):
+            if col in (6, 8, 9, 10, 11):
                 cell.number_format = fmt_money
                 cell.alignment = right
-            elif col == 9:
+            elif col == 7:
                 cell.number_format = '0.000'
                 cell.alignment = right
-            elif col in (10, 13):
+            elif col in (12, 15):
                 cell.alignment = center
-            elif col in (11, 12):
+            elif col in (13, 14):
                 cell.number_format = 'dd/mm/yyyy'
                 cell.alignment = center
             if cr.estado == "vencido":
@@ -330,7 +345,7 @@ def credito_export_xlsx(request):
         r += 1
 
     if not creditos:
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=13)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=15)
         c = ws.cell(row=r, column=1, value="No hay créditos que coincidan con el filtro.")
         c.alignment = center
         c.font = Font(italic=True, color="9CA3AF")
@@ -341,7 +356,8 @@ def credito_export_xlsx(request):
     for t in _totales_por_moneda(creditos):
         ws.cell(row=r, column=1, value=f"TOTAL {t['moneda']}").font = Font(bold=True)
         ws.cell(row=r, column=5, value=f"{t['n']} créditos").alignment = center
-        for col, key in ((6, "monto"), (7, "abonado"), (8, "saldo")):
+        for col, key in ((6, "monto"), (8, "interes"), (9, "total"),
+                         (10, "abonado"), (11, "saldo")):
             cell = ws.cell(row=r, column=col, value=float(t[key]))
             cell.font = Font(bold=True)
             cell.number_format = fmt_money
