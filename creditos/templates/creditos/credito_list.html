@@ -50,6 +50,7 @@
     .btn:hover { opacity:.87; }
     .btn-primary { background:#1e3a5f; }
     .btn-gray    { background:#4b5563; }
+    .btn-green   { background:#15803d; }
 
     .section-title {
       font-size:12px; font-weight:700; letter-spacing:1px;
@@ -198,6 +199,11 @@
   <div class="top-bar">
     <h1 class="page-title">Créditos</h1>
     <div class="top-actions">
+      <a href="{% url 'creditos:credito_export_xlsx' %}{% if qs_actual %}?{{ qs_actual }}{% endif %}"
+         class="btn btn-green"
+         title="Descarga en Excel exactamente lo que estás viendo, con los filtros aplicados">
+        ⬇ Excel de lo que veo
+      </a>
       <a href="{% url 'creditos:garantia_list' %}" class="btn btn-gray">🏞 Garantías</a>
       <a href="{% url 'creditos:credito_create' %}" class="btn btn-primary">+ Nuevo crédito</a>
     </div>

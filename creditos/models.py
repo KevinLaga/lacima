@@ -45,6 +45,8 @@ class Garantia(models.Model):
     """
     nombre      = models.CharField("Nombre del campo / terreno", max_length=120, unique=True)
     descripcion = models.CharField("Descripción", max_length=255, blank=True)
+    precio      = models.DecimalField("Precio", max_digits=14, decimal_places=2,
+                                      null=True, blank=True)
     activo      = models.BooleanField("Activo", default=True)
 
     class Meta:
@@ -54,6 +56,17 @@ class Garantia(models.Model):
 
     def __str__(self):
         return self.nombre
+
+    @property
+    def precio_fmt(self):
+        if self.precio is None:
+            return "—"
+        return f"${self.precio:,.2f}"
+
+    @property
+    def en_uso(self) -> bool:
+        """True si algún crédito la tiene como garantía (no se puede eliminar)."""
+        return self.creditos.exists()
 
 
 # ─────────────────────────── Crédito ───────────────────────────

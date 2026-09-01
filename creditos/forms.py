@@ -82,8 +82,15 @@ class AbonoForm(forms.ModelForm):
 class GarantiaForm(forms.ModelForm):
     class Meta:
         model = Garantia
-        fields = ["nombre", "descripcion", "activo"]
+        fields = ["nombre", "descripcion", "precio"]
         widgets = {
-            "nombre":      forms.TextInput(attrs={"placeholder": "Ej: Campo El Sauz"}),
+            "nombre":      forms.TextInput(attrs={"placeholder": "Ej: campo 21 misión"}),
             "descripcion": forms.TextInput(attrs={"placeholder": "Superficie, ubicación, etc."}),
+            "precio":      forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.00"}),
         }
+
+    def clean_precio(self):
+        precio = self.cleaned_data.get("precio")
+        if precio is not None and precio < 0:
+            raise forms.ValidationError("El precio no puede ser negativo.")
+        return precio

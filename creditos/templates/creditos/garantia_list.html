@@ -51,12 +51,17 @@
     .off { background:#e5e7eb; color:#6b7280; }
     .empty { text-align:center; color:#9ca3af; padding:28px; font-size:13px; }
     .muted { color:#9ca3af; }
+    .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .btn-del { background:none; border:none; color:#b91c1c; font-size:12px;
+               font-weight:600; cursor:pointer; padding:4px 9px; border-radius:6px; }
+    .btn-del:hover { background:#fee2e2; }
 
     .fld { margin-bottom:12px; }
     .fld label { display:block; font-size:11px; font-weight:700; color:#6b7280;
                  margin-bottom:5px; text-transform:uppercase; letter-spacing:.4px; }
-    .fld input[type=text] { width:100%; padding:9px 11px; border:1.5px solid #e5e7eb;
-                            border-radius:7px; font-size:13px; background:#fafafa; outline:none; }
+    .fld input[type=text], .fld input[type=number] {
+      width:100%; padding:9px 11px; border:1.5px solid #e5e7eb;
+      border-radius:7px; font-size:13px; background:#fafafa; outline:none; }
     .fld input:focus { border-color:#1e3a5f; background:#fff; }
     .chk { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#374151; }
     .errs { color:#b91c1c; font-size:12px; margin-top:4px; font-weight:600; }
@@ -101,24 +106,37 @@
           <tr>
             <th>Nombre</th>
             <th>Descripción</th>
-            <th>Créditos</th>
-            <th>Estado</th>
+            <th class="num">Precio</th>
+            <th class="num">Créditos</th>
+            <th></th>
           </tr>
         </thead>
         <tbody>
           {% for g in garantias %}
             <tr>
-              <td><strong>{{ g.nombre }}</strong></td>
-              <td>{{ g.descripcion|default:"—" }}</td>
-              <td>{{ g.creditos.count }}</td>
               <td>
-                <span class="pill {% if g.activo %}on{% else %}off{% endif %}">
-                  {% if g.activo %}Activa{% else %}Inactiva{% endif %}
-                </span>
+                <strong>{{ g.nombre }}</strong>
+                {% if not g.activo %}<span class="pill off">Inactiva</span>{% endif %}
+              </td>
+              <td>{{ g.descripcion|default:"—" }}</td>
+              <td class="num">{{ g.precio_fmt }}</td>
+              <td class="num">{{ g.creditos.count }}</td>
+              <td style="text-align:right; white-space:nowrap;">
+                {% if g.en_uso %}
+                  <span class="muted" style="font-size:12px;"
+                        title="No se puede quitar: está usada por algún crédito.">En uso</span>
+                {% else %}
+                  <form method="post" action="{% url 'creditos:garantia_delete' g.pk %}"
+                        style="margin:0"
+                        onsubmit="return confirm('¿Quitar la garantía «{{ g.nombre|escapejs }}»?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-del">Quitar</button>
+                  </form>
+                {% endif %}
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="empty">Todavía no hay garantías registradas.</td></tr>
+            <tr><td colspan="5" class="empty">Todavía no hay garantías registradas.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -140,7 +158,9 @@
             {% if form.descripcion.errors %}<div class="errs">{{ form.descripcion.errors|striptags }}</div>{% endif %}
           </div>
           <div class="fld">
-            <label class="chk">{{ form.activo }} Activa</label>
+            <label>{{ form.precio.label }}</label>
+            {{ form.precio }}
+            {% if form.precio.errors %}<div class="errs">{{ form.precio.errors|striptags }}</div>{% endif %}
           </div>
           <button type="submit" class="btn-full">＋ Agregar</button>
         </form>

@@ -11,8 +11,8 @@ class AbonoInline(admin.TabularInline):
 
 @admin.register(Garantia)
 class GarantiaAdmin(admin.ModelAdmin):
-    list_display  = ("nombre", "descripcion", "activo")
-    list_editable = ("activo",)
+    list_display  = ("nombre", "descripcion", "precio", "activo")
+    list_editable = ("precio", "activo")
     list_filter   = ("activo",)
     search_fields = ("nombre", "descripcion")
 
