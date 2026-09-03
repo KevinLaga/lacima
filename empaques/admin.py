@@ -55,17 +55,17 @@ class ShipmentAdmin(admin.ModelAdmin):
     # Muestra y permite editar EN LISTA los números por cliente
     list_display = (
         "id", "date", "tracking_number", "invoice_number",
-        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates",
+        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates","order_dhg_lopez",
         "carrier", "tarimas_peco","is_national",
     )
     list_display_links = ("id", "tracking_number")  # estos NO pueden ir en list_editable
-    list_editable = ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates")
+    list_editable = ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates","order_dhg_lopez")
 
     list_filter = ("date", "carrier", "is_national")
     search_fields = (
         "tracking_number", "invoice_number",
-        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates",
-        "invoice_lacima", "invoice_rc", "invoice_gh", "invoice_gourmet", "invoice_gbf","invoice_dhg","invoice_dhg_gonzalo","invoice_dhg_cruces","invoice_el_garal","invoice_dhg_avila","invoice_dhg_otates",
+        "order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates","order_dhg_lopez",
+        "invoice_lacima", "invoice_rc", "invoice_gh", "invoice_gourmet", "invoice_gbf","invoice_dhg","invoice_dhg_gonzalo","invoice_dhg_cruces","invoice_el_garal","invoice_dhg_avila","invoice_dhg_otates","invoice_dhg_lopez",
         "driver", "carrier", "tractor_plates", "box_plates",
     )
 
@@ -90,10 +90,10 @@ class ShipmentAdmin(admin.ModelAdmin):
                        'is_national',)
         }),
         ("Números de orden por cliente (solo para mostrar en los Excel por cliente)", {
-            "fields": ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates"),
+            "fields": ("order_lacima", "order_rc", "order_gh", "order_gourmet", "order_gbf","order_dhg","order_dhg_gonzalo","order_dhg_cruces","order_el_garal","order_dhg_avila","order_dhg_otates","order_dhg_lopez"),
         }),
         ("Números de factura por cliente (solo para mostrar en los Excel por cliente)", {
-            "fields": ("invoice_lacima", "invoice_rc", "invoice_gh", "invoice_gourmet", "invoice_gbf","invoice_dhg","invoice_dhg_gonzalo","invoice_dhg_cruces","invoice_el_garal","invoice_dhg_avila","invoice_dhg_otates"),
+            "fields": ("invoice_lacima", "invoice_rc", "invoice_gh", "invoice_gourmet", "invoice_gbf","invoice_dhg","invoice_dhg_gonzalo","invoice_dhg_cruces","invoice_el_garal","invoice_dhg_avila","invoice_dhg_otates","invoice_dhg_lopez"),
         }),
     )
 

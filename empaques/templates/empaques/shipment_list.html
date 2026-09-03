@@ -269,6 +269,7 @@
             <option value="PRODUCTORA EL GARAL"   {% if e == 'PRODUCTORA EL GARAL' %}selected{% endif %}>PRODUCTORA EL GARAL</option>
             <option value="AGRICOLA DH&G AVILA"   {% if e == 'AGRICOLA DH&G AVILA' %}selected{% endif %}>AGRICOLA DH&amp;G AVILA</option>
             <option value="AGRICOLA DH&G OTATES"  {% if e == 'AGRICOLA DH&G OTATES' %}selected{% endif %}>AGRICOLA DH&amp;G OTATES</option>
+            <option value="AGRICOLA DH&G LOPEZ"   {% if e == 'AGRICOLA DH&G LOPEZ' %}selected{% endif %}>AGRICOLA DH&amp;G LOPEZ</option>
             {% endwith %}
           </select>
         </div>
@@ -326,6 +327,7 @@
             <option value="PRODUCTORA EL GARAL"   {% if e == 'PRODUCTORA EL GARAL' %}selected{% endif %}>PRODUCTORA EL GARAL</option>
             <option value="AGRICOLA DH&G AVILA"   {% if e == 'AGRICOLA DH&G AVILA' %}selected{% endif %}>AGRICOLA DH&amp;G AVILA</option>
             <option value="AGRICOLA DH&G OTATES"  {% if e == 'AGRICOLA DH&G OTATES' %}selected{% endif %}>AGRICOLA DH&amp;G OTATES</option>
+            <option value="AGRICOLA DH&G LOPEZ"   {% if e == 'AGRICOLA DH&G LOPEZ' %}selected{% endif %}>AGRICOLA DH&amp;G LOPEZ</option>
             {% endwith %}
           </select>
         </div>
@@ -359,6 +361,7 @@
             <option value="PRODUCTORA EL GARAL"   {% if e == 'PRODUCTORA EL GARAL' %}selected{% endif %}>PRODUCTORA EL GARAL</option>
             <option value="AGRICOLA DH&G AVILA"   {% if e == 'AGRICOLA DH&G AVILA' %}selected{% endif %}>AGRICOLA DH&amp;G AVILA</option>
             <option value="AGRICOLA DH&G OTATES"  {% if e == 'AGRICOLA DH&G OTATES' %}selected{% endif %}>AGRICOLA DH&amp;G OTATES</option>
+            <option value="AGRICOLA DH&G LOPEZ"   {% if e == 'AGRICOLA DH&G LOPEZ' %}selected{% endif %}>AGRICOLA DH&amp;G LOPEZ</option>
             {% endwith %}
           </select>
         </div>
@@ -388,6 +391,7 @@
             <option value="PRODUCTORA EL GARAL"   {% if e == 'PRODUCTORA EL GARAL' %}selected{% endif %}>PRODUCTORA EL GARAL</option>
             <option value="AGRICOLA DH&G AVILA"   {% if e == 'AGRICOLA DH&G AVILA' %}selected{% endif %}>AGRICOLA DH&amp;G AVILA</option>
             <option value="AGRICOLA DH&G OTATES"  {% if e == 'AGRICOLA DH&G OTATES' %}selected{% endif %}>AGRICOLA DH&amp;G OTATES</option>
+            <option value="AGRICOLA DH&G LOPEZ"   {% if e == 'AGRICOLA DH&G LOPEZ' %}selected{% endif %}>AGRICOLA DH&amp;G LOPEZ</option>
             {% endwith %}
           </select>
         </div>
@@ -427,6 +431,7 @@
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">EL GARAL</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. AVILA</th>
           <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. OTATES</th>
+          <th style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">AGRIC. LOPEZ</th>
           <th class="col-acciones" style="background:#1e3a5f;color:#fff;padding:12px 13px;font-size:13px;font-weight:700;text-align:left;">Acciones</th>
         </tr>
       </thead>
@@ -455,6 +460,7 @@
             <td class="num-col">{% if s.order_el_garal %}<span class="order-num">{{ s.order_el_garal }}</span>{% endif %}</td>
             <td class="num-col">{% if s.order_dhg_avila %}<span class="order-num">{{ s.order_dhg_avila }}</span>{% endif %}</td>
             <td class="num-col">{% if s.order_dhg_otates %}<span class="order-num">{{ s.order_dhg_otates }}</span>{% endif %}</td>
+            <td class="num-col">{% if s.order_dhg_lopez %}<span class="order-num">{{ s.order_dhg_lopez }}</span>{% endif %}</td>
             <td class="col-acciones" style="white-space:nowrap;">
               <a href="{% url 'daily_report' %}?date={{ s.date|date:'Y-m-d' }}&mode=all" class="link-action">Ver día</a>
               <a href="{% url 'daily_report' %}?shipment_id={{ s.id }}&mode=all" class="link-action">Ver reporte</a>
@@ -462,7 +468,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="17" style="text-align:center; color:#9ca3af; padding:32px;">
+            <td colspan="18" style="text-align:center; color:#9ca3af; padding:32px;">
               No hay embarques registrados.
             </td>
           </tr>
