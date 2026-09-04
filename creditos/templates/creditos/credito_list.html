@@ -252,12 +252,7 @@
         <div class="card">
           <div class="lbl">Intereses · {{ t.moneda }}</div>
           <div class="big" style="color:#7c3aed">{{ t.interes_fmt }}</div>
-          <div class="sub">según la tasa de cada crédito</div>
-        </div>
-        <div class="card">
-          <div class="lbl">Total a pagar · {{ t.moneda }}</div>
-          <div class="big">{{ t.total_fmt }}</div>
-          <div class="sub">monto + intereses</div>
+          <div class="sub">informativo · no entra en el saldo</div>
         </div>
         <div class="card">
           <div class="lbl">Abonado · {{ t.moneda }}</div>
@@ -344,7 +339,6 @@
           <th class="num">Monto</th>
           <th class="num">Tasa</th>
           <th class="num">Interés</th>
-          <th class="num">Total a pagar</th>
           <th class="num">Abonado</th>
           <th class="num">Saldo</th>
           <th>Plazo</th>
@@ -367,7 +361,6 @@
             <td class="num">{{ c.monto_fmt }}</td>
             <td class="num">{% if c.tasa is not None %}{{ c.tasa|floatformat:3 }}%{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="num">{% if c.tasa is not None %}{{ c.interes_fmt }}{% else %}<span class="muted">—</span>{% endif %}</td>
-            <td class="num"><strong>{{ c.total_a_pagar_fmt }}</strong></td>
             <td class="num">
               {{ c.abonado_fmt }}
               <div class="bar"><i style="width:{{ c.porcentaje_pagado|floatformat:0 }}%"></i></div>
@@ -385,7 +378,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="15" class="empty">No hay créditos que coincidan con el filtro.</td></tr>
+          <tr><td colspan="14" class="empty">No hay créditos que coincidan con el filtro.</td></tr>
         {% endfor %}
       </tbody>
     </table>

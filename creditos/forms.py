@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import Abono, Credito, Garantia
+from .models import FRECUENCIA_CHOICES, Abono, Credito, Garantia
 
 
 class CreditoForm(forms.ModelForm):
@@ -8,16 +8,19 @@ class CreditoForm(forms.ModelForm):
         model = Credito
         fields = [
             "empresa", "banco", "tipo_credito", "tipo_otro", "garantia",
-            "moneda", "tasa", "plazo_meses", "monto",
-            "fecha_disposicion", "fecha_vencimiento",
+            "moneda", "tasa", "plazo_meses", "cantidad_pagos", "frecuencia_pagos",
+            "monto",
+            "fecha_contratacion", "fecha_disposicion", "fecha_vencimiento",
             "referencia", "notas",
         ]
         widgets = {
+            "fecha_contratacion": forms.DateInput(attrs={"type": "date"}),
             "fecha_disposicion": forms.DateInput(attrs={"type": "date"}),
             "fecha_vencimiento": forms.DateInput(attrs={"type": "date"}),
             "tasa":        forms.NumberInput(attrs={"step": "0.001", "placeholder": "Ej: 12.500"}),
             "monto":       forms.NumberInput(attrs={"step": "0.01",  "placeholder": "Ej: 1500000.00"}),
             "plazo_meses": forms.NumberInput(attrs={"placeholder": "Ej: 12"}),
+            "cantidad_pagos": forms.NumberInput(attrs={"placeholder": "Ej: 6", "min": "1"}),
             "tipo_otro":   forms.TextInput(attrs={"placeholder": "Sólo si elegiste 'Otro'"}),
             "referencia":  forms.TextInput(attrs={"placeholder": "Núm. de crédito (opcional)"}),
             "notas":       forms.Textarea(attrs={"rows": 3}),
@@ -27,6 +30,9 @@ class CreditoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["garantia"].queryset = Garantia.objects.filter(activo=True).order_by("nombre")
         self.fields["garantia"].empty_label = "— Sin garantía —"
+        self.fields["frecuencia_pagos"].widget.choices = (
+            [("", "— Selecciona —")] + list(FRECUENCIA_CHOICES)
+        )
 
     def clean(self):
         cleaned = super().clean()
@@ -38,11 +44,27 @@ class CreditoForm(forms.ModelForm):
         if monto is not None and monto <= 0:
             self.add_error("monto", "El monto debe ser mayor a cero.")
 
+        # Cantidad y frecuencia van juntas: con una sola no se puede armar el calendario
+        cant = cleaned.get("cantidad_pagos")
+        frec = cleaned.get("frecuencia_pagos")
+        if cant is not None and cant < 1:
+            self.add_error("cantidad_pagos", "Debe ser al menos 1 pago.")
+        if cant and not frec:
+            self.add_error("frecuencia_pagos",
+                           "Indica cada cuánto se paga para poder calcular las fechas.")
+        if frec and not cant:
+            self.add_error("cantidad_pagos",
+                           "Indica en cuántos pagos se liquida para poder calcular las fechas.")
+
+        f_contrat = cleaned.get("fecha_contratacion")
         f_disp = cleaned.get("fecha_disposicion")
         f_venc = cleaned.get("fecha_vencimiento")
         if f_disp and f_venc and f_venc < f_disp:
             self.add_error("fecha_vencimiento",
                            "El vencimiento no puede ser anterior a la disposición.")
+        if f_contrat and f_disp and f_disp < f_contrat:
+            self.add_error("fecha_disposicion",
+                           "La disposición no puede ser anterior a la fecha de crédito.")
         return cleaned
 
 

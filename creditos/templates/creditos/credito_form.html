@@ -172,8 +172,8 @@
             <label>{{ form.tasa.label }}</label>
             {{ form.tasa }}
             <div class="help">
-              Se suma al monto para calcular el total a pagar.
-              Ej: 4.15 sobre $100,000 = $4,150 de interés → $104,150 a liquidar.
+              Informativa. Los intereses se manejan aparte y no entran en el
+              calendario de pagos ni en el saldo.
             </div>
             {% if form.tasa.errors %}<div class="errs">{{ form.tasa.errors|striptags }}</div>{% endif %}
           </div>
@@ -183,6 +183,21 @@
             <div class="help">Duración del crédito, en meses.</div>
             {% if form.plazo_meses.errors %}<div class="errs">{{ form.plazo_meses.errors|striptags }}</div>{% endif %}
           </div>
+          <div class="fld">
+            <label>{{ form.cantidad_pagos.label }}</label>
+            {{ form.cantidad_pagos }}
+            <div class="help">En cuántas exhibiciones se liquida el monto.</div>
+            {% if form.cantidad_pagos.errors %}<div class="errs">{{ form.cantidad_pagos.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label>{{ form.frecuencia_pagos.label }}</label>
+            {{ form.frecuencia_pagos }}
+            <div class="help">
+              Con esto y la cantidad de pagos se calcula solo el calendario.
+              El primer pago cae un periodo después de la disposición.
+            </div>
+            {% if form.frecuencia_pagos.errors %}<div class="errs">{{ form.frecuencia_pagos.errors|striptags }}</div>{% endif %}
+          </div>
         </div>
       </div>
     </div>
@@ -191,6 +206,12 @@
       <h2>Fechas</h2>
       <div class="inner">
         <div class="grid">
+          <div class="fld">
+            <label>{{ form.fecha_contratacion.label }}</label>
+            {{ form.fecha_contratacion }}
+            <div class="help">Fecha en que se contrató el crédito.</div>
+            {% if form.fecha_contratacion.errors %}<div class="errs">{{ form.fecha_contratacion.errors|striptags }}</div>{% endif %}
+          </div>
           <div class="fld">
             <label>{{ form.fecha_disposicion.label }}</label>
             {{ form.fecha_disposicion }}

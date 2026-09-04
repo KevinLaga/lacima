@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import models
@@ -32,6 +32,37 @@ MONEDA_CHOICES = [
     ("MXN", "Pesos MXN"),
     ("USD", "Dólares USD"),
 ]
+
+FRECUENCIA_CHOICES = [
+    ("MENSUAL",    "Mensual"),
+    ("BIMESTRAL",  "Cada 2 meses"),
+    ("TRIMESTRAL", "Cada 3 meses"),
+    ("SEMESTRAL",  "Cada 6 meses"),
+    ("ANUAL",      "Anual"),
+]
+
+FRECUENCIA_MESES = {
+    "MENSUAL": 1, "BIMESTRAL": 2, "TRIMESTRAL": 3, "SEMESTRAL": 6, "ANUAL": 12,
+}
+
+MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
+            "jul", "ago", "sep", "oct", "nov", "dic"]
+
+
+def sumar_meses(fecha: date, meses: int) -> date:
+    """
+    Suma meses conservando el día. Si el día no existe en el mes destino
+    (ej. 31 de enero + 1 mes), cae al último día de ese mes.
+    """
+    total = fecha.month - 1 + meses
+    anio = fecha.year + total // 12
+    mes = total % 12 + 1
+    # Último día del mes destino
+    if mes == 12:
+        ultimo = 31
+    else:
+        ultimo = (date(anio, mes + 1, 1) - timedelta(days=1)).day
+    return date(anio, mes, min(fecha.day, ultimo))
 
 SIMBOLO_MONEDA = {"MXN": "$", "USD": "US$"}
 
@@ -95,8 +126,21 @@ class Credito(models.Model):
         help_text="Duración del crédito en meses.",
     )
 
+    cantidad_pagos = models.PositiveIntegerField(
+        "Cantidad de pagos", null=True, blank=True,
+        help_text="En cuántas exhibiciones se liquida el monto del crédito.",
+    )
+    frecuencia_pagos = models.CharField(
+        "Tiempo de pagos", max_length=12, choices=FRECUENCIA_CHOICES, blank=True,
+        help_text="Cada cuánto se paga.",
+    )
+
     monto = models.DecimalField("Monto del crédito", max_digits=14, decimal_places=2)
 
+    fecha_contratacion = models.DateField(
+        "Fecha de crédito", null=True, blank=True,
+        help_text="Fecha en que se contrató el crédito.",
+    )
     fecha_disposicion = models.DateField("Fecha de disposición")
     fecha_vencimiento = models.DateField(
         "Fecha de vencimiento",
@@ -154,8 +198,14 @@ class Credito(models.Model):
 
     @property
     def total_a_pagar(self) -> Decimal:
-        """Monto del crédito + intereses. Es lo que hay que cubrir para liquidar."""
-        return Decimal(self.monto or 0) + self.interes
+        """
+        Lo que hay que cubrir para liquidar: SOLO el monto del crédito.
+
+        Los intereses de la tasa se manejan aparte (la tasa cambia con el tiempo
+        y en créditos de varios años no se puede fijar de antemano), así que
+        'interes' queda como dato informativo y no entra aquí.
+        """
+        return Decimal(self.monto or 0)
 
     # ── Abonos y saldo ──
 
@@ -166,7 +216,7 @@ class Credito(models.Model):
 
     @property
     def saldo(self) -> Decimal:
-        """Lo que falta por abonar para liquidar, ya con los intereses incluidos."""
+        """Lo que falta por abonar del monto del crédito."""
         return self.total_a_pagar - self.total_abonado
 
     @property
@@ -231,6 +281,78 @@ class Credito(models.Model):
             "proximo":   "Próximo",
             "vigente":   "Vigente",
         }.get(self.estado, "Vigente")
+
+    # ── Plan de pagos ──
+
+    @property
+    def tiene_plan(self) -> bool:
+        return bool(self.cantidad_pagos and self.frecuencia_pagos and self.monto)
+
+    @property
+    def monto_por_pago(self) -> Decimal:
+        """Monto del crédito repartido entre la cantidad de pagos."""
+        if not self.tiene_plan:
+            return Decimal("0.00")
+        bruto = Decimal(self.monto) / Decimal(self.cantidad_pagos)
+        return bruto.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    @property
+    def monto_por_pago_fmt(self):
+        return f"{self.simbolo}{self.monto_por_pago:,.2f}"
+
+    @property
+    def frecuencia_label(self):
+        return self.get_frecuencia_pagos_display() if self.frecuencia_pagos else "—"
+
+    def plan_pagos(self):
+        """
+        Calendario de pagos calculado a partir del monto, la cantidad de pagos y
+        la frecuencia. El primer pago cae un periodo después de la disposición.
+
+        Devuelve una lista de dicts:
+          num, fecha, monto, acumulado, pagado, anio, fecha_texto
+        Un pago se marca 'pagado' cuando los abonos acumulados alcanzan a
+        cubrirlo (los abonos se aplican en orden contra el calendario).
+        """
+        if not self.tiene_plan or not self.fecha_disposicion:
+            return []
+
+        paso = FRECUENCIA_MESES.get(self.frecuencia_pagos, 1)
+        n = int(self.cantidad_pagos)
+        cuota = self.monto_por_pago
+        abonado = self.total_abonado
+
+        filas = []
+        acumulado = Decimal("0.00")
+        for i in range(1, n + 1):
+            # El último pago absorbe el redondeo para que la suma dé el monto exacto
+            if i == n:
+                importe = Decimal(self.monto) - acumulado
+            else:
+                importe = cuota
+            acumulado += importe
+
+            fecha = sumar_meses(self.fecha_disposicion, paso * i)
+            filas.append({
+                "num": i,
+                "fecha": fecha,
+                "anio": fecha.year,
+                "fecha_texto": f"{fecha.day} {MESES_ES[fecha.month - 1]}-{fecha.year}",
+                "monto": importe,
+                "monto_fmt": f"{self.simbolo}{importe:,.2f}",
+                "acumulado": acumulado,
+                "pagado": abonado >= acumulado - Decimal("0.005"),
+            })
+        return filas
+
+    def pagos_pendientes(self):
+        """Sólo los pagos que todavía no quedan cubiertos por los abonos."""
+        return [p for p in self.plan_pagos() if not p["pagado"]]
+
+    @property
+    def proximo_pago(self):
+        pendientes = self.pagos_pendientes()
+        return pendientes[0] if pendientes else None
 
     @property
     def vencimiento_texto(self) -> str:

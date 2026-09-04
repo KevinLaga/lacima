@@ -264,7 +264,7 @@ def credito_export_xlsx(request):
     right = Alignment(horizontal="right", vertical="center")
 
     # ── Título y filtros aplicados ──
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=15)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=16)
     c = ws.cell(row=1, column=1, value="Créditos")
     c.font = Font(name="Calibri", size=16, bold=True, color="1E3A5F")
     c.alignment = Alignment(horizontal="left", vertical="center")
@@ -281,7 +281,7 @@ def credito_export_xlsx(request):
     if filtros["ocultar_liquidados"]:
         partes.append("Sin liquidados")
 
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=15)
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=16)
     c = ws.cell(row=2, column=1, value="  ·  ".join(partes))
     c.font = Font(name="Calibri", size=10, italic=True, color="6D6D6D")
     c.alignment = Alignment(horizontal="left", vertical="center")
@@ -290,8 +290,8 @@ def credito_export_xlsx(request):
     headers = [
         ("Empresa", 20), ("Banco", 20), ("Tipo", 24), ("Garantía", 22),
         ("Moneda", 9), ("Monto", 16), ("Tasa (%)", 11), ("Interés", 16),
-        ("Total a pagar", 17), ("Abonado", 16), ("Saldo", 16),
-        ("Plazo (meses)", 13),
+        ("Abonado", 16), ("Saldo", 16),
+        ("Pagos", 9), ("Frecuencia", 14), ("Plazo (meses)", 13),
         ("Disposición", 13), ("Vencimiento", 13), ("Estado", 13),
     ]
     r = 4
@@ -318,9 +318,10 @@ def credito_export_xlsx(request):
             float(cr.monto or 0),
             float(cr.tasa) if cr.tasa is not None else None,
             float(cr.interes),
-            float(cr.total_a_pagar),
             float(cr.total_abonado),
             float(cr.saldo),
+            cr.cantidad_pagos,
+            cr.frecuencia_label if cr.frecuencia_pagos else "",
             cr.plazo_meses,
             cr.fecha_disposicion,
             cr.fecha_vencimiento,
@@ -329,15 +330,15 @@ def credito_export_xlsx(request):
         for col, v in enumerate(vals, start=1):
             cell = ws.cell(row=r, column=col, value=v)
             cell.border = border
-            if col in (6, 8, 9, 10, 11):
+            if col in (6, 8, 9, 10):
                 cell.number_format = fmt_money
                 cell.alignment = right
             elif col == 7:
                 cell.number_format = '0.000'
                 cell.alignment = right
-            elif col in (12, 15):
+            elif col in (11, 12, 13, 16):
                 cell.alignment = center
-            elif col in (13, 14):
+            elif col in (14, 15):
                 cell.number_format = 'dd/mm/yyyy'
                 cell.alignment = center
             if cr.estado == "vencido":
@@ -345,7 +346,7 @@ def credito_export_xlsx(request):
         r += 1
 
     if not creditos:
-        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=15)
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=16)
         c = ws.cell(row=r, column=1, value="No hay créditos que coincidan con el filtro.")
         c.alignment = center
         c.font = Font(italic=True, color="9CA3AF")
@@ -356,8 +357,8 @@ def credito_export_xlsx(request):
     for t in _totales_por_moneda(creditos):
         ws.cell(row=r, column=1, value=f"TOTAL {t['moneda']}").font = Font(bold=True)
         ws.cell(row=r, column=5, value=f"{t['n']} créditos").alignment = center
-        for col, key in ((6, "monto"), (8, "interes"), (9, "total"),
-                         (10, "abonado"), (11, "saldo")):
+        for col, key in ((6, "monto"), (8, "interes"),
+                         (9, "abonado"), (10, "saldo")):
             cell = ws.cell(row=r, column=col, value=float(t[key]))
             cell.font = Font(bold=True)
             cell.number_format = fmt_money
@@ -381,6 +382,177 @@ def credito_export_xlsx(request):
     partes_nombre.append(hoy.isoformat())
     fname = "_".join(partes_nombre) + ".xlsx"
 
+    resp = HttpResponse(
+        out.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
+
+
+@login_required
+def credito_plan_xlsx(request, pk):
+    """
+    Calendario de pagos de UN crédito, en Excel.
+
+    ?solo=pendientes  -> únicamente los pagos que faltan por cubrir
+    (por omisión salen todos, pagados y pendientes).
+    """
+    from io import BytesIO
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    credito = get_object_or_404(Credito.objects.select_related("garantia"), pk=pk)
+    solo_pendientes = (request.GET.get("solo") or "").lower() == "pendientes"
+
+    pagos = credito.pagos_pendientes() if solo_pendientes else credito.plan_pagos()
+
+    if not credito.tiene_plan:
+        return HttpResponse(
+            "Este crédito no tiene calendario: falta capturar la cantidad de pagos "
+            "y cada cuánto se paga.", status=400)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Pendientes" if solo_pendientes else "Calendario"
+
+    thin = Side(style="thin", color="AAAAAA")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    th_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    th_fill = PatternFill("solid", fgColor="1E3A5F")
+    anio_fill = PatternFill("solid", fgColor="2E67D1")
+    pagado_fill = PatternFill("solid", fgColor="DCFCE7")
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    right = Alignment(horizontal="right", vertical="center")
+    fmt_money = '#,##0.00'
+
+    # ── Título ──
+    titulo = ("Pagos pendientes" if solo_pendientes else "Calendario de pagos")
+    ws.cell(row=1, column=1,
+            value=f"{titulo} · {credito.get_empresa_display()} · {credito.get_banco_display()}"
+            ).font = Font(name="Calibri", size=16, bold=True, color="1E3A5F")
+
+    sub = (f"{credito.cantidad_pagos} pagos {credito.frecuencia_label.lower()} de "
+           f"{credito.monto_por_pago_fmt}  ·  Generado {timezone.localdate().strftime('%d/%m/%Y')}")
+    ws.cell(row=2, column=1, value=sub).font = Font(name="Calibri", size=10,
+                                                    italic=True, color="6D6D6D")
+
+    # ── Columnas fijas (encabezado en filas 4-5, valores en fila 6) ──
+    r_anio, r_head, r_data = 4, 5, 6
+
+    fijas = [
+        ("Empresa",                  credito.get_empresa_display(),                 20),
+        ("Crédito",                  credito.tipo_credito_label,                    24),
+        ("Garantía",                 credito.garantia.nombre if credito.garantia else "", 22),
+        ("Tasa (%)",                 float(credito.tasa) if credito.tasa is not None else None, 11),
+        ("Moneda",                   credito.moneda,                                 9),
+        ("Plazo (meses)",            credito.plazo_meses,                           13),
+        ("Fecha de crédito",         credito.fecha_contratacion,                    15),
+        ("Monto del crédito",        float(credito.monto or 0),                     17),
+        ("Fecha de disposición",     credito.fecha_disposicion,                     17),
+    ]
+
+    for col, (etiqueta, valor, ancho) in enumerate(fijas, start=1):
+        ws.merge_cells(start_row=r_anio, start_column=col, end_row=r_head, end_column=col)
+        h = ws.cell(row=r_anio, column=col, value=etiqueta)
+        h.font, h.fill, h.alignment, h.border = th_font, th_fill, center, border
+        ws.cell(row=r_head, column=col).border = border
+
+        c = ws.cell(row=r_data, column=col, value=valor)
+        c.border = border
+        if etiqueta == "Monto del crédito":
+            c.number_format = fmt_money
+            c.alignment = right
+        elif etiqueta == "Tasa (%)":
+            c.number_format = '0.000'
+            c.alignment = right
+        elif etiqueta.startswith("Fecha"):
+            c.number_format = 'dd/mm/yyyy'
+            c.alignment = center
+        else:
+            c.alignment = center
+        ws.column_dimensions[get_column_letter(col)].width = ancho
+
+    # ── Bloques de pago: por cada pago, columna de fecha + columna de importe,
+    #    agrupados bajo el año (celda combinada arriba) ──
+    col = len(fijas) + 1
+    inicio_anio = col
+    anio_actual = pagos[0]["anio"] if pagos else None
+
+    def cerrar_anio(hasta_col, anio):
+        if anio is None or hasta_col < inicio_anio:
+            return
+        ws.merge_cells(start_row=r_anio, start_column=inicio_anio,
+                       end_row=r_anio, end_column=hasta_col)
+        c = ws.cell(row=r_anio, column=inicio_anio, value=anio)
+        c.font, c.fill, c.alignment, c.border = th_font, anio_fill, center, border
+        for cc in range(inicio_anio, hasta_col + 1):
+            ws.cell(row=r_anio, column=cc).border = border
+
+    for p in pagos:
+        if p["anio"] != anio_actual:
+            cerrar_anio(col - 1, anio_actual)
+            anio_actual = p["anio"]
+            inicio_anio = col
+
+        # Columna de la fecha
+        c = ws.cell(row=r_head, column=col, value=p["fecha_texto"])
+        c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
+        ws.column_dimensions[get_column_letter(col)].width = 14
+        marca = ws.cell(row=r_data, column=col,
+                        value=("Pagado" if p["pagado"] else ""))
+        marca.alignment, marca.border = center, border
+        if p["pagado"]:
+            marca.fill = pagado_fill
+            marca.font = Font(size=10, bold=True, color="166534")
+
+        # Columna del importe
+        c = ws.cell(row=r_head, column=col + 1, value="$")
+        c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
+        ws.column_dimensions[get_column_letter(col + 1)].width = 14
+        v = ws.cell(row=r_data, column=col + 1, value=float(p["monto"]))
+        v.number_format = fmt_money
+        v.alignment, v.border = right, border
+        if p["pagado"]:
+            v.fill = pagado_fill
+
+        col += 2
+
+    cerrar_anio(col - 1, anio_actual)
+
+    if not pagos:
+        ws.merge_cells(start_row=r_anio, start_column=len(fijas) + 1,
+                       end_row=r_data, end_column=len(fijas) + 3)
+        c = ws.cell(row=r_anio, column=len(fijas) + 1,
+                    value="No quedan pagos pendientes")
+        c.alignment = center
+        c.font = Font(italic=True, color="9CA3AF")
+
+    # ── Total ──
+    total = sum((p["monto"] for p in pagos), Decimal("0"))
+    r_tot = r_data + 2
+    ws.cell(row=r_tot, column=1,
+            value=("Total pendiente" if solo_pendientes else "Total del calendario")
+            ).font = Font(bold=True)
+    c = ws.cell(row=r_tot, column=8, value=float(total))
+    c.font = Font(bold=True)
+    c.number_format = fmt_money
+    c.alignment = right
+    c.border = border
+
+    ws.row_dimensions[r_anio].height = 20
+    ws.row_dimensions[r_head].height = 26
+    ws.row_dimensions[r_data].height = 22
+    ws.freeze_panes = ws.cell(row=r_data, column=len(fijas) + 1)
+
+    out = BytesIO()
+    wb.save(out)
+    out.seek(0)
+
+    sufijo = "pendientes" if solo_pendientes else "calendario"
+    fname = f"credito_{credito.pk}_{slugify(credito.get_empresa_display())}_{sufijo}.xlsx"
     resp = HttpResponse(
         out.read(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

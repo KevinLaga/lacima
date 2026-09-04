@@ -21,7 +21,8 @@ class GarantiaAdmin(admin.ModelAdmin):
 class CreditoAdmin(admin.ModelAdmin):
     list_display = (
         "id", "empresa", "banco", "tipo_credito_label", "garantia",
-        "moneda", "monto", "tasa", "col_interes", "col_total",
+        "moneda", "monto", "tasa", "col_interes",
+        "cantidad_pagos", "frecuencia_pagos", "col_por_pago",
         "col_abonado", "col_saldo",
         "fecha_disposicion", "fecha_vencimiento", "col_estado",
     )
@@ -36,10 +37,11 @@ class CreditoAdmin(admin.ModelAdmin):
         }),
         ("Condiciones del crédito", {
             "fields": ("tipo_credito", "tipo_otro", "garantia",
-                       "moneda", "monto", "tasa", "plazo_meses"),
+                       "moneda", "monto", "tasa", "plazo_meses",
+                       "cantidad_pagos", "frecuencia_pagos"),
         }),
         ("Fechas", {
-            "fields": ("fecha_disposicion", "fecha_vencimiento"),
+            "fields": ("fecha_contratacion", "fecha_disposicion", "fecha_vencimiento"),
         }),
         ("Otros", {
             "fields": ("notas",),
@@ -54,9 +56,9 @@ class CreditoAdmin(admin.ModelAdmin):
     def col_interes(self, obj):
         return obj.interes_fmt
 
-    @admin.display(description="Total a pagar")
-    def col_total(self, obj):
-        return obj.total_a_pagar_fmt
+    @admin.display(description="Por pago")
+    def col_por_pago(self, obj):
+        return obj.monto_por_pago_fmt if obj.tiene_plan else "—"
 
     @admin.display(description="Abonado")
     def col_abonado(self, obj):

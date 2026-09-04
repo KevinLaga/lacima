@@ -104,6 +104,23 @@
                font-weight:600; cursor:pointer; padding:3px 7px; border-radius:5px; }
     .btn-del:hover { background:#fee2e2; }
     .notas { white-space:pre-wrap; font-size:13px; color:#374151; line-height:1.5; }
+
+    /* Calendario de pagos */
+    .plan-resumen {
+      display:flex; justify-content:space-between; align-items:center;
+      flex-wrap:wrap; gap:10px; font-size:13px; color:#374151; margin-bottom:12px;
+    }
+    .plan-num { font-size:18px; font-weight:700; color:#1e3a5f; }
+    .dl-row { display:flex; gap:9px; flex-wrap:wrap; }
+    .btn-xls {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:9px 15px; border-radius:8px; font-size:13px; font-weight:600;
+      text-decoration:none; background:#15803d; color:#fff !important;
+    }
+    .btn-xls:hover { opacity:.87; }
+    .btn-xls.alt { background:#b45309; }
+    tbody tr.fila-pagada td { background:#f6fdf8; }
+    .card table .num { text-align:right; }
   </style>
 </head>
 <body>
@@ -158,18 +175,6 @@
               <div class="lbl">Monto del crédito</div>
               <div class="big">{{ credito.monto_fmt }}</div>
             </div>
-            <div class="money in">
-              <div class="lbl">
-                Interés{% if credito.tasa is not None %} ({{ credito.tasa|floatformat:3 }}%){% endif %}
-              </div>
-              <div class="big">{{ credito.interes_fmt }}</div>
-            </div>
-            <div class="money to">
-              <div class="lbl">Total a pagar</div>
-              <div class="big">{{ credito.total_a_pagar_fmt }}</div>
-            </div>
-          </div>
-          <div class="money-row" style="margin-top:14px;">
             <div class="money ab">
               <div class="lbl">Abonado</div>
               <div class="big">{{ credito.abonado_fmt }}</div>
@@ -178,19 +183,87 @@
               <div class="lbl">Falta por pagar</div>
               <div class="big">{{ credito.saldo_fmt }}</div>
             </div>
-            <div class="money">
-              <div class="lbl">Vencimiento</div>
-              <div class="big" style="font-size:16px;">{{ credito.fecha_vencimiento|date:"d/m/Y" }}</div>
-            </div>
           </div>
           <div class="bar"><i style="width:{{ credito.porcentaje_pagado|floatformat:0 }}%"></i></div>
           <div class="bar-txt">
-            {{ credito.porcentaje_pagado|floatformat:1 }}% pagado sobre el total a pagar
+            {{ credito.porcentaje_pagado|floatformat:1 }}% pagado
             {% if credito.tasa is not None %}
-              · {{ credito.monto_fmt }} + {{ credito.interes_fmt }} de interés
+              · Interés informativo a la tasa {{ credito.tasa|floatformat:3 }}%:
+              {{ credito.interes_fmt }} (no incluido en el saldo)
             {% endif %}
           </div>
         </div>
+      </div>
+
+      <div class="card">
+        <h2>Calendario de pagos</h2>
+        {% if credito.tiene_plan %}
+          <div class="inner" style="padding-bottom:12px;">
+            <div class="plan-resumen">
+              <div>
+                <span class="plan-num">{{ credito.cantidad_pagos }}</span> pagos
+                <span class="muted">{{ credito.frecuencia_label|lower }}</span>
+                de <strong>{{ credito.monto_por_pago_fmt }}</strong>
+              </div>
+              {% if credito.proximo_pago %}
+                <div class="muted">
+                  Próximo: <strong>{{ credito.proximo_pago.fecha|date:"d/m/Y" }}</strong>
+                  · {{ credito.proximo_pago.monto_fmt }}
+                </div>
+              {% else %}
+                <div class="muted">Todos los pagos cubiertos</div>
+              {% endif %}
+            </div>
+            <div class="dl-row">
+              <a class="btn-xls" href="{% url 'creditos:credito_plan_xlsx' credito.pk %}">
+                ⬇ Excel general (todos los pagos)
+              </a>
+              <a class="btn-xls alt" href="{% url 'creditos:credito_plan_xlsx' credito.pk %}?solo=pendientes">
+                ⬇ Excel de lo que falta
+              </a>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Fecha</th>
+                <th class="num">Monto</th>
+                <th class="num">Acumulado</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in credito.plan_pagos %}
+                <tr class="{% if p.pagado %}fila-pagada{% endif %}">
+                  <td>{{ p.num }}</td>
+                  <td style="white-space:nowrap;">
+                    {{ p.fecha|date:"d/m/Y" }}
+                    <span class="muted" style="font-size:11px;">· {{ p.fecha_texto }}</span>
+                  </td>
+                  <td class="num"><strong>{{ p.monto_fmt }}</strong></td>
+                  <td class="num muted">{{ credito.simbolo }}{{ p.acumulado|floatformat:2 }}</td>
+                  <td>
+                    {% if p.pagado %}
+                      <span class="badge b-vigente">Pagado</span>
+                    {% else %}
+                      <span class="badge b-proximo">Pendiente</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="inner">
+            <p style="margin:0; font-size:13px; color:#6b7280;">
+              Este crédito todavía no tiene calendario. Captura la
+              <strong>cantidad de pagos</strong> y el <strong>tiempo de pagos</strong>
+              en <a href="{% url 'creditos:credito_edit' credito.pk %}">editar crédito</a>
+              y se calcula solo.
+            </p>
+          </div>
+        {% endif %}
       </div>
 
       <div class="card">
