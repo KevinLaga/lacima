@@ -2,7 +2,6 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import models
-from django.db.models import Sum
 from django.utils import timezone
 
 
@@ -234,8 +233,9 @@ class Credito(models.Model):
 
     @property
     def total_abonado(self) -> Decimal:
-        total = self.abonos.aggregate(t=Sum("monto"))["t"]
-        return Decimal(total or 0)
+        # Se suma en Python para aprovechar el prefetch_related de la lista:
+        # con aggregate() sería una consulta por cada crédito.
+        return sum((Decimal(a.monto or 0) for a in self.abonos.all()), Decimal("0.00"))
 
     @property
     def saldo(self) -> Decimal:
@@ -280,11 +280,49 @@ class Credito(models.Model):
         return (self.fecha_vencimiento - timezone.localdate()).days
 
     @property
+    def fecha_proximo_pago(self):
+        """
+        Cuándo toca el siguiente pago.
+
+        Si el crédito tiene calendario, es la fecha de la próxima exhibición sin
+        cubrir. Si no lo tiene, se usa el vencimiento del crédito. None si ya
+        está liquidado.
+        """
+        if self.liquidado:
+            return None
+        prox = self.proximo_pago
+        if prox:
+            return prox["fecha"]
+        return self.fecha_vencimiento
+
+    @property
+    def dias_para_proximo_pago(self):
+        """Días que faltan para el siguiente pago. Negativo si ya se pasó."""
+        f = self.fecha_proximo_pago
+        if not f:
+            return None
+        return (f - timezone.localdate()).days
+
+    @property
+    def proximo_pago_texto(self) -> str:
+        d = self.dias_para_proximo_pago
+        if self.liquidado:
+            return "Liquidado"
+        if d is None:
+            return "—"
+        if d < 0:
+            n = abs(d)
+            return f"Atrasado {n} día{'s' if n != 1 else ''}"
+        if d == 0:
+            return "Se paga hoy"
+        return f"Faltan {d} día{'s' if d != 1 else ''}"
+
+    @property
     def estado(self) -> str:
         """liquidado | vencido | urgente | proximo | vigente"""
         if self.liquidado:
             return "liquidado"
-        d = self.dias_para_vencer
+        d = self.dias_para_proximo_pago
         if d is None:
             return "vigente"
         if d < 0:

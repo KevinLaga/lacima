@@ -19,20 +19,41 @@ from .models import (
 # Menú de proximidad a vencer. clave -> (etiqueta, meses); None = sin tope.
 # 'vencidos' es un caso aparte y no usa el número de meses.
 VENCE_FILTROS = OrderedDict([
-    ("todos",    ("Todos",             None)),
-    ("vencidos", ("Vencidos",          None)),
-    ("1m",       ("Vencen en 1 mes",   1)),
-    ("6m",       ("Vencen en 6 meses", 6)),
-    ("1a",       ("Vencen en 1 año",   12)),
-    ("2a",       ("Vencen en 2 años",  24)),
+    ("todos",    ("Todos",            None)),
+    ("vencidos", ("Atrasados",        None)),
+    ("1m",       ("Se pagan en 1 mes",   1)),
+    ("6m",       ("Se pagan en 6 meses", 6)),
+    ("1a",       ("Se pagan en 1 año",   12)),
+    ("2a",       ("Se pagan en 2 años",  24)),
 ])
 
 ORDEN_OPCIONES = OrderedDict([
-    ("vencimiento", "Más próximos a vencer"),
+    ("vencimiento", "Más próximos a pagar"),
     ("saldo",       "Mayor saldo"),
     ("monto",       "Mayor monto"),
     ("reciente",    "Disposición más reciente"),
 ])
+
+
+def _en_tramo(credito, clave, hoy):
+    """
+    ¿El crédito cae en el tramo del menú, según su fecha de pago próxima?
+
+    'todos' pasa siempre; 'vencidos' es el que ya se pasó de fecha; el resto
+    son los que se pagan de hoy hasta N meses adelante.
+    """
+    if clave == "todos":
+        return True
+
+    fecha = credito.fecha_proximo_pago
+    if fecha is None:          # liquidado o sin fecha: no entra en ningún tramo
+        return False
+
+    if clave == "vencidos":
+        return fecha < hoy
+
+    meses = VENCE_FILTROS[clave][1]
+    return hoy <= fecha <= sumar_meses(hoy, meses)
 
 
 def _totales_por_moneda(creditos):
@@ -100,17 +121,12 @@ def _aplicar_filtros(request):
     if moneda:
         qs = qs.filter(moneda=moneda)
 
-    # Filtro por proximidad de vencimiento (a nivel de base de datos)
-    meses = VENCE_FILTROS[vence][1]
-    if vence == "vencidos":
-        qs = qs.filter(fecha_vencimiento__lt=hoy)
-    elif meses is not None:
-        qs = qs.filter(fecha_vencimiento__gte=hoy,
-                       fecha_vencimiento__lte=sumar_meses(hoy, meses))
-
     creditos = list(qs)
 
-    # 'liquidado' y 'saldo' dependen de los abonos: se resuelven en Python
+    # El filtro va sobre la FECHA DE PAGO PRÓXIMA, que depende de los abonos y
+    # del calendario, así que se resuelve en Python (igual que saldo/liquidado).
+    creditos = [c for c in creditos if _en_tramo(c, vence, hoy)]
+
     if ocultar_liq:
         creditos = [c for c in creditos if not c.liquidado]
 
@@ -121,8 +137,8 @@ def _aplicar_filtros(request):
     elif orden == "reciente":
         creditos.sort(key=lambda c: c.fecha_disposicion or hoy, reverse=True)
     else:
-        # Más próximos a vencer primero; los liquidados al final
-        creditos.sort(key=lambda c: (c.liquidado, c.fecha_vencimiento or hoy))
+        # Los que se pagan antes primero; los liquidados al final
+        creditos.sort(key=lambda c: (c.liquidado, c.fecha_proximo_pago or hoy))
 
     filtros = {
         "empresa": empresa, "banco": banco, "moneda": moneda,
@@ -136,22 +152,14 @@ def credito_list(request):
     hoy = timezone.localdate()
     creditos, filtros = _aplicar_filtros(request)
 
-    # Conteos para las pestañas del menú (mismos cortes que el filtro)
-    todos = list(Credito.objects.all())
-    pendientes = [c for c in todos if not c.liquidado]
-    conteos = {
-        "todos":    len(todos),
-        "vencidos": sum(1 for c in pendientes
-                        if c.fecha_vencimiento and c.fecha_vencimiento < hoy),
-    }
-    for clave, (_etiqueta, meses) in VENCE_FILTROS.items():
-        if meses is None:
-            continue
-        corte = sumar_meses(hoy, meses)
-        conteos[clave] = sum(
-            1 for c in pendientes
-            if c.fecha_vencimiento and hoy <= c.fecha_vencimiento <= corte
+    # Conteos para las pestañas del menú, con el mismo criterio que el filtro
+    todos = list(
+        Credito.objects.prefetch_related(
+            Prefetch("abonos", queryset=Abono.objects.order_by("-fecha", "-id"))
         )
+    )
+    conteos = {clave: sum(1 for c in todos if _en_tramo(c, clave, hoy))
+               for clave in VENCE_FILTROS}
 
     # Querystring actual, para que el botón de Excel exporte lo mismo que se ve
     qs_actual = request.GET.urlencode()
@@ -283,7 +291,7 @@ def credito_export_xlsx(request):
         partes.append("Banco: " + dict(BANCO_CHOICES).get(filtros["banco"], filtros["banco"]))
     if filtros["moneda"]:
         partes.append("Moneda: " + filtros["moneda"])
-    partes.append("Vencimiento: " + VENCE_FILTROS[filtros["vence"]][0])
+    partes.append("Fecha de pago: " + VENCE_FILTROS[filtros["vence"]][0])
     partes.append("Orden: " + ORDEN_OPCIONES[filtros["orden"]])
     if filtros["ocultar_liquidados"]:
         partes.append("Sin liquidados")
@@ -299,7 +307,7 @@ def credito_export_xlsx(request):
         ("Moneda", 9), ("Monto", 16), ("Tasa (%)", 11), ("Interés", 16),
         ("Abonado", 16), ("Saldo", 16),
         ("Pagos", 9), ("Frecuencia", 14), ("Plazo (meses)", 13),
-        ("Disposición", 13), ("Vencimiento", 13), ("Estado", 13),
+        ("Disposición", 13), ("Fecha de pago próxima", 19), ("Estado", 13),
     ]
     r = 4
     for col, (h, w) in enumerate(headers, start=1):
@@ -331,7 +339,7 @@ def credito_export_xlsx(request):
             cr.frecuencia_label if cr.frecuencia_pagos else "",
             cr.plazo_meses,
             cr.fecha_disposicion,
-            cr.fecha_vencimiento,
+            cr.fecha_proximo_pago,
             cr.estado_label,
         ]
         for col, v in enumerate(vals, start=1):

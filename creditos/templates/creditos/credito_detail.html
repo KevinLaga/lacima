@@ -159,7 +159,13 @@
       </h1>
       <div style="margin-top:7px; display:flex; gap:9px; align-items:center; flex-wrap:wrap;">
         <span class="badge b-{{ credito.estado }}">{{ credito.estado_label }}</span>
-        <span style="font-size:13px; color:#6b7280;">{{ credito.vencimiento_texto }}</span>
+        <span style="font-size:13px; color:#6b7280;">
+          {% if credito.fecha_proximo_pago %}
+            Próximo pago {{ credito.fecha_proximo_pago|date:"d/m/Y" }} · {{ credito.proximo_pago_texto|lower }}
+          {% else %}
+            {{ credito.proximo_pago_texto }}
+          {% endif %}
+        </span>
         {% if credito.referencia %}
           <span style="font-size:13px; color:#6b7280;">· Ref. {{ credito.referencia }}</span>
         {% endif %}
@@ -308,8 +314,18 @@
               <div class="val">{% if credito.plazo_meses %}{{ credito.plazo_meses }} mes{{ credito.plazo_meses|pluralize:"es" }}{% else %}<span class="muted">—</span>{% endif %}</div>
             </div>
             <div><div class="lbl">Fecha de disposición</div><div class="val">{{ credito.fecha_disposicion|date:"d/m/Y" }}</div></div>
-            <div><div class="lbl">Vencimiento</div><div class="val">{{ credito.fecha_vencimiento|date:"d/m/Y" }}</div></div>
-            <div><div class="lbl">Año de vencimiento</div><div class="val">{{ credito.anio_vencimiento }}</div></div>
+            <div><div class="lbl">Vencimiento del crédito</div><div class="val">{{ credito.fecha_vencimiento|date:"d/m/Y" }}</div></div>
+            <div>
+              <div class="lbl">Fecha de pago próxima</div>
+              <div class="val">
+                {% if credito.fecha_proximo_pago %}
+                  {{ credito.fecha_proximo_pago|date:"d/m/Y" }}
+                  {% if credito.proximo_pago %}
+                    <span class="muted" style="font-size:12px;">· {{ credito.proximo_pago.monto_fmt }}</span>
+                  {% endif %}
+                {% else %}<span class="muted">—</span>{% endif %}
+              </div>
+            </div>
           </div>
           {% if credito.notas %}
             <div style="margin-top:18px;">

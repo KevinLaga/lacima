@@ -267,7 +267,7 @@
   {% endif %}
 
   <!-- Menú: proximidad a vencer -->
-  <p class="section-title">Filtrar por vencimiento</p>
+  <p class="section-title">Filtrar por fecha de pago próxima</p>
   <div class="vence-menu">
     {% for clave, etiqueta, n in vence_filtros %}
       <a class="vence-tab {% if clave == 'vencidos' %}danger{% endif %} {% if f.vence == clave %}active{% endif %}"
@@ -343,7 +343,7 @@
           <th class="num">Saldo</th>
           <th>Plazo</th>
           <th>Disposición</th>
-          <th>Vencimiento</th>
+          <th>Fecha de pago próxima</th>
           <th>Estado</th>
           <th class="col-acciones">Acciones</th>
         </tr>
@@ -369,8 +369,15 @@
             <td>{% if c.plazo_meses %}{{ c.plazo_meses }} mes{{ c.plazo_meses|pluralize:"es" }}{% else %}<span class="muted">—</span>{% endif %}</td>
             <td style="white-space:nowrap;">{{ c.fecha_disposicion|date:"d/m/Y" }}</td>
             <td style="white-space:nowrap;">
-              <strong>{{ c.fecha_vencimiento|date:"d/m/Y" }}</strong>
-              <div class="muted">{{ c.vencimiento_texto }}</div>
+              {% if c.fecha_proximo_pago %}
+                <strong>{{ c.fecha_proximo_pago|date:"d/m/Y" }}</strong>
+                <div class="muted">
+                  {{ c.proximo_pago_texto }}{% if c.proximo_pago %} · {{ c.proximo_pago.monto_fmt }}{% endif %}
+                </div>
+              {% else %}
+                <span class="muted">—</span>
+                <div class="muted">{{ c.proximo_pago_texto }}</div>
+              {% endif %}
             </td>
             <td><span class="badge b-{{ c.estado }}">{{ c.estado_label }}</span></td>
             <td class="col-acciones">
