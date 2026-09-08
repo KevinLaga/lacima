@@ -80,6 +80,8 @@ class Garantia(models.Model):
     descripcion = models.CharField("Descripción", max_length=255, blank=True)
     precio      = models.DecimalField("Precio", max_digits=14, decimal_places=2,
                                       null=True, blank=True)
+    moneda      = models.CharField("Moneda del precio", max_length=3,
+                                   choices=MONEDA_CHOICES, default="MXN")
     activo      = models.BooleanField("Activo", default=True)
 
     class Meta:
@@ -91,10 +93,14 @@ class Garantia(models.Model):
         return self.nombre
 
     @property
+    def simbolo(self):
+        return SIMBOLO_MONEDA.get(self.moneda, "$")
+
+    @property
     def precio_fmt(self):
         if self.precio is None:
             return "—"
-        return f"${self.precio:,.2f}"
+        return f"{self.simbolo}{self.precio:,.2f}"
 
     @property
     def en_uso(self) -> bool:

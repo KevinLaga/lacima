@@ -104,7 +104,7 @@ class AbonoForm(forms.ModelForm):
 class GarantiaForm(forms.ModelForm):
     class Meta:
         model = Garantia
-        fields = ["nombre", "descripcion", "precio"]
+        fields = ["nombre", "descripcion", "precio", "moneda"]
         widgets = {
             "nombre":      forms.TextInput(attrs={"placeholder": "Ej: campo 21 misión"}),
             "descripcion": forms.TextInput(attrs={"placeholder": "Superficie, ubicación, etc."}),

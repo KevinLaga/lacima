@@ -52,6 +52,10 @@
     .empty { text-align:center; color:#9ca3af; padding:28px; font-size:13px; }
     .muted { color:#9ca3af; }
     .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+    .moneda {
+      display:inline-block; margin-left:5px; padding:1px 6px; border-radius:9px;
+      background:#eef2f7; color:#4b5563; font-size:10px; font-weight:700;
+    }
     .btn-del { background:none; border:none; color:#b91c1c; font-size:12px;
                font-weight:600; cursor:pointer; padding:4px 9px; border-radius:6px; }
     .btn-del:hover { background:#fee2e2; }
@@ -63,6 +67,18 @@
       width:100%; padding:9px 11px; border:1.5px solid #e5e7eb;
       border-radius:7px; font-size:13px; background:#fafafa; outline:none; }
     .fld input:focus { border-color:#1e3a5f; background:#fff; }
+    /* El select nativo recorta el texto si no se le da alto propio */
+    .fld select {
+      width:100%; box-sizing:border-box; height:40px; line-height:38px;
+      padding:0 32px 0 11px; border:1.5px solid #e5e7eb; border-radius:7px;
+      font-size:13px; font-family:inherit; color:#111827; outline:none;
+      -webkit-appearance:none; -moz-appearance:none; appearance:none;
+      background-color:#fafafa;
+      background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7280' d='M1.4 0 6 4.6 10.6 0 12 1.4 6 7.4 0 1.4z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 11px center;
+      text-overflow:ellipsis;
+    }
+    .fld select:focus { border-color:#1e3a5f; background-color:#fff; }
     .chk { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#374151; }
     .errs { color:#b91c1c; font-size:12px; margin-top:4px; font-weight:600; }
     .btn-full { width:100%; padding:11px 0; background:#1e3a5f; color:#fff; border:none;
@@ -119,7 +135,10 @@
                 {% if not g.activo %}<span class="pill off">Inactiva</span>{% endif %}
               </td>
               <td>{{ g.descripcion|default:"—" }}</td>
-              <td class="num">{{ g.precio_fmt }}</td>
+              <td class="num">
+                {{ g.precio_fmt }}
+                {% if g.precio is not None %}<span class="moneda">{{ g.moneda }}</span>{% endif %}
+              </td>
               <td class="num">{{ g.creditos.count }}</td>
               <td style="text-align:right; white-space:nowrap;">
                 {% if g.en_uso %}
@@ -161,6 +180,11 @@
             <label>{{ form.precio.label }}</label>
             {{ form.precio }}
             {% if form.precio.errors %}<div class="errs">{{ form.precio.errors|striptags }}</div>{% endif %}
+          </div>
+          <div class="fld">
+            <label>{{ form.moneda.label }}</label>
+            {{ form.moneda }}
+            {% if form.moneda.errors %}<div class="errs">{{ form.moneda.errors|striptags }}</div>{% endif %}
           </div>
           <button type="submit" class="btn-full">＋ Agregar</button>
         </form>
