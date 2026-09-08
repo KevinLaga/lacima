@@ -17,7 +17,7 @@ class CreditoForm(forms.ModelForm):
             "fecha_contratacion": forms.DateInput(attrs={"type": "date"}),
             "fecha_disposicion": forms.DateInput(attrs={"type": "date"}),
             "fecha_vencimiento": forms.DateInput(attrs={"type": "date"}),
-            "tasa":        forms.NumberInput(attrs={"step": "0.001", "placeholder": "Ej: 12.500"}),
+            "tasa":        forms.NumberInput(attrs={"step": "any", "placeholder": "Ej: 4.123456789012"}),
             "monto":       forms.NumberInput(attrs={"step": "0.01",  "placeholder": "Ej: 1500000.00"}),
             "plazo_meses": forms.NumberInput(attrs={"placeholder": "Ej: 12"}),
             "cantidad_pagos": forms.NumberInput(attrs={"placeholder": "Ej: 6", "min": "1"}),

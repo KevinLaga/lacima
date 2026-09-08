@@ -37,12 +37,14 @@ FRECUENCIA_CHOICES = [
     ("MENSUAL",    "Mensual"),
     ("BIMESTRAL",  "Cada 2 meses"),
     ("TRIMESTRAL", "Cada 3 meses"),
+    ("CADA5",      "Cada 5 meses"),
     ("SEMESTRAL",  "Cada 6 meses"),
     ("ANUAL",      "Anual"),
 ]
 
 FRECUENCIA_MESES = {
-    "MENSUAL": 1, "BIMESTRAL": 2, "TRIMESTRAL": 3, "SEMESTRAL": 6, "ANUAL": 12,
+    "MENSUAL": 1, "BIMESTRAL": 2, "TRIMESTRAL": 3,
+    "CADA5": 5, "SEMESTRAL": 6, "ANUAL": 12,
 }
 
 MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun",
@@ -118,7 +120,9 @@ class Credito(models.Model):
     )
 
     moneda = models.CharField("Moneda", max_length=3, choices=MONEDA_CHOICES, default="MXN")
-    tasa   = models.DecimalField("Tasa (%)", max_digits=6, decimal_places=3,
+    # 15 dígitos en total: hasta 3 enteros y 12 decimales, para tasas con
+    # muchos decimales (ej. 4.123456789012).
+    tasa   = models.DecimalField("Tasa (%)", max_digits=15, decimal_places=12,
                                  null=True, blank=True)
 
     plazo_meses = models.PositiveIntegerField(
@@ -176,6 +180,19 @@ class Credito(models.Model):
     @property
     def monto_fmt(self):
         return f"{self.simbolo}{self.monto:,.2f}"
+
+    @property
+    def tasa_fmt(self):
+        """
+        Tasa sin ceros de relleno: 4.150000000000 -> '4.15', 10.000000000000 -> '10'.
+        Así se pueden guardar muchos decimales sin ensuciar la pantalla.
+        """
+        if self.tasa is None:
+            return "—"
+        s = format(self.tasa, "f")
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s or "0"
 
     @property
     def anio_vencimiento(self):
@@ -309,29 +326,69 @@ class Credito(models.Model):
         Calendario de pagos calculado a partir del monto, la cantidad de pagos y
         la frecuencia. El primer pago cae un periodo después de la disposición.
 
+        Si se abona de más, lo pagado en exceso se descuenta de los pagos que
+        faltan: el saldo pendiente se reparte entre las fechas restantes, así que
+        las siguientes cuotas bajan. El pago cubierto muestra lo que realmente se
+        aplicó (su cuota más el excedente).
+
         Devuelve una lista de dicts:
-          num, fecha, monto, acumulado, pagado, anio, fecha_texto
-        Un pago se marca 'pagado' cuando los abonos acumulados alcanzan a
-        cubrirlo (los abonos se aplican en orden contra el calendario).
+          num, fecha, anio, fecha_texto, monto, monto_fmt, acumulado, pagado
         """
         if not self.tiene_plan or not self.fecha_disposicion:
             return []
 
-        paso = FRECUENCIA_MESES.get(self.frecuencia_pagos, 1)
-        n = int(self.cantidad_pagos)
-        cuota = self.monto_por_pago
+        paso    = FRECUENCIA_MESES.get(self.frecuencia_pagos, 1)
+        n       = int(self.cantidad_pagos)
+        monto   = Decimal(self.monto)
         abonado = self.total_abonado
+        centavo = Decimal("0.01")
+
+        # 1) ¿Cuántos pagos alcanzaron a cubrirse y cuánto sobró?
+        #    En cada vuelta la cuota se recalcula con el saldo vivo, de modo que
+        #    un abono grande reduce las cuotas siguientes.
+        restante   = monto
+        disponible = abonado
+        cubiertas  = []
+        while len(cubiertas) < n:
+            faltan = n - len(cubiertas)
+            cuota = (restante if faltan == 1
+                     else (restante / faltan).quantize(centavo, rounding=ROUND_HALF_UP))
+            if cuota > 0 and disponible >= cuota - Decimal("0.005"):
+                disponible -= cuota
+                restante   -= cuota
+                cubiertas.append(cuota)
+            else:
+                break
+        sobrante = disponible  # abonado de más, no alcanza para otro pago completo
+
+        # 2) El saldo se reparte entre los pagos que quedan
+        pendientes = n - len(cubiertas)
+        saldo = monto - abonado
+        if saldo < 0:
+            saldo = Decimal("0.00")
+        cuota_pendiente = (
+            (saldo / pendientes).quantize(centavo, rounding=ROUND_HALF_UP)
+            if pendientes > 0 else Decimal("0.00")
+        )
 
         filas = []
         acumulado = Decimal("0.00")
+        vistos_pendientes = 0
         for i in range(1, n + 1):
-            # El último pago absorbe el redondeo para que la suma dé el monto exacto
-            if i == n:
-                importe = Decimal(self.monto) - acumulado
+            if i <= len(cubiertas):
+                importe = cubiertas[i - 1]
+                # El último pago cubierto refleja también lo que se pagó de más
+                if i == len(cubiertas):
+                    importe += sobrante
+                pagado = True
             else:
-                importe = cuota
-            acumulado += importe
+                vistos_pendientes += 1
+                # El último pendiente absorbe el redondeo
+                importe = (saldo - cuota_pendiente * (pendientes - 1)
+                           if vistos_pendientes == pendientes else cuota_pendiente)
+                pagado = False
 
+            acumulado += importe
             fecha = sumar_meses(self.fecha_disposicion, paso * i)
             filas.append({
                 "num": i,
@@ -341,9 +398,26 @@ class Credito(models.Model):
                 "monto": importe,
                 "monto_fmt": f"{self.simbolo}{importe:,.2f}",
                 "acumulado": acumulado,
-                "pagado": abonado >= acumulado - Decimal("0.005"),
+                "pagado": pagado,
             })
         return filas
+
+    @property
+    def cuota_actual(self) -> Decimal:
+        """Lo que toca pagar en la próxima exhibición (ya reajustada)."""
+        prox = self.proximo_pago
+        return prox["monto"] if prox else Decimal("0.00")
+
+    @property
+    def cuota_actual_fmt(self):
+        return f"{self.simbolo}{self.cuota_actual:,.2f}"
+
+    @property
+    def cuota_reajustada(self) -> bool:
+        """True si las cuotas pendientes ya no son las originales."""
+        if not self.tiene_plan or not self.pagos_pendientes():
+            return False
+        return abs(self.cuota_actual - self.monto_por_pago) > Decimal("0.005")
 
     def pagos_pendientes(self):
         """Sólo los pagos que todavía no quedan cubiertos por los abonos."""

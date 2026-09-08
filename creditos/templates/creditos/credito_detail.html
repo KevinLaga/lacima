@@ -111,6 +111,10 @@
       flex-wrap:wrap; gap:10px; font-size:13px; color:#374151; margin-bottom:12px;
     }
     .plan-num { font-size:18px; font-weight:700; color:#1e3a5f; }
+    .ajuste {
+      display:inline-block; margin-left:6px; padding:2px 8px; border-radius:10px;
+      background:#ede9fe; color:#5b21b6; font-size:11px; font-weight:700;
+    }
     .dl-row { display:flex; gap:9px; flex-wrap:wrap; }
     .btn-xls {
       display:inline-flex; align-items:center; gap:6px;
@@ -188,7 +192,7 @@
           <div class="bar-txt">
             {{ credito.porcentaje_pagado|floatformat:1 }}% pagado
             {% if credito.tasa is not None %}
-              · Interés informativo a la tasa {{ credito.tasa|floatformat:3 }}%:
+              · Interés informativo a la tasa {{ credito.tasa_fmt }}%:
               {{ credito.interes_fmt }} (no incluido en el saldo)
             {% endif %}
           </div>
@@ -203,7 +207,16 @@
               <div>
                 <span class="plan-num">{{ credito.cantidad_pagos }}</span> pagos
                 <span class="muted">{{ credito.frecuencia_label|lower }}</span>
-                de <strong>{{ credito.monto_por_pago_fmt }}</strong>
+                {% if credito.pagos_pendientes %}
+                  de <strong>{{ credito.cuota_actual_fmt }}</strong>
+                  {% if credito.cuota_reajustada %}
+                    <span class="ajuste" title="Se abonó de más: el saldo se repartió entre los pagos que faltan">
+                      reajustado desde {{ credito.monto_por_pago_fmt }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  de <strong>{{ credito.monto_por_pago_fmt }}</strong>
+                {% endif %}
               </div>
               {% if credito.proximo_pago %}
                 <div class="muted">
@@ -283,7 +296,7 @@
             <div><div class="lbl">Moneda</div><div class="val">{{ credito.get_moneda_display }}</div></div>
             <div>
               <div class="lbl">Tasa</div>
-              <div class="val">{% if credito.tasa is not None %}{{ credito.tasa|floatformat:3 }}%{% else %}<span class="muted">—</span>{% endif %}</div>
+              <div class="val">{% if credito.tasa is not None %}{{ credito.tasa_fmt }}%{% else %}<span class="muted">—</span>{% endif %}</div>
             </div>
             <div>
               <div class="lbl">Plazo</div>

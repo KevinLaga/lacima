@@ -359,7 +359,7 @@
               {% else %}<span class="muted">—</span>{% endif %}
             </td>
             <td class="num">{{ c.monto_fmt }}</td>
-            <td class="num">{% if c.tasa is not None %}{{ c.tasa|floatformat:3 }}%{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="num">{% if c.tasa is not None %}{{ c.tasa_fmt }}%{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="num">{% if c.tasa is not None %}{{ c.interes_fmt }}{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="num">
               {{ c.abonado_fmt }}

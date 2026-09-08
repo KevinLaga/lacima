@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib import messages
@@ -14,16 +13,18 @@ from django.views.decorators.http import require_http_methods
 from .forms import AbonoForm, CreditoForm, GarantiaForm
 from .models import (
     BANCO_CHOICES, EMPRESA_CHOICES, MONEDA_CHOICES, SIMBOLO_MONEDA,
-    TIPO_CREDITO_CHOICES, Abono, Credito, Garantia,
+    TIPO_CREDITO_CHOICES, Abono, Credito, Garantia, sumar_meses,
 )
 
-# Menú de proximidad a vencer. clave -> (etiqueta, días); None = sin tope.
+# Menú de proximidad a vencer. clave -> (etiqueta, meses); None = sin tope.
+# 'vencidos' es un caso aparte y no usa el número de meses.
 VENCE_FILTROS = OrderedDict([
-    ("todos",    ("Todos",            None)),
-    ("vencidos", ("Vencidos",         -1)),
-    ("30",       ("Vencen en 30 días", 30)),
-    ("60",       ("Vencen en 60 días", 60)),
-    ("90",       ("Vencen en 90 días", 90)),
+    ("todos",    ("Todos",             None)),
+    ("vencidos", ("Vencidos",          None)),
+    ("1m",       ("Vencen en 1 mes",   1)),
+    ("6m",       ("Vencen en 6 meses", 6)),
+    ("1a",       ("Vencen en 1 año",   12)),
+    ("2a",       ("Vencen en 2 años",  24)),
 ])
 
 ORDEN_OPCIONES = OrderedDict([
@@ -100,12 +101,12 @@ def _aplicar_filtros(request):
         qs = qs.filter(moneda=moneda)
 
     # Filtro por proximidad de vencimiento (a nivel de base de datos)
-    dias = VENCE_FILTROS[vence][1]
+    meses = VENCE_FILTROS[vence][1]
     if vence == "vencidos":
         qs = qs.filter(fecha_vencimiento__lt=hoy)
-    elif dias is not None:
+    elif meses is not None:
         qs = qs.filter(fecha_vencimiento__gte=hoy,
-                       fecha_vencimiento__lte=hoy + timedelta(days=dias))
+                       fecha_vencimiento__lte=sumar_meses(hoy, meses))
 
     creditos = list(qs)
 
@@ -135,16 +136,22 @@ def credito_list(request):
     hoy = timezone.localdate()
     creditos, filtros = _aplicar_filtros(request)
 
-    # Conteos para las pestañas del menú
+    # Conteos para las pestañas del menú (mismos cortes que el filtro)
     todos = list(Credito.objects.all())
     pendientes = [c for c in todos if not c.liquidado]
     conteos = {
         "todos":    len(todos),
-        "vencidos": sum(1 for c in pendientes if (c.dias_para_vencer or 0) < 0),
-        "30":       sum(1 for c in pendientes if 0 <= (c.dias_para_vencer or -1) <= 30),
-        "60":       sum(1 for c in pendientes if 0 <= (c.dias_para_vencer or -1) <= 60),
-        "90":       sum(1 for c in pendientes if 0 <= (c.dias_para_vencer or -1) <= 90),
+        "vencidos": sum(1 for c in pendientes
+                        if c.fecha_vencimiento and c.fecha_vencimiento < hoy),
     }
+    for clave, (_etiqueta, meses) in VENCE_FILTROS.items():
+        if meses is None:
+            continue
+        corte = sumar_meses(hoy, meses)
+        conteos[clave] = sum(
+            1 for c in pendientes
+            if c.fecha_vencimiento and hoy <= c.fecha_vencimiento <= corte
+        )
 
     # Querystring actual, para que el botón de Excel exporte lo mismo que se ve
     qs_actual = request.GET.urlencode()
@@ -334,7 +341,7 @@ def credito_export_xlsx(request):
                 cell.number_format = fmt_money
                 cell.alignment = right
             elif col == 7:
-                cell.number_format = '0.000'
+                cell.number_format = '0.############'   # hasta 12 decimales, sin ceros de relleno
                 cell.alignment = right
             elif col in (11, 12, 13, 16):
                 cell.alignment = center
@@ -434,8 +441,16 @@ def credito_plan_xlsx(request, pk):
             value=f"{titulo} · {credito.get_empresa_display()} · {credito.get_banco_display()}"
             ).font = Font(name="Calibri", size=16, bold=True, color="1E3A5F")
 
-    sub = (f"{credito.cantidad_pagos} pagos {credito.frecuencia_label.lower()} de "
-           f"{credito.monto_por_pago_fmt}  ·  Generado {timezone.localdate().strftime('%d/%m/%Y')}")
+    if credito.pagos_pendientes():
+        cuota_txt = f"de {credito.cuota_actual_fmt}"
+        if credito.cuota_reajustada:
+            cuota_txt += (f" (reajustado desde {credito.monto_por_pago_fmt} "
+                          f"por abonos de más)")
+    else:
+        cuota_txt = f"de {credito.monto_por_pago_fmt}"
+
+    sub = (f"{credito.cantidad_pagos} pagos {credito.frecuencia_label.lower()} {cuota_txt}"
+           f"  ·  Generado {timezone.localdate().strftime('%d/%m/%Y')}")
     ws.cell(row=2, column=1, value=sub).font = Font(name="Calibri", size=10,
                                                     italic=True, color="6D6D6D")
 
@@ -466,7 +481,7 @@ def credito_plan_xlsx(request, pk):
             c.number_format = fmt_money
             c.alignment = right
         elif etiqueta == "Tasa (%)":
-            c.number_format = '0.000'
+            c.number_format = '0.############'   # hasta 12 decimales, sin ceros de relleno
             c.alignment = right
         elif etiqueta.startswith("Fecha"):
             c.number_format = 'dd/mm/yyyy'
