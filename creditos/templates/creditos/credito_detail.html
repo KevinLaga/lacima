@@ -259,6 +259,11 @@
                   <td>
                     {% if p.pagado %}
                       <span class="badge b-vigente">Pagado</span>
+                      {% if p.abono_fecha %}
+                        <div class="muted" style="font-size:11px; margin-top:3px;">
+                          abonado {{ p.abono_fecha|date:"d/m/Y" }}{% if p.abono_ref %} · {{ p.abono_ref }}{% endif %}
+                        </div>
+                      {% endif %}
                     {% else %}
                       <span class="badge b-proximo">Pendiente</span>
                     {% endif %}

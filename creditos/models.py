@@ -340,29 +340,27 @@ class Credito(models.Model):
         paso    = FRECUENCIA_MESES.get(self.frecuencia_pagos, 1)
         n       = int(self.cantidad_pagos)
         monto   = Decimal(self.monto)
-        abonado = self.total_abonado
         centavo = Decimal("0.01")
 
-        # 1) ¿Cuántos pagos alcanzaron a cubrirse y cuánto sobró?
-        #    En cada vuelta la cuota se recalcula con el saldo vivo, de modo que
-        #    un abono grande reduce las cuotas siguientes.
-        restante   = monto
-        disponible = abonado
-        cubiertas  = []
-        while len(cubiertas) < n:
-            faltan = n - len(cubiertas)
-            cuota = (restante if faltan == 1
-                     else (restante / faltan).quantize(centavo, rounding=ROUND_HALF_UP))
-            if cuota > 0 and disponible >= cuota - Decimal("0.005"):
-                disponible -= cuota
-                restante   -= cuota
-                cubiertas.append(cuota)
-            else:
-                break
-        sobrante = disponible  # abonado de más, no alcanza para otro pago completo
+        # Los abonos se ligan al calendario EN ORDEN: el 1er abono es el 1er pago,
+        # el 2o abono el 2o pago, etc. Así la fila muestra lo que realmente se
+        # pagó en esa exhibición, aunque haya sido de más o de menos.
+        abonos = sorted(self.abonos.all(), key=lambda a: (a.fecha, a.id))
 
-        # 2) El saldo se reparte entre los pagos que quedan
-        pendientes = n - len(cubiertas)
+        cubiertos = []          # (importe_real, fecha_real, referencia)
+        for i, ab in enumerate(abonos[:n], start=1):
+            cubiertos.append((Decimal(ab.monto or 0), ab.fecha, ab.referencia))
+        # Si hay más abonos que exhibiciones, los sobrantes se suman al último pago
+        if len(abonos) > n and n > 0:
+            extra = sum((Decimal(a.monto or 0) for a in abonos[n:]), Decimal("0.00"))
+            imp, fch, ref = cubiertos[n - 1]
+            cubiertos[n - 1] = (imp + extra, fch, ref)
+
+        abonado = sum((imp for imp, _f, _r in cubiertos), Decimal("0.00"))
+
+        # Lo que falta se reparte entre las exhibiciones que quedan: si se pagó de
+        # más las siguientes bajan, si se pagó de menos suben.
+        pendientes = n - len(cubiertos)
         saldo = monto - abonado
         if saldo < 0:
             saldo = Decimal("0.00")
@@ -370,23 +368,23 @@ class Credito(models.Model):
             (saldo / pendientes).quantize(centavo, rounding=ROUND_HALF_UP)
             if pendientes > 0 else Decimal("0.00")
         )
+        sin_saldo = saldo <= Decimal("0.005")
 
         filas = []
         acumulado = Decimal("0.00")
         vistos_pendientes = 0
         for i in range(1, n + 1):
-            if i <= len(cubiertas):
-                importe = cubiertas[i - 1]
-                # El último pago cubierto refleja también lo que se pagó de más
-                if i == len(cubiertas):
-                    importe += sobrante
+            if i <= len(cubiertos):
+                importe, fecha_real, referencia = cubiertos[i - 1]
                 pagado = True
             else:
                 vistos_pendientes += 1
                 # El último pendiente absorbe el redondeo
                 importe = (saldo - cuota_pendiente * (pendientes - 1)
                            if vistos_pendientes == pendientes else cuota_pendiente)
-                pagado = False
+                fecha_real, referencia = None, ""
+                # Si ya no queda saldo, estas fechas no tienen nada que cobrar
+                pagado = sin_saldo
 
             acumulado += importe
             fecha = sumar_meses(self.fecha_disposicion, paso * i)
@@ -399,6 +397,8 @@ class Credito(models.Model):
                 "monto_fmt": f"{self.simbolo}{importe:,.2f}",
                 "acumulado": acumulado,
                 "pagado": pagado,
+                "abono_fecha": fecha_real,
+                "abono_ref": referencia,
             })
         return filas
 

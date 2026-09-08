@@ -516,8 +516,14 @@ def credito_plan_xlsx(request, pk):
         c = ws.cell(row=r_head, column=col, value=p["fecha_texto"])
         c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
         ws.column_dimensions[get_column_letter(col)].width = 14
-        marca = ws.cell(row=r_data, column=col,
-                        value=("Pagado" if p["pagado"] else ""))
+        # En los pagados se anota la fecha real del abono, que puede no ser la programada
+        if p["pagado"] and p.get("abono_fecha"):
+            texto_marca = "Pagado " + p["abono_fecha"].strftime("%d/%m/%Y")
+        elif p["pagado"]:
+            texto_marca = "Pagado"
+        else:
+            texto_marca = ""
+        marca = ws.cell(row=r_data, column=col, value=texto_marca)
         marca.alignment, marca.border = center, border
         if p["pagado"]:
             marca.fill = pagado_fill
