@@ -56,6 +56,7 @@ class ShipmentForm(forms.ModelForm):
     order_dhg_avila        = forms.CharField(label='Núm. orden AGRICOLA DH&G AVILA',    required=False)
     order_dhg_otates       = forms.CharField(label='Núm. orden AGRICOLA DH&G OTATES',   required=False)
     order_dhg_lopez        = forms.CharField(label='Núm. orden AGRICOLA DH&G LOPEZ',    required=False)
+    order_dhg_ventura      = forms.CharField(label='Núm. orden AGRICOLA DH&G VENTURA',  required=False)
 
     # --- Números de factura por cliente ---
     invoice_lacima       = forms.CharField(label='Núm. factura CIMA',                  required=False)
@@ -70,6 +71,7 @@ class ShipmentForm(forms.ModelForm):
     invoice_dhg_avila    = forms.CharField(label='Núm. factura AGRICOLA DH&G AVILA',   required=False)
     invoice_dhg_otates   = forms.CharField(label='Núm. factura AGRICOLA DH&G OTATES',  required=False)
     invoice_dhg_lopez    = forms.CharField(label='Núm. factura AGRICOLA DH&G LOPEZ',   required=False)
+    invoice_dhg_ventura  = forms.CharField(label='Núm. factura AGRICOLA DH&G VENTURA', required=False)
 
     class Meta:
         model = Shipment
@@ -80,9 +82,9 @@ class ShipmentForm(forms.ModelForm):
             'delivery_signature','driver_signature','invoice_number','tarimas_peco', "is_national",
 
 
-            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg','order_dhg_gonzalo','order_dhg_cruces','order_el_garal','order_dhg_avila','order_dhg_otates','order_dhg_lopez',
+            'order_lacima','order_rc','order_gourmet','order_gbf','order_gh', 'order_dhg','order_dhg_gonzalo','order_dhg_cruces','order_el_garal','order_dhg_avila','order_dhg_otates','order_dhg_lopez','order_dhg_ventura',
 
-            'invoice_lacima','invoice_rc','invoice_gourmet','invoice_gbf','invoice_gh','invoice_dhg','invoice_dhg_gonzalo','invoice_dhg_cruces','invoice_el_garal','invoice_dhg_avila','invoice_dhg_otates','invoice_dhg_lopez',
+            'invoice_lacima','invoice_rc','invoice_gourmet','invoice_gbf','invoice_gh','invoice_dhg','invoice_dhg_gonzalo','invoice_dhg_cruces','invoice_el_garal','invoice_dhg_avila','invoice_dhg_otates','invoice_dhg_lopez','invoice_dhg_ventura',
         ]
         widgets = {
             "is_national": forms.CheckboxInput(attrs={"id":"id_is_national"})
@@ -100,6 +102,7 @@ class ShipmentForm(forms.ModelForm):
             'order_dhg_avila':        'Núm. orden AGRICOLA DH&G AVILA',
             'order_dhg_otates':       'Núm. orden AGRICOLA DH&G OTATES',
             'order_dhg_lopez':        'Núm. orden AGRICOLA DH&G LOPEZ',
+            'order_dhg_ventura':      'Núm. orden AGRICOLA DH&G VENTURA',
 
             'invoice_lacima':      'Núm. factura CIMA',
             'invoice_rc':          'Núm. factura RC',
@@ -113,6 +116,7 @@ class ShipmentForm(forms.ModelForm):
             'invoice_dhg_avila':   'Núm. factura AGRICOLA DH&G AVILA',
             'invoice_dhg_otates':  'Núm. factura AGRICOLA DH&G OTATES',
             'invoice_dhg_lopez':   'Núm. factura AGRICOLA DH&G LOPEZ',
+            'invoice_dhg_ventura': 'Núm. factura AGRICOLA DH&G VENTURA',
 
             "is_national": "Nacional",
         }
@@ -132,6 +136,7 @@ CLIENTE_CHOICES = [
     ("AGRICOLA DH&G AVILA",    "AGRICOLA DH&G AVILA"),
     ("AGRICOLA DH&G OTATES",   "AGRICOLA DH&G OTATES"),
     ("AGRICOLA DH&G LOPEZ",    "AGRICOLA DH&G LOPEZ"),
+    ("AGRICOLA DH&G VENTURA",  "AGRICOLA DH&G VENTURA"),
 ]
 
 class ShipmentItemForm(ModelForm):
