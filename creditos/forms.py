@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import FRECUENCIA_CHOICES, Abono, Credito, Garantia
+from .models import FRECUENCIA_CHOICES, FRECUENCIA_MESES, Abono, Credito, Garantia
 
 
 class CreditoForm(forms.ModelForm):
@@ -55,6 +55,27 @@ class CreditoForm(forms.ModelForm):
         if frec and not cant:
             self.add_error("cantidad_pagos",
                            "Indica en cuántos pagos se liquida para poder calcular las fechas.")
+
+        # El revolvente necesita los tres datos para saber cuántas veces se renueva
+        if cleaned.get("tipo_credito") == "REVOLVENTE":
+            plazo = cleaned.get("plazo_meses")
+            if not cant:
+                self.add_error("cantidad_pagos",
+                               "El revolvente necesita los pagos de cada ciclo.")
+            if not frec:
+                self.add_error("frecuencia_pagos",
+                               "El revolvente necesita cada cuánto se paga.")
+            if not plazo:
+                self.add_error("plazo_meses",
+                               "El revolvente necesita el plazo total para calcular "
+                               "cuántas veces se renueva.")
+            elif cant and frec:
+                por_ciclo = int(cant) * FRECUENCIA_MESES.get(frec, 1)
+                if plazo < por_ciclo:
+                    self.add_error(
+                        "plazo_meses",
+                        f"El plazo ({plazo} meses) es menor que un ciclo completo "
+                        f"({por_ciclo} meses). No alcanzaría ni para una vuelta.")
 
         f_contrat = cleaned.get("fecha_contratacion")
         f_disp = cleaned.get("fecha_disposicion")

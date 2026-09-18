@@ -24,6 +24,7 @@ TIPO_CREDITO_CHOICES = [
     ("CTA_CORRIENTE",  "Cuenta corriente"),
     ("SIMPLE",         "Crédito simple"),
     ("CC_GARANTIA_H",  "CC garantía hipotecaria"),
+    ("REVOLVENTE",     "Crédito revolvente"),
     ("OTRO",           "Otro (especificar)"),
 ]
 
@@ -218,6 +219,77 @@ class Credito(models.Model):
         bruto = Decimal(self.monto) * Decimal(self.tasa) / Decimal("100")
         return bruto.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
+    # ── Revolvente ──
+
+    @property
+    def es_revolvente(self) -> bool:
+        return self.tipo_credito == "REVOLVENTE"
+
+    @property
+    def meses_por_ciclo(self) -> int:
+        """Cuánto dura una vuelta completa del crédito, en meses."""
+        if not self.tiene_plan:
+            return 0
+        return int(self.cantidad_pagos) * FRECUENCIA_MESES.get(self.frecuencia_pagos, 1)
+
+    @property
+    def ciclos(self) -> int:
+        """
+        Cuántas veces se presta el monto a lo largo del plazo.
+
+        Sale solo del plazo entre la duración de un ciclo: 60 meses de plazo con
+        2 pagos cada 6 meses (ciclo de 12) son 5 ciclos. Un crédito normal
+        siempre es 1.
+        """
+        if not self.es_revolvente or not self.tiene_plan:
+            return 1
+        mpc = self.meses_por_ciclo
+        if not mpc or not self.plazo_meses:
+            return 1
+        return max(1, int(self.plazo_meses) // mpc)
+
+    @property
+    def ciclos_pagados(self) -> int:
+        """Ciclos ya liquidados por completo."""
+        monto = Decimal(self.monto or 0)
+        if not self.es_revolvente or not monto:
+            return 0
+        return min(int(self.total_abonado / monto), self.ciclos)
+
+    @property
+    def ciclo_actual(self) -> int:
+        return min(self.ciclos_pagados + 1, self.ciclos)
+
+    @property
+    def abonado_ciclo(self) -> Decimal:
+        """Abonado dentro del ciclo en curso (en un crédito normal, el total)."""
+        if not self.es_revolvente:
+            return self.total_abonado
+        monto = Decimal(self.monto or 0)
+        pagados = self.ciclos_pagados
+        if pagados >= self.ciclos:
+            return monto
+        return self.total_abonado - pagados * monto
+
+    @property
+    def abonado_ciclo_fmt(self):
+        return f"{self.simbolo}{self.abonado_ciclo:,.2f}"
+
+    @property
+    def total_del_plazo(self) -> Decimal:
+        """Lo que se va a pagar en todo el plazo, sumando las renovaciones."""
+        return Decimal(self.monto or 0) * self.ciclos
+
+    @property
+    def total_del_plazo_fmt(self):
+        return f"{self.simbolo}{self.total_del_plazo:,.2f}"
+
+    @property
+    def pagos_totales(self) -> int:
+        if not self.tiene_plan:
+            return 0
+        return int(self.cantidad_pagos) * self.ciclos
+
     @property
     def total_a_pagar(self) -> Decimal:
         """
@@ -239,8 +311,22 @@ class Credito(models.Model):
 
     @property
     def saldo(self) -> Decimal:
-        """Lo que falta por abonar del monto del crédito."""
-        return self.total_a_pagar - self.total_abonado
+        """
+        Lo que falta por abonar.
+
+        En un revolvente es del CICLO EN CURSO: nunca pasa del monto del crédito
+        y se reinicia en cada renovación. Sólo llega a cero cuando ya se
+        cubrieron todos los ciclos del plazo.
+        """
+        if not self.es_revolvente:
+            return self.total_a_pagar - self.total_abonado
+
+        monto = Decimal(self.monto or 0)
+        if not monto:
+            return Decimal("0.00")
+        if self.ciclos_pagados >= self.ciclos:
+            return Decimal("0.00")
+        return monto - self.abonado_ciclo
 
     @property
     def interes_fmt(self):
@@ -260,10 +346,11 @@ class Credito(models.Model):
 
     @property
     def porcentaje_pagado(self) -> float:
+        # En el revolvente el avance es del ciclo en curso, no de todo el plazo
         total = self.total_a_pagar
         if not total:
             return 0.0
-        pct = float(self.total_abonado) / float(total) * 100.0
+        pct = float(self.abonado_ciclo) / float(total) * 100.0
         return max(0.0, min(100.0, pct))
 
     @property
@@ -385,65 +472,77 @@ class Credito(models.Model):
         n       = int(self.cantidad_pagos)
         monto   = Decimal(self.monto)
         centavo = Decimal("0.01")
+        ciclos  = self.ciclos
 
         # Los abonos se ligan al calendario EN ORDEN: el 1er abono es el 1er pago,
         # el 2o abono el 2o pago, etc. Así la fila muestra lo que realmente se
         # pagó en esa exhibición, aunque haya sido de más o de menos.
         abonos = sorted(self.abonos.all(), key=lambda a: (a.fecha, a.id))
-
-        cubiertos = []          # (importe_real, fecha_real, referencia)
-        for i, ab in enumerate(abonos[:n], start=1):
-            cubiertos.append((Decimal(ab.monto or 0), ab.fecha, ab.referencia))
-        # Si hay más abonos que exhibiciones, los sobrantes se suman al último pago
-        if len(abonos) > n and n > 0:
-            extra = sum((Decimal(a.monto or 0) for a in abonos[n:]), Decimal("0.00"))
-            imp, fch, ref = cubiertos[n - 1]
-            cubiertos[n - 1] = (imp + extra, fch, ref)
-
-        abonado = sum((imp for imp, _f, _r in cubiertos), Decimal("0.00"))
-
-        # Lo que falta se reparte entre las exhibiciones que quedan: si se pagó de
-        # más las siguientes bajan, si se pagó de menos suben.
-        pendientes = n - len(cubiertos)
-        saldo = monto - abonado
-        if saldo < 0:
-            saldo = Decimal("0.00")
-        cuota_pendiente = (
-            (saldo / pendientes).quantize(centavo, rounding=ROUND_HALF_UP)
-            if pendientes > 0 else Decimal("0.00")
-        )
-        sin_saldo = saldo <= Decimal("0.005")
+        total_pagos = n * ciclos
 
         filas = []
         acumulado = Decimal("0.00")
-        vistos_pendientes = 0
-        for i in range(1, n + 1):
-            if i <= len(cubiertos):
-                importe, fecha_real, referencia = cubiertos[i - 1]
-                pagado = True
-            else:
-                vistos_pendientes += 1
-                # El último pendiente absorbe el redondeo
-                importe = (saldo - cuota_pendiente * (pendientes - 1)
-                           if vistos_pendientes == pendientes else cuota_pendiente)
-                fecha_real, referencia = None, ""
-                # Si ya no queda saldo, estas fechas no tienen nada que cobrar
-                pagado = sin_saldo
+        k = 0  # número de pago dentro de todo el plazo
 
-            acumulado += importe
-            fecha = sumar_meses(self.fecha_disposicion, paso * i)
-            filas.append({
-                "num": i,
-                "fecha": fecha,
-                "anio": fecha.year,
-                "fecha_texto": f"{fecha.day} {MESES_ES[fecha.month - 1]}-{fecha.year}",
-                "monto": importe,
-                "monto_fmt": f"{self.simbolo}{importe:,.2f}",
-                "acumulado": acumulado,
-                "pagado": pagado,
-                "abono_fecha": fecha_real,
-                "abono_ref": referencia,
-            })
+        # En un revolvente cada ciclo vuelve a prestar el monto completo, así que
+        # el reparto se hace ciclo por ciclo. Un crédito normal es un solo ciclo.
+        for ciclo in range(1, ciclos + 1):
+            cubiertos = [
+                (Decimal(a.monto or 0), a.fecha, a.referencia)
+                for a in abonos[(ciclo - 1) * n: ciclo * n]
+            ]
+            # Si hay más abonos que exhibiciones, el sobrante va al último pago
+            if ciclo == ciclos and cubiertos and len(abonos) > total_pagos:
+                extra = sum((Decimal(a.monto or 0) for a in abonos[total_pagos:]),
+                            Decimal("0.00"))
+                imp, fch, ref = cubiertos[-1]
+                cubiertos[-1] = (imp + extra, fch, ref)
+
+            abonado_ciclo = sum((imp for imp, _f, _r in cubiertos), Decimal("0.00"))
+
+            # Lo que falta del ciclo se reparte entre sus exhibiciones restantes:
+            # si se pagó de más las siguientes bajan, si se pagó de menos suben.
+            pendientes = n - len(cubiertos)
+            saldo_ciclo = monto - abonado_ciclo
+            if saldo_ciclo < 0:
+                saldo_ciclo = Decimal("0.00")
+            cuota_pendiente = (
+                (saldo_ciclo / pendientes).quantize(centavo, rounding=ROUND_HALF_UP)
+                if pendientes > 0 else Decimal("0.00")
+            )
+            sin_saldo = saldo_ciclo <= Decimal("0.005")
+
+            vistos_pendientes = 0
+            for j in range(1, n + 1):
+                k += 1
+                if j <= len(cubiertos):
+                    importe, fecha_real, referencia = cubiertos[j - 1]
+                    pagado = True
+                else:
+                    vistos_pendientes += 1
+                    # El último pendiente del ciclo absorbe el redondeo
+                    importe = (saldo_ciclo - cuota_pendiente * (pendientes - 1)
+                               if vistos_pendientes == pendientes else cuota_pendiente)
+                    fecha_real, referencia = None, ""
+                    # Si el ciclo ya está cubierto, estas fechas no cobran nada
+                    pagado = sin_saldo
+
+                acumulado += importe
+                fecha = sumar_meses(self.fecha_disposicion, paso * k)
+                filas.append({
+                    "num": k,
+                    "ciclo": ciclo,
+                    "num_en_ciclo": j,
+                    "fecha": fecha,
+                    "anio": fecha.year,
+                    "fecha_texto": f"{fecha.day} {MESES_ES[fecha.month - 1]}-{fecha.year}",
+                    "monto": importe,
+                    "monto_fmt": f"{self.simbolo}{importe:,.2f}",
+                    "acumulado": acumulado,
+                    "pagado": pagado,
+                    "abono_fecha": fecha_real,
+                    "abono_ref": referencia,
+                })
         return filas
 
     @property

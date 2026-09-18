@@ -173,6 +173,10 @@
       font-size:11px; font-weight:700; background:#e0e7ff; color:#3730a3;
     }
     .banco-tag { font-size:12px; font-weight:600; color:#374151; }
+    .ciclo-tag {
+      display:inline-block; margin-left:5px; padding:1px 7px; border-radius:9px;
+      background:#dbeafe; color:#1e40af; font-size:10px; font-weight:700;
+    }
     .muted { color:#9ca3af; font-size:12px; }
 
     .badge {
@@ -353,7 +357,12 @@
           <tr class="{% if c.estado == 'vencido' %}is-vencido{% endif %}">
             <td><span class="empresa-tag">{{ c.get_empresa_display }}</span></td>
             <td><span class="banco-tag">{{ c.get_banco_display }}</span></td>
-            <td>{{ c.tipo_credito_label }}</td>
+            <td>
+              {{ c.tipo_credito_label }}
+              {% if c.es_revolvente %}
+                <span class="ciclo-tag">Ciclo {{ c.ciclo_actual }}/{{ c.ciclos }}</span>
+              {% endif %}
+            </td>
             <td>
               {% if c.garantia %}{{ c.garantia.nombre }}
               {% else %}<span class="muted">—</span>{% endif %}
@@ -362,7 +371,7 @@
             <td class="num">{% if c.tasa is not None %}{{ c.tasa_fmt }}%{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="num">{% if c.tasa is not None %}{{ c.interes_fmt }}{% else %}<span class="muted">—</span>{% endif %}</td>
             <td class="num">
-              {{ c.abonado_fmt }}
+              {{ c.abonado_ciclo_fmt }}
               <div class="bar"><i style="width:{{ c.porcentaje_pagado|floatformat:0 }}%"></i></div>
             </td>
             <td class="num"><strong>{{ c.saldo_fmt }}</strong></td>

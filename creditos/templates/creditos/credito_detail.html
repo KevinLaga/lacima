@@ -115,6 +115,16 @@
       display:inline-block; margin-left:6px; padding:2px 8px; border-radius:10px;
       background:#ede9fe; color:#5b21b6; font-size:11px; font-weight:700;
     }
+    .revolv {
+      margin-top:14px; padding:10px 14px; border-radius:9px;
+      background:#eff6ff; border:1px solid #bfdbfe;
+      color:#1e40af; font-size:12.5px; line-height:1.5;
+    }
+    .ciclo-sep td {
+      background:#f1f5f9 !important; color:#475569; font-weight:700;
+      font-size:11px; letter-spacing:.5px; text-transform:uppercase;
+      padding:7px 14px;
+    }
     .dl-row { display:flex; gap:9px; flex-wrap:wrap; }
     .btn-xls {
       display:inline-flex; align-items:center; gap:6px;
@@ -186,17 +196,32 @@
               <div class="big">{{ credito.monto_fmt }}</div>
             </div>
             <div class="money ab">
-              <div class="lbl">Abonado</div>
-              <div class="big">{{ credito.abonado_fmt }}</div>
+              <div class="lbl">
+                {% if credito.es_revolvente %}Abonado en este ciclo{% else %}Abonado{% endif %}
+              </div>
+              <div class="big">{{ credito.abonado_ciclo_fmt }}</div>
             </div>
             <div class="money sa">
-              <div class="lbl">Falta por pagar</div>
+              <div class="lbl">
+                {% if credito.es_revolvente %}Falta en este ciclo{% else %}Falta por pagar{% endif %}
+              </div>
               <div class="big">{{ credito.saldo_fmt }}</div>
             </div>
           </div>
+          {% if credito.es_revolvente %}
+            <div class="revolv">
+              <strong>Revolvente</strong> · Ciclo {{ credito.ciclo_actual }} de {{ credito.ciclos }}
+              · al terminar cada ciclo se vuelve a prestar {{ credito.monto_fmt }}
+              <div style="margin-top:4px;">
+                Total del plazo: <strong>{{ credito.total_del_plazo_fmt }}</strong>
+                ({{ credito.ciclos }} ciclos)
+                · Abonado en total: <strong>{{ credito.abonado_fmt }}</strong>
+              </div>
+            </div>
+          {% endif %}
           <div class="bar"><i style="width:{{ credito.porcentaje_pagado|floatformat:0 }}%"></i></div>
           <div class="bar-txt">
-            {{ credito.porcentaje_pagado|floatformat:1 }}% pagado
+            {{ credito.porcentaje_pagado|floatformat:1 }}% pagado{% if credito.es_revolvente %} de este ciclo{% endif %}
             {% if credito.tasa is not None %}
               · Interés informativo a la tasa {{ credito.tasa_fmt }}%:
               {{ credito.interes_fmt }} (no incluido en el saldo)
@@ -211,13 +236,16 @@
           <div class="inner" style="padding-bottom:12px;">
             <div class="plan-resumen">
               <div>
-                <span class="plan-num">{{ credito.cantidad_pagos }}</span> pagos
+                <span class="plan-num">{{ credito.pagos_totales }}</span> pagos
                 <span class="muted">{{ credito.frecuencia_label|lower }}</span>
+                {% if credito.es_revolvente %}
+                  <span class="muted">({{ credito.cantidad_pagos }} por ciclo × {{ credito.ciclos }})</span>
+                {% endif %}
                 {% if credito.pagos_pendientes %}
                   de <strong>{{ credito.cuota_actual_fmt }}</strong>
                   {% if credito.cuota_reajustada %}
-                    <span class="ajuste" title="Se abonó de más: el saldo se repartió entre los pagos que faltan">
-                      reajustado desde {{ credito.monto_por_pago_fmt }}
+                    <span class="ajuste" title="Lo que falta se repartió entre los pagos restantes">
+                      ajustado desde {{ credito.monto_por_pago_fmt }}
                     </span>
                   {% endif %}
                 {% else %}
@@ -254,6 +282,15 @@
             </thead>
             <tbody>
               {% for p in credito.plan_pagos %}
+                {% if credito.es_revolvente and p.num_en_ciclo == 1 %}
+                  <tr class="ciclo-sep">
+                    <td colspan="5">
+                      Ciclo {{ p.ciclo }} de {{ credito.ciclos }}
+                      {% if p.ciclo > 1 %}· renovación{% endif %}
+                      · {{ credito.monto_fmt }}
+                    </td>
+                  </tr>
+                {% endif %}
                 <tr class="{% if p.pagado %}fila-pagada{% endif %}">
                   <td>{{ p.num }}</td>
                   <td style="white-space:nowrap;">

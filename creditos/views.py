@@ -73,7 +73,7 @@ def _totales_por_moneda(creditos):
         d["monto"]   += Decimal(c.monto or 0)
         d["interes"] += c.interes
         d["total"]   += c.total_a_pagar
-        d["abonado"] += c.total_abonado
+        d["abonado"] += c.abonado_ciclo   # del ciclo en curso si es revolvente
         d["saldo"]   += c.saldo
         d["n"]       += 1
 
@@ -333,9 +333,11 @@ def credito_export_xlsx(request):
             float(cr.monto or 0),
             float(cr.tasa) if cr.tasa is not None else None,
             float(cr.interes),
-            float(cr.total_abonado),
+            # En el revolvente, abonado y saldo son del ciclo en curso (igual
+            # que en pantalla), así Monto − Abonado = Saldo en cada renglón.
+            float(cr.abonado_ciclo),
             float(cr.saldo),
-            cr.cantidad_pagos,
+            cr.pagos_totales or cr.cantidad_pagos,
             cr.frecuencia_label if cr.frecuencia_pagos else "",
             cr.plazo_meses,
             cr.fecha_disposicion,
@@ -452,13 +454,23 @@ def credito_plan_xlsx(request, pk):
     if credito.pagos_pendientes():
         cuota_txt = f"de {credito.cuota_actual_fmt}"
         if credito.cuota_reajustada:
-            cuota_txt += (f" (reajustado desde {credito.monto_por_pago_fmt} "
-                          f"por abonos de más)")
+            sentido = ("se abonó de más" if credito.cuota_actual < credito.monto_por_pago
+                       else "se abonó de menos")
+            cuota_txt += (f" (ajustado desde {credito.monto_por_pago_fmt}: "
+                          f"{sentido})")
     else:
         cuota_txt = f"de {credito.monto_por_pago_fmt}"
 
-    sub = (f"{credito.cantidad_pagos} pagos {credito.frecuencia_label.lower()} {cuota_txt}"
-           f"  ·  Generado {timezone.localdate().strftime('%d/%m/%Y')}")
+    if credito.es_revolvente:
+        encabezado = (f"Revolvente · {credito.ciclos} ciclos de "
+                      f"{credito.cantidad_pagos} pagos {credito.frecuencia_label.lower()} "
+                      f"{cuota_txt} · se vuelve a prestar {credito.monto_fmt} "
+                      f"en cada renovación")
+    else:
+        encabezado = (f"{credito.cantidad_pagos} pagos "
+                      f"{credito.frecuencia_label.lower()} {cuota_txt}")
+
+    sub = f"{encabezado}  ·  Generado {timezone.localdate().strftime('%d/%m/%Y')}"
     ws.cell(row=2, column=1, value=sub).font = Font(name="Calibri", size=10,
                                                     italic=True, color="6D6D6D")
 
@@ -498,58 +510,75 @@ def credito_plan_xlsx(request, pk):
             c.alignment = center
         ws.column_dimensions[get_column_letter(col)].width = ancho
 
-    # ── Bloques de pago: por cada pago, columna de fecha + columna de importe,
-    #    agrupados bajo el año (celda combinada arriba) ──
-    col = len(fijas) + 1
-    inicio_anio = col
-    anio_actual = pagos[0]["anio"] if pagos else None
+    # ── Bloques de pago: por cada pago, columna de fecha + columna de importe.
+    #    Arriba va una celda combinada que agrupa: por CICLO si el crédito es
+    #    revolvente (un ciclo puede cruzar dos años, así no queda partido) o por
+    #    año calendario en los demás.
+    es_rev = credito.es_revolvente
 
-    def cerrar_anio(hasta_col, anio):
-        if anio is None or hasta_col < inicio_anio:
-            return
-        ws.merge_cells(start_row=r_anio, start_column=inicio_anio,
-                       end_row=r_anio, end_column=hasta_col)
-        c = ws.cell(row=r_anio, column=inicio_anio, value=anio)
-        c.font, c.fill, c.alignment, c.border = th_font, anio_fill, center, border
-        for cc in range(inicio_anio, hasta_col + 1):
-            ws.cell(row=r_anio, column=cc).border = border
+    def clave_grupo(p):
+        return p["ciclo"] if es_rev else p["anio"]
 
+    def etiqueta_grupo(clave, items):
+        if not es_rev:
+            return clave
+        anios = sorted({q["anio"] for q in items})
+        rango = str(anios[0]) if len(anios) == 1 else f"{anios[0]}–{anios[-1]}"
+        return f"CICLO {clave} DE {credito.ciclos}  ·  {rango}"
+
+    grupos = []
     for p in pagos:
-        if p["anio"] != anio_actual:
-            cerrar_anio(col - 1, anio_actual)
-            anio_actual = p["anio"]
-            inicio_anio = col
-
-        # Columna de la fecha
-        c = ws.cell(row=r_head, column=col, value=p["fecha_texto"])
-        c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
-        ws.column_dimensions[get_column_letter(col)].width = 14
-        # En los pagados se anota la fecha real del abono, que puede no ser la programada
-        if p["pagado"] and p.get("abono_fecha"):
-            texto_marca = "Pagado " + p["abono_fecha"].strftime("%d/%m/%Y")
-        elif p["pagado"]:
-            texto_marca = "Pagado"
+        k = clave_grupo(p)
+        if grupos and grupos[-1][0] == k:
+            grupos[-1][1].append(p)
         else:
-            texto_marca = ""
-        marca = ws.cell(row=r_data, column=col, value=texto_marca)
-        marca.alignment, marca.border = center, border
-        if p["pagado"]:
-            marca.fill = pagado_fill
-            marca.font = Font(size=10, bold=True, color="166534")
+            grupos.append((k, [p]))
 
-        # Columna del importe
-        c = ws.cell(row=r_head, column=col + 1, value="$")
-        c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
-        ws.column_dimensions[get_column_letter(col + 1)].width = 14
-        v = ws.cell(row=r_data, column=col + 1, value=float(p["monto"]))
-        v.number_format = fmt_money
-        v.alignment, v.border = right, border
-        if p["pagado"]:
-            v.fill = pagado_fill
+    col = len(fijas) + 1
+    for clave, items in grupos:
+        inicio_grupo = col
 
-        col += 2
+        for p in items:
+            # Columna de la fecha
+            c = ws.cell(row=r_head, column=col, value=p["fecha_texto"])
+            c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
+            ws.column_dimensions[get_column_letter(col)].width = 14
 
-    cerrar_anio(col - 1, anio_actual)
+            # En los pagados se anota la fecha real del abono, que puede no ser
+            # la programada
+            if p["pagado"] and p.get("abono_fecha"):
+                texto_marca = "Pagado " + p["abono_fecha"].strftime("%d/%m/%Y")
+            elif p["pagado"]:
+                texto_marca = "Pagado"
+            else:
+                texto_marca = ""
+            marca = ws.cell(row=r_data, column=col, value=texto_marca)
+            marca.alignment, marca.border = center, border
+            if p["pagado"]:
+                marca.fill = pagado_fill
+                marca.font = Font(size=10, bold=True, color="166534")
+
+            # Columna del importe
+            c = ws.cell(row=r_head, column=col + 1, value="$")
+            c.font, c.fill, c.alignment, c.border = th_font, th_fill, center, border
+            ws.column_dimensions[get_column_letter(col + 1)].width = 14
+            v = ws.cell(row=r_data, column=col + 1, value=float(p["monto"]))
+            v.number_format = fmt_money
+            v.alignment, v.border = right, border
+            if p["pagado"]:
+                v.fill = pagado_fill
+
+            col += 2
+
+        # Encabezado del grupo (ciclo o año) sobre sus columnas
+        fin_grupo = col - 1
+        ws.merge_cells(start_row=r_anio, start_column=inicio_grupo,
+                       end_row=r_anio, end_column=fin_grupo)
+        cg = ws.cell(row=r_anio, column=inicio_grupo,
+                     value=etiqueta_grupo(clave, items))
+        cg.font, cg.fill, cg.alignment, cg.border = th_font, anio_fill, center, border
+        for cc in range(inicio_grupo, fin_grupo + 1):
+            ws.cell(row=r_anio, column=cc).border = border
 
     if not pagos:
         ws.merge_cells(start_row=r_anio, start_column=len(fijas) + 1,
