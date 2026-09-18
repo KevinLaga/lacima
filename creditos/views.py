@@ -451,31 +451,8 @@ def credito_plan_xlsx(request, pk):
             value=f"{titulo} · {credito.get_empresa_display()} · {credito.get_banco_display()}"
             ).font = Font(name="Calibri", size=16, bold=True, color="1E3A5F")
 
-    if credito.pagos_pendientes():
-        cuota_txt = f"de {credito.cuota_actual_fmt}"
-        if credito.cuota_reajustada:
-            sentido = ("se abonó de más" if credito.cuota_actual < credito.monto_por_pago
-                       else "se abonó de menos")
-            cuota_txt += (f" (ajustado desde {credito.monto_por_pago_fmt}: "
-                          f"{sentido})")
-    else:
-        cuota_txt = f"de {credito.monto_por_pago_fmt}"
-
-    if credito.es_revolvente:
-        encabezado = (f"Revolvente · {credito.ciclos} ciclos de "
-                      f"{credito.cantidad_pagos} pagos {credito.frecuencia_label.lower()} "
-                      f"{cuota_txt} · se vuelve a prestar {credito.monto_fmt} "
-                      f"en cada renovación")
-    else:
-        encabezado = (f"{credito.cantidad_pagos} pagos "
-                      f"{credito.frecuencia_label.lower()} {cuota_txt}")
-
-    sub = f"{encabezado}  ·  Generado {timezone.localdate().strftime('%d/%m/%Y')}"
-    ws.cell(row=2, column=1, value=sub).font = Font(name="Calibri", size=10,
-                                                    italic=True, color="6D6D6D")
-
-    # ── Columnas fijas (encabezado en filas 4-5, valores en fila 6) ──
-    r_anio, r_head, r_data = 4, 5, 6
+    # ── Columnas fijas (encabezado en filas 3-4, valores en fila 5) ──
+    r_anio, r_head, r_data = 3, 4, 5
 
     fijas = [
         ("Empresa",                  credito.get_empresa_display(),                 20),
