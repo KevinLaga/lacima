@@ -474,6 +474,12 @@ class Credito(models.Model):
         centavo = Decimal("0.01")
         ciclos  = self.ciclos
 
+        # Los pagos no se salen del plazo: si la frecuencia no da para tantas
+        # fechas distintas, los que sobran caen en la última fecha del plazo.
+        # Ej. plazo de 6 meses con 2 pagos cada 6 meses -> los 2 el mismo día.
+        limite = (sumar_meses(self.fecha_disposicion, int(self.plazo_meses))
+                  if self.plazo_meses else None)
+
         # Los abonos se ligan al calendario EN ORDEN: el 1er abono es el 1er pago,
         # el 2o abono el 2o pago, etc. Así la fila muestra lo que realmente se
         # pagó en esa exhibición, aunque haya sido de más o de menos.
@@ -529,6 +535,8 @@ class Credito(models.Model):
 
                 acumulado += importe
                 fecha = sumar_meses(self.fecha_disposicion, paso * k)
+                if limite and fecha > limite:
+                    fecha = limite
                 filas.append({
                     "num": k,
                     "ciclo": ciclo,

@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import FRECUENCIA_CHOICES, FRECUENCIA_MESES, Abono, Credito, Garantia
+from .models import FRECUENCIA_CHOICES, Abono, Credito, Garantia
 
 
 class CreditoForm(forms.ModelForm):
@@ -14,9 +14,11 @@ class CreditoForm(forms.ModelForm):
             "referencia", "notas",
         ]
         widgets = {
-            "fecha_contratacion": forms.DateInput(attrs={"type": "date"}),
-            "fecha_disposicion": forms.DateInput(attrs={"type": "date"}),
-            "fecha_vencimiento": forms.DateInput(attrs={"type": "date"}),
+            # El formato ISO es obligatorio: <input type="date"> no entiende
+            # dd/mm/aaaa y dejaría el campo vacío al editar, borrando la fecha.
+            "fecha_contratacion": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "fecha_disposicion": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "fecha_vencimiento": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "tasa":        forms.NumberInput(attrs={"step": "any", "placeholder": "Ej: 4.123456789012"}),
             "monto":       forms.NumberInput(attrs={"step": "0.01",  "placeholder": "Ej: 1500000.00"}),
             "plazo_meses": forms.NumberInput(attrs={"placeholder": "Ej: 12"}),
@@ -69,13 +71,8 @@ class CreditoForm(forms.ModelForm):
                 self.add_error("plazo_meses",
                                "El revolvente necesita el plazo total para calcular "
                                "cuántas veces se renueva.")
-            elif cant and frec:
-                por_ciclo = int(cant) * FRECUENCIA_MESES.get(frec, 1)
-                if plazo < por_ciclo:
-                    self.add_error(
-                        "plazo_meses",
-                        f"El plazo ({plazo} meses) es menor que un ciclo completo "
-                        f"({por_ciclo} meses). No alcanzaría ni para una vuelta.")
+            # Si el plazo no alcanza para una vuelta completa no es un error:
+            # simplemente queda en un ciclo (ver Credito.ciclos).
 
         f_contrat = cleaned.get("fecha_contratacion")
         f_disp = cleaned.get("fecha_disposicion")
@@ -94,7 +91,7 @@ class AbonoForm(forms.ModelForm):
         model = Abono
         fields = ["fecha", "monto", "referencia", "nota"]
         widgets = {
-            "fecha":      forms.DateInput(attrs={"type": "date"}),
+            "fecha":      forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
             "monto":      forms.NumberInput(attrs={"step": "0.01", "placeholder": "0.00"}),
             "referencia": forms.TextInput(attrs={"placeholder": "Folio / transferencia"}),
             "nota":       forms.TextInput(attrs={"placeholder": "Opcional"}),
