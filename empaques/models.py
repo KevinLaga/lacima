@@ -73,6 +73,7 @@ class Shipment(models.Model):
     order_dhg_otates        = models.CharField("Núm. orden AGRICOLA DH&G OTATES",  max_length=50, blank=True, null=True)
     order_dhg_lopez         = models.CharField("Núm. orden AGRICOLA DH&G LOPEZ",   max_length=50, blank=True, null=True)
     order_dhg_ventura       = models.CharField("Núm. orden AGRICOLA DH&G VENTURA", max_length=50, blank=True, null=True)
+    order_dhg_favela        = models.CharField("Núm. orden AGRICOLA DH&G FAVELA",  max_length=50, blank=True, null=True)
 
     # --- Números de factura por cliente ---
     invoice_lacima        = models.CharField("Núm. factura CIMA",                   max_length=50, blank=True, null=True)
@@ -88,6 +89,7 @@ class Shipment(models.Model):
     invoice_dhg_otates    = models.CharField("Núm. factura AGRICOLA DH&G OTATES",   max_length=50, blank=True, null=True)
     invoice_dhg_lopez     = models.CharField("Núm. factura AGRICOLA DH&G LOPEZ",    max_length=50, blank=True, null=True)
     invoice_dhg_ventura   = models.CharField("Núm. factura AGRICOLA DH&G VENTURA",  max_length=50, blank=True, null=True)
+    invoice_dhg_favela    = models.CharField("Núm. factura AGRICOLA DH&G FAVELA",   max_length=50, blank=True, null=True)
 
     date = models.DateField(verbose_name="Fecha")
     carrier = models.CharField(max_length=50, verbose_name="Transportista", blank=True)
@@ -157,6 +159,7 @@ CLIENTE_CHOICES = [
     ("AGRICOLA DH&G OTATES",   "AGRICOLA DH&G OTATES"),
     ("AGRICOLA DH&G LOPEZ",    "AGRICOLA DH&G LOPEZ"),
     ("AGRICOLA DH&G VENTURA",  "AGRICOLA DH&G VENTURA"),
+    ("AGRICOLA DH&G FAVELA",   "AGRICOLA DH&G FAVELA"),
 
 ]
 class ShipmentItem(models.Model):

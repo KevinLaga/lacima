@@ -95,6 +95,7 @@ clientes = [
     "AGRICOLA DH&G OTATES",
     "AGRICOLA DH&G LOPEZ",
     "AGRICOLA DH&G VENTURA",
+    "AGRICOLA DH&G FAVELA",
 ]
 LEGAL_CLIENT_NAME = {
 "La Cima Produce": "La Cima Produce, S.P.R. DE R.L",
@@ -109,6 +110,7 @@ LEGAL_CLIENT_NAME = {
 "AGRICOLA DH&G OTATES":  "AGRICOLA DH&G OTATES",
 "AGRICOLA DH&G LOPEZ":   "AGRICOLA DH&G LOPEZ",
 "AGRICOLA DH&G VENTURA": "AGRICOLA DH&G VENTURA",
+"AGRICOLA DH&G FAVELA":  "AGRICOLA DH&G FAVELA",
 }
 LOGO_SLUG = {
     'RC': 'rc-organics',
@@ -210,8 +212,13 @@ COMPANY_CANON = {
     'agricola dh & g ventura': 'AGRICOLA DH&G VENTURA',
     'agricola ventura': 'AGRICOLA DH&G VENTURA',
     'ventura': 'AGRICOLA DH&G VENTURA',
+    'AGRICOLA DH&G FAVELA': 'AGRICOLA DH&G FAVELA',
+    'agricola dh&g favela': 'AGRICOLA DH&G FAVELA',
+    'agricola dh & g favela': 'AGRICOLA DH&G FAVELA',
+    'agricola favela': 'AGRICOLA DH&G FAVELA',
+    'favela': 'AGRICOLA DH&G FAVELA',
 }
-COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO', 'AGRICOLA DH&G CRUCES', 'PRODUCTORA EL GARAL', 'AGRICOLA DH&G AVILA', 'AGRICOLA DH&G OTATES', 'AGRICOLA DH&G LOPEZ', 'AGRICOLA DH&G VENTURA']
+COMPANY_CHOICES = ['RC', 'LACIMA', 'GH', 'GOURMET', 'GBF', 'AGRICOLA DH & G', 'AGRICOLA DH&G GONZALO', 'AGRICOLA DH&G CRUCES', 'PRODUCTORA EL GARAL', 'AGRICOLA DH&G AVILA', 'AGRICOLA DH&G OTATES', 'AGRICOLA DH&G LOPEZ', 'AGRICOLA DH&G VENTURA', 'AGRICOLA DH&G FAVELA']
 DEFAULT_COMPANY = 'LACIMA'  # elige el que prefieras por defecto
 
 import unicodedata
@@ -886,6 +893,8 @@ def _canon_company_label(name: str | None) -> str:
         return "AGRICOLA DH&G LOPEZ"
     if "ventura" in n:
         return "AGRICOLA DH&G VENTURA"
+    if "favela" in n:
+        return "AGRICOLA DH&G FAVELA"
     if "agricola" in n or "dhg" in n or "dh&g" in n or "dh & g" in n:
         return "AGRICOLA DH & G"
     return name.strip()
@@ -926,6 +935,9 @@ def _client_order_for(shipment, company_label):
 
     if "ventura" in lbl:
         return getattr(shipment, "order_dhg_ventura", None)
+
+    if "favela" in lbl:
+        return getattr(shipment, "order_dhg_favela", None)
 
     if "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
         return getattr(shipment, "order_dhg", None)
@@ -969,6 +981,8 @@ def _client_invoice_for(shipment, company_label):
         field = "invoice_dhg_lopez"
     elif "ventura" in lbl:
         field = "invoice_dhg_ventura"
+    elif "favela" in lbl:
+        field = "invoice_dhg_favela"
     elif "agricola" in lbl or "dhg" in lbl or "dh&g" in lbl or "dh & g" in lbl:
         field = "invoice_dhg"
     elif "garal" in lbl or "productora" in lbl:
@@ -1015,6 +1029,8 @@ def _iter_company_items(embarques, empresa_filter: str | None, mode: str = "espa
             return "AGRICOLA DH&G LOPEZ"
         if "ventura" in low:
             return "AGRICOLA DH&G VENTURA"
+        if "favela" in low:
+            return "AGRICOLA DH&G FAVELA"
 
         if "agricola" in low or "dhg" in low or "dh&g" in low or "dh & g" in low:
             return "AGRICOLA DH & G"
@@ -1743,7 +1759,7 @@ def production_today(request):
         "rows": rows,
         "ship_cols_labels": ship_cols,
         "empresa": empresa,
-        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH&G GONZALO", "AGRICOLA DH&G CRUCES", "PRODUCTORA EL GARAL", "AGRICOLA DH&G AVILA", "AGRICOLA DH&G OTATES", "AGRICOLA DH&G LOPEZ", "AGRICOLA DH&G VENTURA"],
+        "empresas": ["RC", "LACIMA", "GH", "GOURMET", "GBF", "AGRICOLA DH & G", "AGRICOLA DH&G GONZALO", "AGRICOLA DH&G CRUCES", "PRODUCTORA EL GARAL", "AGRICOLA DH&G AVILA", "AGRICOLA DH&G OTATES", "AGRICOLA DH&G LOPEZ", "AGRICOLA DH&G VENTURA", "AGRICOLA DH&G FAVELA"],
 
         # Bloque inferior
         "exist_piso_ayer": exist_piso_ayer,
@@ -1824,6 +1840,7 @@ def production_xlsx(request, prod_date):
         "AGRICOLA DH&G OTATES": "AGRICOLA DH&G OTATES",
         "AGRICOLA DH&G LOPEZ": "AGRICOLA DH&G LOPEZ",
         "AGRICOLA DH&G VENTURA": "AGRICOLA DH&G VENTURA",
+        "AGRICOLA DH&G FAVELA": "AGRICOLA DH&G FAVELA",
     }
     LOGO_SLUG = {
         "LACIMA":  "la-cima-produce",
@@ -1839,6 +1856,7 @@ def production_xlsx(request, prod_date):
         "AGRICOLA DH&G OTATES": "AGRICOLA",
         "AGRICOLA DH&G LOPEZ": "AGRICOLA",
         "AGRICOLA DH&G VENTURA": "AGRICOLA",
+        "AGRICOLA DH&G FAVELA": "AGRICOLA",
     }
     legal_name = LEGAL_COMPANY.get(empresa, empresa)
     logo_slug  = LOGO_SLUG.get(empresa)
@@ -3138,6 +3156,9 @@ def shipment_list(request):
                 if "ventura" in cname:
                     return getattr(embarque, "order_dhg_ventura", None)
 
+                if "favela" in cname:
+                    return getattr(embarque, "order_dhg_favela", None)
+
                 if "agricola" in cname or "dhg" in cname or "dh&g" in cname or "dh & g" in cname:
                     return getattr(embarque, "order_dhg", None)
 
@@ -3611,6 +3632,8 @@ def shipment_list(request):
                 return getattr(embarque, "order_dhg_lopez", None)
             if "ventura" in cname:
                 return getattr(embarque, "order_dhg_ventura", None)
+            if "favela" in cname:
+                return getattr(embarque, "order_dhg_favela", None)
             if "agricola dh & g" in cname or "agricola" in cname or "dhg" in cname:
                 return getattr(embarque, "order_dhg", None)
             if "garal" in cname or "productora" in cname:
